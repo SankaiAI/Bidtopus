@@ -120,6 +120,60 @@ Reference docs:
 
 ---
 
+## New Developer Onboarding
+
+Everything you need after cloning the repo.
+
+### 1. Clone and open your component
+
+```bash
+git clone https://github.com/SankaiAI/outcomeX.git
+cd outcomeX
+```
+
+Open **only your component folder** in VS Code — Claude Code reads the `CLAUDE.md` in your working directory to know what you own and how to behave.
+
+### 2. Install Claude Code
+
+```bash
+npm install -g @anthropic/claude-code
+```
+
+Authenticate with your Anthropic account when prompted.
+
+### 3. Install GitHub CLI and authenticate
+
+**Windows:**
+```bash
+winget install --id GitHub.cli
+```
+**Mac:**
+```bash
+brew install gh
+```
+
+Then authenticate:
+```bash
+gh auth login
+# Choose: GitHub.com → HTTPS → Login with a web browser
+```
+
+This also sets up `git credential fill` which the CLAUDE.md session setup relies on.
+
+### 4. Get access to the GitHub project board
+
+Ask the repo owner to invite you to [github.com/users/SankaiAI/projects/2](https://github.com/users/SankaiAI/projects/2) so you can monitor tickets.
+
+### 5. Start your Claude Code session
+
+Open your component folder in VS Code, open Claude Code, and say:
+
+> "Check for your tickets"
+
+Claude will read your `CLAUDE.md`, run the setup, and report any open tickets assigned to your component.
+
+---
+
 ## Local Development
 
 Each folder runs independently in local dev. You do not need to run all four at once.
