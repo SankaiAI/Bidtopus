@@ -20,19 +20,52 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 
 ## Cross-Team Coordination
 
-Check for open requests assigned to you at the start of every session:
+### Setup — run this once at the start of every session
 
 ```bash
-gh issue list --label "needs: backend" --state open
-gh issue view <number>
+export GH_TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill 2>/dev/null | grep password | cut -d= -f2)
 ```
 
-When you need something from another team:
+This loads your GitHub token so all `gh` commands below work without separate auth.
+
+---
+
+### Step 1 — Check for tickets assigned to you
+
+```bash
+gh issue list --label "needs: backend" --state open --repo SankaiAI/outcomeX
+gh issue view <number> --repo SankaiAI/outcomeX
+```
+
+Read the full issue before starting. The **Request** section says what to build. The **Definition of Done** says what your response must include.
+
+### Step 2 — Claim the ticket when you start working
+
+```bash
+gh issue comment <number> --body "Picking this up now." --repo SankaiAI/outcomeX
+gh issue edit <number> --add-label "status: in-progress" --repo SankaiAI/outcomeX
+```
+
+This signals to the human monitor that the ticket is active.
+
+### Step 3 — Close the ticket when done
+
+```bash
+gh issue comment <number> --body "Done. [your answer or summary of what was built]" --repo SankaiAI/outcomeX
+gh issue close <number> --repo SankaiAI/outcomeX
+```
+
+Closing automatically moves the card to **Done** on the project board. The requester sees your comment as the answer.
+
+---
+
+### When you need something from another team
 
 ```bash
 gh issue create \
   --title "[backend → agent] Short description" \
   --label "needs: agent,api-contract" \
+  --repo SankaiAI/outcomeX \
   --body "**From:** backend
 **To:** agent
 **Blocking:** what cannot be built until this is answered
@@ -40,13 +73,6 @@ gh issue create \
 ## Request
 
 ## Definition of Done"
-```
-
-When you finish a request assigned to you:
-
-```bash
-gh issue comment <number> --body "Done. Summary of what was built or decided."
-gh issue close <number>
 ```
 
 Reference issues in commits: `Closes #7`
