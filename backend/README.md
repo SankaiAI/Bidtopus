@@ -1,5 +1,35 @@
 # OutcomeX — Backend
 
+## Quickstart
+
+```bash
+# 1. Create and activate virtual environment
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+# source .venv/bin/activate   # Mac/Linux
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Copy env file and fill in secrets
+cp .env.example .env
+# Edit .env — set DATABASE_URL, CLERK_SECRET_KEY, ANTHROPIC_API_KEY
+
+# 4. Start the dev server (auto-reload on save)
+uvicorn main:app --reload --port 8000
+```
+
+API is available at `http://localhost:8000`. Interactive docs at `http://localhost:8000/docs`.
+
+To run the test suite:
+
+```bash
+pip install -r requirements-dev.txt
+pytest tests/ -v
+```
+
+---
+
 ## Purpose
 The backend is the API and data layer. It receives requests from the frontend, persists all contract state to the database, and routes work to the agent. It is intentionally thin — business logic lives in the agent, not here.
 
