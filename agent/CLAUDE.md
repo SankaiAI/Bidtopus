@@ -6,6 +6,24 @@ Read [AGENT.md](AGENT.md) for the component map. Read [README.md](README.md) for
 
 ---
 
+## Local Environment Setup
+
+Always work inside a virtual environment. Never install packages globally.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Mac/Linux
+.venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+```
+
+If you install a new package, add it to `requirements.txt` immediately:
+```bash
+pip install <package> && pip freeze > requirements.txt
+```
+
+---
+
 ## Non-Negotiable Rules
 
 1. LLM never makes the settlement call. The deterministic resolution engine does.

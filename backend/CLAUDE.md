@@ -6,6 +6,24 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 
 ---
 
+## Local Environment Setup
+
+Always work inside a virtual environment. Never install packages globally.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Mac/Linux
+.venv\Scripts\activate           # Windows
+pip install -r requirements.txt
+```
+
+If you install a new package, add it to `requirements.txt` immediately:
+```bash
+pip install <package> && pip freeze > requirements.txt
+```
+
+---
+
 ## Non-Negotiable Rules
 
 1. Every state-transition endpoint checks pre-conditions before calling the agent. If the gate fails, return 400. No agent call happens.
