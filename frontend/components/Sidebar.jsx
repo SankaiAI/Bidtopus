@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useClerk, useUser } from '@clerk/nextjs'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
 
@@ -328,8 +329,15 @@ const THEMES = ['Light', 'Dark']
 function UserProfile({ collapsed, connected, onDisconnect }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const { isDark, toggleTheme } = useTheme()
+  const { signOut, openSignIn } = useClerk()
+  const { user, isSignedIn } = useUser()
   const containerRef = React.useRef(null)
   const addr = '0x742d...4a8F'
+
+  const displayName = isSignedIn
+    ? (user.fullName || user.firstName || user.primaryEmailAddress?.emailAddress || 'Account')
+    : 'Sign in'
+  const initial = displayName[0]?.toUpperCase() || '?'
 
   React.useEffect(() => {
     if (!panelOpen) return
@@ -342,11 +350,23 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [panelOpen])
 
-  const avatar = (
-    <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'linear-gradient(135deg, #4F46E5, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>S</span>
-    </div>
-  )
+  const handleLogOut = async () => {
+    setPanelOpen(false)
+    onDisconnect()
+    const path = window.location.pathname
+    // Protected routes: /contracts/* (except /contracts/new) and /settings/*
+    const isProtected = (path.startsWith('/contracts') && path !== '/contracts/new') ||
+                         path.startsWith('/settings')
+    await signOut({ redirectUrl: isProtected ? '/dashboard' : path })
+  }
+
+  const avatar = user?.imageUrl
+    ? <img src={user.imageUrl} alt={displayName} style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+    : (
+      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'linear-gradient(135deg, #4F46E5, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>{initial}</span>
+      </div>
+    )
 
   if (collapsed) {
     return (
@@ -382,7 +402,7 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
       >
         {avatar}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-text)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Shawn Zhou</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-text)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{displayName}</div>
           <div style={{ fontSize: '11px', fontWeight: 500, color: connected ? GREEN : 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
             {connected ? addr : 'Not connected'}
           </div>
@@ -445,15 +465,27 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
 
           <div style={{ height: '1px', background: 'var(--c-border)' }} />
 
-          <button
-            onClick={() => { onDisconnect(); setPanelOpen(false) }}
-            style={{ ...panelRowStyle, color: '#ef4444' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          >
-            <Icon.LogOut />
-            Log out
-          </button>
+          {isSignedIn ? (
+            <button
+              onClick={handleLogOut}
+              style={{ ...panelRowStyle, color: '#ef4444' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <Icon.LogOut />
+              Log out
+            </button>
+          ) : (
+            <button
+              onClick={() => { setPanelOpen(false); openSignIn({ afterSignInUrl: window.location.href }) }}
+              style={{ ...panelRowStyle, color: 'var(--c-indigo)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-border-s)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ display: 'flex', transform: 'scaleX(-1)' }}><Icon.LogOut /></span>
+              Sign in
+            </button>
+          )}
         </div>
       )}
     </div>

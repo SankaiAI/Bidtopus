@@ -135,8 +135,8 @@
 .agent-input { scrollbar-width: thin; scrollbar-color: #b8b6cc #ebebf2; overflow-y: hidden; }
 
 /* ─── AGENT PAGE LAYOUT ────────────────────────────────────────────────────── */
-.agent-body           { display: flex; overflow: hidden; flex: 1; }
-.agent-chat-panel     { flex: 1; }
+.agent-body           { display: flex; overflow: hidden; flex: 1; min-height: 0; }
+.agent-chat-panel     { flex: 1; min-height: 0; }
 .agent-input-mobile   { display: none; }
 .agent-input-desktop  { display: block; }
 .agent-setup-cards    { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; width: 100%; margin-bottom: 24px; }

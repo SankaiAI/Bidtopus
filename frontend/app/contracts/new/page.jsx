@@ -3,6 +3,7 @@ import React from 'react'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useAuth, useClerk } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
 
@@ -315,6 +316,8 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function ContractChatPage() {
   const openMobileSidebar = useOpenMobileSidebar()
+  const { isSignedIn, isLoaded } = useAuth()
+  const { openSignIn }            = useClerk()
   const [messages,     setMessages]     = React.useState([])
   const [loading,      setLoading]      = React.useState(false)
   const [liveDetail,   setLiveDetail]   = React.useState('')
@@ -369,6 +372,12 @@ export default function ContractChatPage() {
 
   const sendMessage = async (text) => {
     if (!text?.trim() || loading) return
+
+    // Require sign-in before sending any message to the agent
+    if (isLoaded && !isSignedIn) {
+      openSignIn({ afterSignInUrl: window.location.href })
+      return
+    }
 
     if (chatStep === 'choose') setChatStep('ready')
 
@@ -646,7 +655,12 @@ export default function ContractChatPage() {
                 paddingLeft="18px"
               />
             </div>
-            <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center' }}>Enter to send · Shift+Enter for new line</div>
+            <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center' }}>
+              {isLoaded && !isSignedIn
+                ? <><button onClick={() => openSignIn({ afterSignInUrl: window.location.href })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.indigo, fontWeight: 600, fontSize: '11px', padding: 0, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Sign in</button>{' to start chatting with the agent'}</>
+                : 'Enter to send · Shift+Enter for new line'
+              }
+            </div>
           </div>
 
         </div>

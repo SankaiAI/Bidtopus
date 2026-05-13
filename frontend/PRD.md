@@ -49,6 +49,33 @@ The frontend must support this exact demo script end-to-end without any broken s
 
 ## 4. Screens to Build
 
+### Architecture note: Unified Workspace
+
+Screens 4.3–4.7 are all rendered inside a single **Workspace** route (`/contracts/[id]/workspace`) rather than as separate pages. The workspace has two persistent panels:
+
+- **Left panel:** ordered chat timeline — agent bubbles, merchant bubbles, daily update cards, approval cards, system banners. Layout is the same across all lifecycle phases.
+- **Right panel:** adapts based on `contract.status` — live ROAS metrics during `Active`, the escrow fund button during `Funded-pending`, final outcome during `Resolved`/`Settled`.
+
+The sections below (4.3–4.7) describe what content must appear at each phase, not separate route pages.
+
+---
+
+### 4.0 Authentication Screens
+
+**Purpose:** Gate access to the app. Unauthenticated users are redirected to Clerk's hosted sign-in/sign-up UI; on success they land on `/dashboard`.
+
+**What the merchant sees:**
+- Clerk-hosted sign-in page (email / Google OAuth) — no custom auth UI needed
+- Clerk-hosted sign-up page (email / Google OAuth)
+
+**Required wiring (not yet done as of v1.1):**
+- Wrap `app/layout.tsx` in `<ClerkProvider>`
+- Add `middleware.ts` to protect `/contracts/*`, `/dashboard`, `/settings`
+- After sign-in, redirect to `/dashboard`
+- Use `useAuth().getToken()` inline on every API request — never write the JWT to `localStorage`
+
+---
+
 ### 4.1 Landing Page
 **Purpose:** Explain the OutcomeX model to first-time visitors.
 
@@ -154,6 +181,44 @@ The frontend must support this exact demo script end-to-end without any broken s
   - Success → "100 USDC released to agent wallet. [tx hash]"
   - Failure → "100 USDC refunded to merchant wallet. [tx hash]"
 - On-chain transaction proof (transaction hash, linkable to block explorer)
+
+---
+
+### 4.8 Agent Thinking Indicator
+
+**Purpose:** Show the merchant that the agent is processing so the UI does not appear frozen.
+
+**When it appears:** In the chat timeline immediately after the merchant sends a message, while the streaming response has not yet started. Disappears as soon as the first token arrives.
+
+**What it looks like:** Three animated dots next to the agent avatar icon — the same row position as an agent chat bubble but with a bouncing-dot animation instead of text.
+
+**Rule:** This is a transient loading state only. It is never persisted to the DB and never appears in history loaded from `GET /messages`.
+
+---
+
+### 4.9 Settings Screen
+
+**Route:** `/settings`
+
+**Purpose:** Let merchants configure how the agent behaves and review connected accounts.
+
+**Must show:**
+
+**Agent Execution — Approval Mode**
+- **Manual (default):** Agent pauses before every individual Meta Ads action and surfaces an approval card in the chat timeline. Merchant must click Approve before the action runs.
+- **Auto-approve:** Agent executes individual mid-campaign optimizations automatically once the overall strategy has been approved. Reduces friction during active contracts.
+- Even in auto-approve mode, the initial strategy plan always requires explicit merchant approval before the campaign launches.
+- An amber banner appears at the top of the Workspace when a contract is Active and approval mode is Manual, reminding the merchant and linking to Settings.
+- Preference is saved locally per browser.
+
+**Connected Accounts**
+- Meta Ads account: shows account ID and connection status
+- Wallet: shows connected wallet address and status (populated after Escrow Funding step)
+
+**Notifications** (toggles)
+- Daily agent progress updates
+- Approval request alerts
+- Contract settlement alerts
 
 ---
 
@@ -269,13 +334,17 @@ Wallet connection (Circle App Kit) happens at the Escrow Funding step and is sep
 
 ## 7. MVP Acceptance Criteria (Frontend)
 
+- [ ] Clerk authentication gates all `/contracts/*`, `/dashboard`, and `/settings` routes. Unauthenticated users are redirected to sign-in.
 - [ ] Merchant can fill in and submit a performance contract.
 - [ ] Agent underwriting result (probability, risk, decision, explanation) is displayed.
 - [ ] Counteroffer terms are rendered when the agent counteroffers.
+- [ ] Agent thinking indicator (animated dots) appears while awaiting a streaming response.
 - [ ] Merchant can fund USDC escrow; confirmation and tx hash are shown.
 - [ ] Strategy plan is displayed with an approve button before execution.
 - [ ] Live monitoring dashboard shows spend, ROAS, probability, and time remaining.
 - [ ] Resolution screen shows final metrics, outcome verdict, and settlement proof.
+- [ ] Settings screen lets the merchant toggle manual vs. auto-approve mode.
+- [ ] Manual-approval banner appears in the Workspace header when a contract is Active.
 - [ ] The full demo golden path (Scenes 1–7) runs without broken steps.
 
 ---
@@ -285,7 +354,6 @@ Wallet connection (Circle App Kit) happens at the Escrow Funding step and is sep
 - Complex wallet management or fiat on/off-ramp UI
 - Creative asset upload or ad creative generation
 - Multi-contract management views
-- User account settings or profile management
 - Mobile-optimized layout (desktop demo is sufficient)
 
 ---
@@ -319,7 +387,228 @@ The frontend is the demo surface. Judges see this first.
 
 | Needs from | What |
 |---|---|
-| `backend/` | All API endpoints listed in Section 14 of the main PRD |
+| `backend/` | All 14 API endpoints documented in `backend/PRD.md` Section 4; full endpoint shapes in Section 12 of this PRD |
 | `agent/` | Underwriting result, LLM offer text, strategy plan, live forecast — all surfaced via backend API |
 | `contracts/` | Escrow tx hash and settlement tx hash for display; Arc block explorer URL for linking |
 | Circle App Kit | Drop-in USDC send component for the escrow funding screen |
+
+---
+
+## 12. API Contract Reference
+
+The frontend consumes these 14 backend endpoints. All requests include `Authorization: Bearer <clerk-token>`. Base URL is `NEXT_PUBLIC_API_URL`.
+
+### Contract Lifecycle Endpoints
+
+| Method | Endpoint | Called from screen | Notes |
+|---|---|---|---|
+| POST | `/api/contracts` | Contract Builder | Create contract; navigate to evaluation on 201 |
+| POST | `/api/contracts/:id/underwrite` | Agent Evaluation | Trigger ML model; poll or subscribe via SSE for result |
+| POST | `/api/contracts/:id/agent-offer` | Agent Evaluation | Request LLM offer; result arrives via SSE |
+| POST | `/api/contracts/:id/accept` | Agent Evaluation | Merchant accepts offer |
+| POST | `/api/contracts/:id/fund-escrow` | Escrow Funding | Confirm Arc tx; status → Funded |
+| POST | `/api/contracts/:id/generate-strategy` | Strategy Approval | Request strategy plan |
+| POST | `/api/contracts/:id/approve-execution` | Strategy Approval | Merchant approves; status → Active |
+| POST | `/api/contracts/:id/execute-ads-actions` | Strategy Approval | Called immediately after approval; fire-and-forget from frontend |
+| GET | `/api/contracts/:id/performance` | Live Monitoring | Poll every 30 s |
+| POST | `/api/contracts/:id/resolve` | Resolution | Trigger deterministic settlement |
+
+### Message and Streaming Endpoints
+
+| Method | Endpoint | Called from screen | Notes |
+|---|---|---|---|
+| GET | `/api/contracts/:id/messages` | All contract screens | Step 1 of two-step hydration on mount |
+| POST | `/api/contracts/:id/messages` | Workspace chat | Persist merchant message before streaming |
+| POST | `/api/contracts/:id/chat/stream` | Workspace chat | Step 2 for chat — streams `data: {"text":"..."}` lines |
+| GET | `/api/contracts/:id/events` | All contract screens | Step 2 of two-step hydration — SSE for live updates |
+
+### Request / Response Shapes
+
+**POST `/api/contracts`**
+```typescript
+// Request
+{
+  campaign_goal: string;           // free text product/campaign description
+  target_metric: "ROAS";           // only supported metric for MVP
+  threshold: number;               // e.g. 2.0
+  minimum_spend: number;           // e.g. 500
+  time_window_days: number;        // e.g. 7
+  success_fee_usdc: number;        // e.g. 100
+  campaign_mode: "new" | "optimize";
+  account_context: Record<string, unknown>;  // ad account ID + metadata
+}
+// Response 201
+{ id: string; status: "Created"; created_at: string; }
+```
+
+**GET `/api/contracts/:id/performance`**
+```typescript
+// Response 200
+{
+  spend: number;
+  revenue: number;
+  roas: number | null;             // null if spend === 0
+  success_probability: number;     // 0–1
+  days_remaining: number;
+  contract_status: "Active" | "On Track" | "At Risk";
+}
+```
+
+**POST `/api/contracts/:id/fund-escrow`**
+```typescript
+// Request — sent after Circle App Kit confirms the on-chain tx
+{ tx_hash: string; amount_usdc: number; }
+// Response 200
+{ status: "Funded"; escrow_tx_hash: string; funded_at: string; }
+```
+
+**POST `/api/contracts/:id/resolve`**
+```typescript
+// Response 200
+{
+  final_spend: number;
+  final_revenue: number;
+  final_roas: number;
+  outcome: "success" | "failure";
+  settlement_tx_hash: string;
+}
+```
+
+**GET `/api/contracts/:id/events`** — SSE stream
+Each event is a `ContractMessage` JSON object (see Section 13). Named events:
+- `message` — agent or merchant chat bubble
+- `daily_update` — agent day-N ROAS card
+- `approval_request` — strategy or terms approval card
+- `system_event` — lifecycle banner (e.g. "Escrow funded")
+
+**POST `/api/contracts/:id/chat/stream`** — SSE stream
+```
+data: {"text": "I estimate a "}
+data: {"text": "68% chance..."}
+data: [DONE]
+```
+
+**POST `/api/users/me/wallet`**
+```typescript
+// Request — sent after Circle App Kit wallet connection
+{ wallet_address: string; signature: string; }
+// Response 200
+{ wallet_address: string; }
+```
+
+---
+
+## 13. TypeScript Types
+
+Define these in `lib/types.ts`. They must match the backend Pydantic schemas exactly.
+
+```typescript
+// Core message type — every row from GET /messages renders by this shape
+export interface ContractMessage {
+  id: string;
+  contract_id: string;
+  role: 'agent' | 'merchant' | 'system';
+  type: 'message' | 'daily_update' | 'approval_request' | 'system_event';
+  content: string;
+  metadata: Record<string, unknown>;
+  status: 'pending' | 'approved' | 'declined' | null;
+  created_at: string;
+}
+
+// Full contract record from GET /contracts/:id
+export interface PerformanceContract {
+  id: string;
+  merchant_id: string;
+  target_metric: string;
+  threshold: number;
+  minimum_spend: number;
+  time_window_days: number;
+  success_fee_usdc: number;
+  campaign_mode: 'new' | 'optimize';
+  campaign_goal: string;
+  account_context: Record<string, unknown>;
+  status: 'Created' | 'Funded' | 'Active' | 'Resolved' | 'Settled';
+  created_at: string;
+  funded_at: string | null;
+  resolved_at: string | null;
+}
+
+// From POST /underwrite result surfaced via contract messages metadata
+export interface UnderwritingResult {
+  success_probability: number;        // 0–1
+  risk_level: 'low' | 'medium' | 'high';
+  expected_roas_range: [number, number];
+  recommendation: 'accept' | 'counteroffer' | 'reject';
+  recommended_fee_usdc: number;
+}
+
+// From POST /agent-offer result surfaced via contract messages metadata
+export interface AgentOffer {
+  offer_type: 'accept' | 'counteroffer' | 'reject';
+  message: string;
+  revised_threshold?: number;
+  revised_fee_usdc?: number;
+  revised_time_window_days?: number;
+}
+
+// From GET /performance
+export interface PerformanceSnapshot {
+  spend: number;
+  revenue: number;
+  roas: number | null;
+  success_probability: number;
+  days_remaining: number;
+  contract_status: string;
+}
+
+// From POST /resolve
+export interface ResolutionResult {
+  final_spend: number;
+  final_revenue: number;
+  final_roas: number;
+  outcome: 'success' | 'failure';
+  settlement_tx_hash: string;
+}
+
+// Strategy plan surfaced via approval_request message metadata
+export interface StrategyPlan {
+  id: string;
+  summary: string;
+  planned_actions: Array<{
+    type: string;         // e.g. "create_campaign"
+    description: string;  // human-readable
+    params: Record<string, unknown>;
+  }>;
+  approval_status: 'pending' | 'approved' | 'declined';
+}
+```
+
+---
+
+## 14. Environment Variables
+
+Set in `.env.local` for local development. Set as encrypted secrets in Vercel for production.
+
+| Variable | Description | Where to get it |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | Deployed backend service URL | Railway/Render dashboard after backend deploy |
+| `NEXT_PUBLIC_ARC_EXPLORER_URL` | Arc block explorer base URL for tx hash links | Arc developer docs |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key — safe to expose in browser | Clerk dashboard → API Keys |
+| `CLERK_SECRET_KEY` | Clerk secret key — Next.js server-side only, never sent to browser | Clerk dashboard → API Keys |
+
+For local dev, point `NEXT_PUBLIC_API_URL` to `http://localhost:8000` while the backend runs locally.
+
+---
+
+## 15. Engineering Principles
+
+Full implementation patterns are documented in [README.md](README.md). Key rules:
+
+1. **UI reads from DB, never calls the agent directly.** The agent writes to DB. The frontend reads backend API. No direct agent communication.
+2. **Screen = contract state.** Routing follows the state machine in Section 5. No skipping steps. Contract state drives navigation, not URL history.
+3. **Two-step hydration on every contract screen mount.** `GET /messages` first (full history), then open SSE `/events` stream. Never open the stream before the hydration completes.
+4. **Render the timeline by `message.type`.** `system_event` → banner; `message` → chat bubble; `daily_update` → metrics card; `approval_request` → approval card with `message.status`.
+5. **LLM streaming via `fetch` + `ReadableStream`.** Not `EventSource` (GET-only). The chat endpoint is a POST stream. See README.md Principle 6 for the implementation pattern.
+6. **Chat is Q&A only.** The chat input never triggers ad execution. Strategy changes go through an `approval_request` card in the timeline.
+7. **Never render LLM output as raw HTML.** Use `ReactMarkdown` with `html: () => null`. See Section 6a.
+8. **Make agent intelligence visible.** Every screen that shows the agent's reasoning must display: success probability (with source label), the agent's plain-language rationale, and live ROAS vs. target trajectory. See README.md for the full principle.

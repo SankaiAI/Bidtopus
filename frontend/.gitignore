@@ -29,5 +29,8 @@ yarn-error.log*
 .claude/
 .gstack/
 
+# runtime logs (local only)
+logs/*.log
+
 # vercel
 .vercel
