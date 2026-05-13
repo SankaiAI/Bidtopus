@@ -44,9 +44,10 @@ Raise a ticket when you hit something you **cannot resolve by reading your own f
 
 ```bash
 export GH_TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill 2>/dev/null | grep password | cut -d= -f2)
+export PATH="$PATH:/c/Program Files/GitHub CLI"
 ```
 
-This loads your GitHub token so all `gh` commands below work without separate auth.
+This loads your GitHub token and adds `gh` to the PATH so all commands below work.
 
 ---
 
