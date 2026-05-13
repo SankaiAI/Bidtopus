@@ -223,3 +223,52 @@ Sponsor transaction fees in USDC for both the merchant's `fund()` call and the s
 
 ### 3. Deployment Scripts
 Configurable deploy via ARC CLI. Output: contract address + deployment tx hash + network. Writes `out/abi.json` and `out/address.json` for agent and backend consumption.
+
+---
+
+## CLI Reference
+
+### Arc CLI
+
+```bash
+uv tool install git+https://github.com/the-canteen-dev/ARC-cli
+
+arc --help                    # list all available commands
+arc deploy                    # deploy contract to Arc testnet
+arc verify <contract-address> # verify contract source on Arc explorer
+```
+
+Docs: https://arc-node.thecanteenapp.com
+
+> The Arc CLI is the official tool from Canteen for deploying to Arc testnet. Install it before running any deployment scripts.
+
+### Foundry (forge / cast / anvil)
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup                     # install or update all Foundry tools
+```
+
+**forge** — build and test:
+```bash
+forge build                                              # compile all contracts
+forge test                                               # run all tests with gas report
+forge test --match-test testRelease -vvv                 # run a specific test with full trace
+forge create src/Escrow.sol:Escrow --rpc-url <arc-rpc>  # deploy a contract
+forge script scripts/Deploy.s.sol --rpc-url <arc-rpc> --broadcast  # scripted deploy
+```
+
+**cast** — read and interact with deployed contracts:
+```bash
+cast call <address> "getEscrow(bytes32)" <contractId> --rpc-url <arc-rpc>   # read escrow state
+cast send <address> "release(bytes32)" <contractId> --rpc-url <arc-rpc>     # call release
+cast balance <address> --rpc-url <arc-rpc>                                  # check wallet balance
+```
+
+**anvil** — local test node:
+```bash
+anvil                          # start local EVM node at localhost:8545
+anvil --fork-url <arc-rpc>     # fork Arc testnet state locally for realistic testing
+```
+
+Docs: https://getfoundry.sh

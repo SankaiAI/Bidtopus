@@ -417,3 +417,35 @@ Answers: "Did the contracted outcome get achieved?"
 - Queryable by contract_id, component, timestamp range
 - Every component call logs inputs + outputs + timestamp
 - The backbone for crash recovery and chat Q&A context
+
+---
+
+## CLI Reference
+
+### FastAPI + Uvicorn
+
+The agent runs as a module inside the backend service. Start via the backend:
+
+```bash
+fastapi dev ../backend/main.py               # dev server — agent is imported automatically
+uvicorn main:app --reload --log-level debug  # verbose mode to see every agent step in stdout
+```
+
+Docs: https://fastapi.tiangolo.com/deployment/manually/
+
+### Neon CLI
+
+The agent shares the same Neon database as the backend. Use your own branch for local dev:
+
+```bash
+npm install -g neonctl
+neon auth
+
+neon branches create --name dev/yourname         # isolated DB branch for local agent testing
+neon connection-string --branch dev/yourname     # get DATABASE_URL for your .env
+neon branches list                               # see all active branches
+```
+
+Docs: https://neon.com/docs/reference/neon-cli
+
+> Use a dedicated Neon branch when testing agent behavior locally — it prevents your test data from polluting the shared dev database.

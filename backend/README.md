@@ -421,3 +421,47 @@ messages_repo.append(db, contract_id, "agent", "message", content=content, ...)
 ### Secrets in Railway Encrypted Store Only
 
 Never commit: `SETTLER_PRIVATE_KEY`, `ANTHROPIC_API_KEY`, `META_ADS_ACCESS_TOKEN`, `CIRCLE_API_KEY`, `DATABASE_URL`, `JWT_SECRET`. Add a pre-commit hook that scans for these patterns.
+
+---
+
+## CLI Reference
+
+### FastAPI + Uvicorn
+
+```bash
+pip install "fastapi[standard]" "uvicorn[standard]"
+
+fastapi dev main.py                          # dev server with auto-reload (recommended)
+fastapi run main.py                          # production server (no reload)
+uvicorn main:app --reload --log-level debug  # verbose dev server with debug logging
+uvicorn main:app --host 0.0.0.0 --port 8000 # expose to local network
+```
+
+Docs: https://fastapi.tiangolo.com/deployment/manually/
+
+### Neon CLI
+
+```bash
+npm install -g neonctl
+neon auth                                        # authenticate with your Neon account
+
+neon branches create --name dev/yourname         # create an isolated DB branch for local dev
+neon branches list                               # list all branches and their status
+neon connection-string --branch dev/yourname     # get the pooled connection string for a branch
+neon branches delete dev/yourname                # delete a branch when done
+```
+
+Docs: https://neon.com/docs/reference/neon-cli
+
+> Each developer should create their own Neon branch (`dev/yourname`) and use its connection string as `DATABASE_URL` in `.env`. Never develop against the `main` branch.
+
+### Clerk CLI
+
+```bash
+npm install -g clerk
+
+clerk env pull       # pull CLERK_SECRET_KEY into .env
+clerk doctor         # validate backend Clerk integration
+```
+
+Docs: https://clerk.com/docs/cli

@@ -325,3 +325,33 @@ export const getAuthToken = () => authToken;
 ```
 
 Token is lost on page refresh; the wallet re-signs to obtain a new one. This is the correct tradeoff for a financial application.
+
+---
+
+## CLI Reference
+
+### Next.js
+
+```bash
+npm run dev          # start dev server at localhost:3000 with hot reload
+npm run build        # production build — run before deploying
+npm run start        # serve production build locally
+npx next info        # print system info for bug reports
+```
+
+Docs: https://nextjs.org/docs/app/api-reference/cli/next
+
+### Clerk CLI
+
+```bash
+npm install -g clerk
+
+clerk init           # auto-detect framework, install SDK, scaffold auth pages and middleware.ts
+clerk env pull       # pull NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY into .env.local
+clerk doctor         # validate Clerk integration and flag common misconfigurations
+clerk open           # open Clerk dashboard in browser
+```
+
+Docs: https://clerk.com/docs/cli
+
+> Run `clerk env pull` first on a new machine — it saves you manually copying keys from the dashboard.
