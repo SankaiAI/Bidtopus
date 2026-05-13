@@ -40,7 +40,11 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pip-log.txt
 
 # Private keys (never commit these)
 *.pem
