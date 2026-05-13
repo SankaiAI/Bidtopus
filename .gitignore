@@ -38,9 +38,10 @@ contracts/typechain/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs — folders are tracked, files inside are not
 *.log
-logs/
+**/logs/*
+!**/logs/.gitkeep
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
