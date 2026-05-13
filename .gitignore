@@ -50,3 +50,7 @@ pip-log.txt
 # Private keys (never commit these)
 *.pem
 *.key
+
+# Test artifacts
+.pytest_cache/
+backend/tests/test.db
