@@ -18,9 +18,12 @@ The frontend does not contain business logic. It renders state from the backend 
 | Framework | Next.js (App Router) |
 | Styling | Tailwind CSS + shadcn/ui |
 | Charts | Lightweight charts (e.g. Recharts or Chart.js) |
+| Authentication | Clerk (`@clerk/nextjs`) — email/Google sign-in, JWT issued per session |
 | Wallet connection | Circle App Kit — drop-in components for USDC send, bridge, swap, and unified balance |
 | Web3 / wallet fallback | wagmi + viem |
 | State / data fetching | React Query or SWR |
+
+**On Clerk:** Clerk handles email and Google sign-in out of the box. Wrap the app in `<ClerkProvider>` in `app/layout.tsx` and add `middleware.ts` to protect all `/contracts/*` routes. The Clerk JWT is sent as a `Bearer` token in every API request; the backend verifies it against `CLERK_SECRET_KEY`. Wallet connection (Circle App Kit) is a separate step that happens at the Escrow Funding screen — it is not login.
 
 **On Circle App Kit:** The hackathon judges score Circle tool usage at 20%. App Kit provides drop-in components for the most common USDC flows (Bridge, Swap, Send, Unified Balance). Use these for the escrow funding step rather than building wallet connection from scratch.
 
@@ -173,6 +176,94 @@ Each screen maps to a state. Navigation should follow this sequence and not allo
 - The approve execution button must not be active until the strategy plan is displayed.
 - Settlement outcome is shown as deterministic fact, not an AI opinion.
 - On-chain transaction hashes must be shown as proof for any fund movement.
+
+---
+
+## 6a. Security Rules (Frontend)
+
+### Never Render LLM Output as Raw HTML
+
+Agent-generated text appears in the conversation timeline. Rendering it with `dangerouslySetInnerHTML` opens a stored XSS vector — a manipulated LLM output could execute arbitrary JavaScript in the merchant's browser.
+
+```tsx
+// WRONG — executes any script tag in LLM output
+<div dangerouslySetInnerHTML={{ __html: message.content }} />
+
+// CORRECT — render as sanitized markdown or plain text only
+import ReactMarkdown from 'react-markdown';
+
+<ReactMarkdown
+  components={{
+    // Force external links to open safely
+    a: ({ href, children }) => (
+      <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+    ),
+    // Disallow raw HTML in markdown source
+    html: () => null,
+  }}
+>
+  {message.content}
+</ReactMarkdown>
+```
+
+### Approval Gates Are UX Only — Server Side is the Real Enforcement
+
+The disabled Approve button is a UX convenience. A determined attacker bypasses the frontend entirely and calls the API directly. Never rely on frontend gating for security. The backend state gate (checking `strategy_plans.approval_status` in the DB) is the actual enforcement.
+
+This means: if the backend state gate is missing, the frontend gate is worthless. Both must exist, and the backend gate is the one that matters.
+
+### USDC Amounts Must Display Exactly What Gets Sent
+
+Never truncate, round, or abbreviate USDC amounts shown before the merchant confirms a transaction. What the merchant reads must be the exact value passed to `fund()`.
+
+```tsx
+// WRONG — rounds 100.5 to "100 USDC", merchant funds more than shown
+<span>{Math.floor(contract.success_fee_usdc)} USDC</span>
+
+// CORRECT — display full precision, no rounding
+<span>{contract.success_fee_usdc.toFixed(2)} USDC</span>
+```
+
+### Validate Transaction Hashes Before Constructing Explorer URLs
+
+Arc tx hashes from the API must be validated before being embedded in links. An invalid or malicious hash value could produce a broken or misleading URL.
+
+```typescript
+const TX_HASH_REGEX = /^0x[a-fA-F0-9]{64}$/;
+
+function TxHashLink({ hash }: { hash: string }) {
+  if (!TX_HASH_REGEX.test(hash)) {
+    return <span className="text-muted">{hash}</span>;  // show but don't link
+  }
+  return (
+    <a
+      href={`${ARC_EXPLORER_URL}/tx/${hash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {hash.slice(0, 10)}...{hash.slice(-6)}
+    </a>
+  );
+}
+```
+
+### Let Clerk Manage the Session Token — Never Touch localStorage
+
+Clerk stores the JWT in a secure, httpOnly cookie automatically. Do not manually read, write, or copy the session token into `localStorage` or React state. Use `getToken()` from `useAuth()` when you need to attach it to an API request.
+
+```typescript
+// WRONG — copies JWT to localStorage, readable by any XSS script
+const { getToken } = useAuth();
+localStorage.setItem('auth_token', await getToken());
+
+// CORRECT — read token only when you need to send a request; never store it
+const { getToken } = useAuth();
+const res = await fetch('/api/contracts', {
+  headers: { Authorization: `Bearer ${await getToken()}` },
+});
+```
+
+Wallet connection (Circle App Kit) happens at the Escrow Funding step and is separate from Clerk session auth.
 
 ---
 

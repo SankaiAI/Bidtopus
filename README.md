@@ -95,15 +95,18 @@ Reference docs:
 |---|---|
 | `NEXT_PUBLIC_API_URL` | URL of the deployed backend service |
 | `NEXT_PUBLIC_ARC_EXPLORER_URL` | Arc block explorer base URL (for tx hash links) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (from Clerk dashboard — safe to expose) |
+| `CLERK_SECRET_KEY` | Clerk secret key — Next.js server-side only, never sent to browser |
 
 ### backend/ + agent/
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | PostgreSQL connection string (Supabase) |
+| `DATABASE_URL` | Neon pooled connection string (copy the **pooled** URL from Neon dashboard) |
+| `CLERK_SECRET_KEY` | Clerk secret key — used by `clerk-backend-api` to verify JWTs on every request |
 | `ANTHROPIC_API_KEY` | Claude API key for LLM negotiation and strategy generation |
 | `ARC_RPC_URL` | Arc testnet RPC endpoint (from ARC CLI setup) |
 | `ESCROW_CONTRACT_ADDRESS` | Deployed Arc escrow contract address (from contracts/ deploy) |
-| `SETTLER_PRIVATE_KEY` | Private key for the authorized settler wallet |
+| `SETTLER_PRIVATE_KEY` | Private key for the authorized settler wallet (use Circle Wallets in production) |
 | `CIRCLE_API_KEY` | Circle API key for Wallets and Paymaster |
 | `META_ADS_ACCESS_TOKEN` | Meta Ads API token (optional — mock adapter used if absent) |
 

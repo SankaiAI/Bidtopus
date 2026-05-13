@@ -189,6 +189,79 @@ The judges will look for real transactions on Arc testnet with real tx hashes. A
 
 ---
 
+## 9a. Security Rules (Smart Contract)
+
+### Reentrancy Prevention — Check-Effects-Interactions Pattern
+
+State must be updated **before** any external token transfer. This is the single most important smart contract security rule.
+
+```solidity
+// WRONG — state updated after transfer (reentrancy window open)
+function release() external onlySetter {
+    require(status == Status.Funded, "Not funded");
+    usdc.transfer(agent, amount);   // external call — attacker re-enters here
+    status = Status.Released;       // too late, state not yet updated
+}
+
+// CORRECT — state updated before transfer
+function release() external onlySetter {
+    require(status == Status.Funded, "Not funded");
+    status = Status.Released;            // close the reentrancy window first
+    emit Released(contractId, agent, amount, block.timestamp);
+    usdc.safeTransfer(agent, amount);    // then transfer using OpenZeppelin SafeERC20
+}
+```
+
+Apply this pattern to both `release()` and `refund()`.
+
+### Settler Private Key is the Master Key to All Escrows
+
+If `SETTLER_PRIVATE_KEY` leaks, an attacker calls `release()` on every funded escrow and drains all USDC to the agent wallet. This is catastrophic and irreversible.
+
+- Use **Circle Wallets** (HSM-backed) for the settler — never a raw private key in an env var
+- The settler wallet should hold zero balance of its own — it only signs transactions, the Paymaster covers fees
+- Add an explicit `require(amount > 0)` guard in `fund()` so zero-value escrows cannot be created
+
+### Verify USDC Token Address Before Deployment
+
+The USDC token address is hardcoded at deploy time and cannot be changed. Deploying with the wrong address means all escrowed "USDC" goes to a black hole contract.
+
+Before deploying: verify the address against Circle's official Arc testnet USDC documentation. Log it explicitly in the deploy script output:
+
+```javascript
+console.log("Deploying with USDC address:", USDC_TOKEN_ADDRESS);
+console.log("Settler address:", SETTLER_ADDRESS);
+// Require manual confirmation before proceeding
+```
+
+### Double-Settlement Prevention
+
+The `onlySetter` modifier prevents unauthorized callers. The status check prevents double-settlement. Both must be present:
+
+```solidity
+modifier onlySetter() {
+    require(msg.sender == settler, "Not authorized settler");
+    _;
+}
+
+function release() external onlySetter {
+    require(status == Status.Funded, "Already settled or not funded");
+    // ... check-effects-interactions pattern above
+}
+```
+
+### Emit Events for Every State Change
+
+On-chain proof is a judging criterion. All three settlement functions must emit events with full context. Verify events appear in the Arc block explorer before the demo.
+
+```solidity
+event Funded(bytes32 indexed contractId, address merchant, address agent, uint256 amount, uint256 timestamp);
+event Released(bytes32 indexed contractId, address agent, uint256 amount, uint256 timestamp);
+event Refunded(bytes32 indexed contractId, address merchant, uint256 amount, uint256 timestamp);
+```
+
+---
+
 ## 10. MVP Acceptance Criteria (Contracts)
 
 - [ ] ARC CLI is installed and connected to the Canteen-hosted Arc testnet.
