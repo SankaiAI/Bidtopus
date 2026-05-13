@@ -19,6 +19,26 @@ Read [AGENT.md](AGENT.md) for the component map. Read [README.md](README.md) for
 
 ---
 
+## When to Raise a Ticket
+
+Raise a ticket when you hit something you **cannot resolve by reading your own files**.
+
+| Situation | What to do |
+|---|---|
+| You need an endpoint, schema, or behavior owned by another component | Ticket to that component — `needs: backend/frontend/contracts` |
+| The PRD and README contradict each other | Ticket to human — `needs: human` |
+| Completing your work requires changing another component's behavior | Ticket to that component before making any assumptions |
+| You think your own PRD needs to change | Ticket to human — `needs: human` — do not self-edit |
+
+**Do not raise a ticket for:**
+- Anything answerable by reading your own `PRD.md`, `README.md`, `AGENT.md`, or `docs/`
+- Implementation decisions within your own directory
+- Clarifications you can resolve with a reasonable assumption — make the assumption, note it in a code comment, keep moving
+
+**Never edit another component's PRD or README.** If you believe a change is needed, raise a `needs: human` ticket describing what should change and why. The human decides.
+
+---
+
 ## Cross-Team Coordination
 
 ### Setup — run this once at the start of every session
@@ -74,6 +94,24 @@ gh issue create \
 ## Request
 
 ## Definition of Done"
+```
+
+### When you need a human decision (spec conflict or PRD change)
+
+```bash
+gh issue create \
+  --title "[agent → human] Short description of the conflict or proposed change" \
+  --label "needs: human" \
+  --repo SankaiAI/outcomeX \
+  --body "**From:** agent
+**Type:** spec-conflict OR prd-change-request
+**Blocking:** what cannot be built until this is resolved
+
+## What the current spec says
+
+## What the problem is
+
+## What I propose"
 ```
 
 Reference issues in commits: `Closes #3`
