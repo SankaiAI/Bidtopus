@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
+import { useMessages } from '@/hooks/useMessages'
+import { useActionApprovals } from '@/hooks/useActionApprovals'
 
 const C = {
   bg:           'var(--c-bg)',
@@ -118,65 +120,6 @@ const STATUS_COLORS = {
   failure:         { color: C.muted,  bg: 'var(--c-bg)'        },
 }
 
-// ─── MOCK CHAT HISTORIES ──────────────────────────────────────────────────────
-const CHATS = {
-  c1: [
-    { role: 'user',   text: 'I want to run a retargeting campaign for my summer sale. Target ROAS 2.0 with $500 minimum spend over 7 days.',                                                                                                                                              time: 'May 9 · 9:02 AM' },
-    { role: 'agent',  text: "I've analyzed your Meta account. Your 30-day website visitor audience shows strong purchase intent signals.\n\nI estimate a **61% chance** of achieving ROAS ≥ 2.0 within 7 days. My strategy: retargeting campaign targeting 30-day site visitors with value-oriented creative, optimizing for purchases at $75/day.\n\nMy success fee is **100 USDC**, locked in Arc escrow — you only pay if I hit your target.", time: 'May 9 · 9:02 AM' },
-    { role: 'user',   text: "Let's go.",                                                                                                                                                                                                                                                  time: 'May 9 · 9:04 AM' },
-    { role: 'system', text: 'Contract created · Escrow funded',                                                                                                                                                                                                                           time: 'May 9 · 9:05 AM' },
-    { role: 'agent',  text: "Escrow confirmed — 100 USDC locked. Before I launch any ads, I'll walk you through each step. Your approval is required before any action executes.",                                                                                                        time: 'May 9 · 9:05 AM' },
-    { role: 'agent-action', id: 'c1-a1', title: 'Create retargeting campaign', detail: '30-day website visitors · Sales objective', actionType: 'campaign', status: 'approved', approvedAt: 'May 9 · 9:06 AM', time: 'May 9 · 9:06 AM' },
-    { role: 'agent-action', id: 'c1-a2', title: 'Set daily budget — $75/day', detail: 'Purchase conversion optimization', actionType: 'budget', status: 'approved', approvedAt: 'May 9 · 9:07 AM', time: 'May 9 · 9:07 AM' },
-    { role: 'agent-action', id: 'c1-a3', title: 'Launch 3 ad creatives', detail: 'Product benefit messaging · A/B split test', actionType: 'creative', status: 'approved', approvedAt: 'May 9 · 9:08 AM', time: 'May 9 · 9:08 AM' },
-    { role: 'system', text: 'Campaign launched · 3 actions approved by merchant',                                                                                                                                                                                                         time: 'May 9 · 9:09 AM' },
-    { role: 'agent-update', text: 'Purchase volume is tracking well — keeping current budget split across 3 ad sets.',                                                                                                                                                                    time: 'May 10 · 8:15 AM', metric: { roas: 1.22, day: 1 } },
-    { role: 'agent-update', text: 'Ad set B is outperforming by 22%. Shifting 15% more budget there tomorrow.',                                                                                                                                                                           time: 'May 11 · 8:30 AM', metric: { roas: 1.45, day: 2 } },
-    { role: 'agent-update', text: 'Budget reallocation working — ad set B now drives 58% of conversions. On track.',                                                                                                                                                                      time: 'May 12 · 8:10 AM', metric: { roas: 1.62, day: 3 } },
-    { role: 'agent-update', text: 'Trending strong. Maximizing delivery over the final 3 days.',                                                                                                                                                                                          time: 'May 12 · 5:30 PM', metric: { roas: 1.74, day: 4 } },
-    { role: 'agent',  text: "Day 4 wrapped. Ready to execute the key optimization — shifting budget toward the best-performing ad set for Days 5–7. Your approval is needed before I proceed.",                                                                                           time: 'May 12 · 5:31 PM' },
-    { role: 'agent-action', id: 'c1-a4', title: 'Shift budget to best-performing ad set', detail: 'Move 40% from Ad Set A+C → Ad Set B · Day 5 optimization', actionType: 'budget', status: 'pending', time: 'May 12 · 5:31 PM' },
-  ],
-  c2: [
-    { role: 'user',   text: 'Launching a new product next week. Target ROAS 1.8 with $300 minimum spend, 14 days.',                                                                                                                                                                       time: 'May 11 · 2:00 PM' },
-    { role: 'agent',  text: "New product launches are tricky without historical data — let me analyze your account.\n\nYour product category and average order value ($87) support a **1.8× target**. Similar launches average 1.6–2.4× within 14 days. I estimate **72% probability**.\n\nI'll start broad — testing 4 interest segments — then rapidly scale winners. My fee is **150 USDC**, locked in Arc escrow.\n\nFund the escrow and I'll launch within 2 hours.", time: 'May 11 · 2:01 PM' },
-    { role: 'user',   text: "I'll fund it now.",                                                                                                                                                                                                                                          time: 'May 11 · 2:03 PM' },
-    { role: 'system', text: 'Contract created · Awaiting escrow funding',                                                                                                                                                                                                                 time: 'May 11 · 2:03 PM' },
-  ],
-  c3: [
-    { role: 'user',         text: 'I need a brand awareness campaign for Q1. ROAS target 2.5× over 30 days, $1000 minimum spend.',                                                                                                                                                         time: 'Mar 29 · 10:00 AM' },
-    { role: 'agent',        text: "30 days gives me enough room to properly optimize across multiple audience layers.\n\nI estimate **68% probability** of hitting ROAS ≥ 2.5×. Strategy: 1–3% lookalikes from your purchaser list + 14-day engaged visitor retargeting + dynamic product ads for cart abandoners.\n\nSuccess fee: **100 USDC** in Arc escrow.", time: 'Mar 29 · 10:01 AM' },
-    { role: 'user',         text: "Let's do it.",                                                                                                                                                                                                                                          time: 'Mar 29 · 10:02 AM' },
-    { role: 'system',       text: 'Contract created · Escrow funded',                                                                                                                                                                                                                     time: 'Mar 29 · 10:05 AM' },
-    { role: 'agent',        text: "Escrow confirmed. Here's my execution plan — I need approval for each step.",                                                                                                                                                                           time: 'Mar 29 · 10:05 AM' },
-    { role: 'agent-action', id: 'c3-a1', title: 'Launch 1–3% lookalike campaign', detail: 'Purchaser seed list · Cold audience', actionType: 'campaign', status: 'approved', approvedAt: 'Mar 29 · 10:06 AM', time: 'Mar 29 · 10:06 AM' },
-    { role: 'agent-action', id: 'c3-a2', title: 'Retargeting — 14-day engaged visitors', detail: 'Warm audience · Dynamic product ads', actionType: 'audience', status: 'approved', approvedAt: 'Mar 29 · 10:07 AM', time: 'Mar 29 · 10:07 AM' },
-    { role: 'agent-action', id: 'c3-a3', title: 'Dynamic product ads — cart abandoners', detail: 'High-intent audience · Catalog ads', actionType: 'creative', status: 'approved', approvedAt: 'Mar 29 · 10:08 AM', time: 'Mar 29 · 10:08 AM' },
-    { role: 'system',       text: 'Campaign launched · 3 actions approved by merchant',                                                                                                                                                                                                   time: 'Mar 29 · 10:09 AM' },
-    { role: 'agent-update', text: 'Lookalike audience performing well. Cart abandoner DPAs hitting 3.2× on their own.',                                                                                                                                                                   time: 'Apr 5 · 9:00 AM', metric: { roas: 1.80, day: 7 } },
-    { role: 'agent-update', text: 'Reallocated 60% of budget to the top ad set. Cart DPAs now driving 40% of all conversions.',                                                                                                                                                           time: 'Apr 12 · 9:00 AM', metric: { roas: 2.18, day: 14 } },
-    { role: 'agent-action', id: 'c3-a4', title: 'Reallocate 60% budget to top ad set', detail: 'Cart abandoner DPA → primary · Day 14 optimization', actionType: 'budget', status: 'approved', approvedAt: 'Apr 12 · 9:02 AM', time: 'Apr 12 · 9:01 AM' },
-    { role: 'agent-update', text: 'Target already exceeded with a week remaining. Scaling to maximize the final result.',                                                                                                                                                                  time: 'Apr 19 · 9:00 AM', metric: { roas: 2.56, day: 21 } },
-    { role: 'agent-update', text: 'Campaign complete. Final ROAS: 2.73× against your 2.5× target. 100 USDC success fee released. Great run.',                                                                                                                                            time: 'Apr 28 · 11:00 AM', metric: { roas: 2.73, day: 30 } },
-    { role: 'system',       text: 'Contract settled · 100 USDC released to agent · Campaign closed',                                                                                                                                                                                      time: 'Apr 28 · 11:01 AM' },
-  ],
-  c4: [
-    { role: 'user',         text: 'Flash sale this weekend. I need ROAS 3.0 in 3 days. Budget around $200.',                                                                                                                                                                              time: 'Apr 29 · 8:00 AM' },
-    { role: 'agent',        text: "ROAS 3.0 in 3 days is high risk — **41% probability**. The short window limits optimization cycles.\n\nI'd suggest lowering the target to 2.5× (68% probability) or extending to 7 days (61% at 3.0×). How do you want to proceed?",                   time: 'Apr 29 · 8:01 AM' },
-    { role: 'user',         text: 'I understand the risk. Proceed with original terms.',                                                                                                                                                                                                   time: 'Apr 29 · 8:02 AM' },
-    { role: 'agent',        text: "Understood. Proceeding with ROAS ≥ 3.0 in 3 days at **41% probability**. I'll use flash sale countdown formats and target your highest-intent audiences from day one.\n\nSuccess fee: **80 USDC** in Arc escrow.",                                      time: 'Apr 29 · 8:02 AM' },
-    { role: 'system',       text: 'Contract created · Escrow funded',                                                                                                                                                                                                                     time: 'Apr 29 · 8:05 AM' },
-    { role: 'agent',        text: "Escrow confirmed. Here's my plan for the 72-hour sprint — approval required for each step.",                                                                                                                                                            time: 'Apr 29 · 8:05 AM' },
-    { role: 'agent-action', id: 'c4-a1', title: 'Flash sale campaign — countdown formats', detail: 'Previous purchasers + cart abandoners · Urgency creative', actionType: 'campaign', status: 'approved', approvedAt: 'Apr 29 · 8:06 AM', time: 'Apr 29 · 8:06 AM' },
-    { role: 'agent-action', id: 'c4-a2', title: 'Maximize budget delivery — 72-hour window', detail: '$200 total · Accelerated delivery', actionType: 'budget', status: 'approved', approvedAt: 'Apr 29 · 8:07 AM', time: 'Apr 29 · 8:07 AM' },
-    { role: 'system',       text: 'Campaign launched · 2 actions approved by merchant',                                                                                                                                                                                                   time: 'Apr 29 · 8:08 AM' },
-    { role: 'agent-update', text: 'Below trajectory for 3.0×. Shifted all budget to previous purchasers — your highest-intent segment.',                                                                                                                                                  time: 'Apr 30 · 8:00 AM', metric: { roas: 2.10, day: 1 } },
-    { role: 'agent-update', text: "I've exhausted the highest-intent segments. The gap to 3.0× is unlikely to close in 24 hours.",                                                                                                                                                        time: 'May 1 · 8:00 AM', metric: { roas: 2.28, day: 2 } },
-    { role: 'agent-update', text: 'Campaign ended. Target of 3.0× was not met. 80 USDC has been refunded to your wallet per the escrow contract.',                                                                                                                                        time: 'May 2 · 12:00 PM', metric: { roas: 1.94, day: 3 } },
-    { role: 'system',       text: 'Contract closed · 80 USDC refunded to wallet',                                                                                                                                                                                                        time: 'May 2 · 12:01 PM' },
-  ],
-}
-
 // ─── ACTION ICONS ─────────────────────────────────────────────────────────────
 const ACTION_ICONS = {
   campaign: (
@@ -249,8 +192,6 @@ function AgentUpdate({ msg }) {
   const hasMetric = msg.metric?.roas !== undefined
   const roas = msg.metric?.roas
   const day = msg.metric?.day
-  const target = 2.0
-  const isOnTrack = roas >= target * 0.85
 
   return (
     <div style={{ borderRadius: '12px', border: `1px solid ${C.indigoBorder}`, background: C.indigoGlow, overflow: 'hidden', fontFamily: font }}>
@@ -267,9 +208,9 @@ function AgentUpdate({ msg }) {
           </span>
         </div>
         {hasMetric && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: isOnTrack ? C.greenBg : C.amberBg, padding: '3px 10px', borderRadius: 20 }}>
-            <span style={{ fontSize: '11px', color: isOnTrack ? C.green : C.amber, fontFamily: font }}>ROAS</span>
-            <span style={{ fontSize: '14px', fontWeight: 800, color: isOnTrack ? C.green : C.amber, fontFamily: font, letterSpacing: '-0.02em' }}>{roas}×</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontSize: '11px', color: C.muted, fontFamily: font }}>ROAS</span>
+            <span style={{ fontSize: '14px', fontWeight: 800, color: C.indigo, fontFamily: font, letterSpacing: '-0.02em' }}>{roas}×</span>
           </div>
         )}
       </div>
@@ -293,8 +234,8 @@ function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved }) {
   return (
     <div style={{
       borderRadius: '12px',
-      border: `1px solid ${isApproved ? C.greenBorder : C.indigoBorder}`,
-      background: isApproved ? C.greenBg : C.surface,
+      border: `1px solid ${isPending ? C.indigoBorder : C.border}`,
+      background: C.surface,
       overflow: 'hidden',
       fontFamily: font,
     }}>
@@ -302,23 +243,23 @@ function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: isPending ? `1px solid ${C.indigoBorder}` : 'none' }}>
         <div style={{
           width: 34, height: 34, borderRadius: 9, flexShrink: 0,
-          background: isApproved ? C.greenLight : C.indigoBg,
-          color: isApproved ? C.green : C.indigo,
+          background: isPending ? C.indigoBg : C.surfaceAlt,
+          color: isPending ? C.indigo : C.muted,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {icon}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: C.text, lineHeight: 1.3 }}>{msg.title}</div>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: isPending ? C.text : C.sub, lineHeight: 1.3 }}>{msg.title}</div>
           <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{msg.detail}</div>
         </div>
         <div style={{
           fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0,
-          color: isApproved ? C.green : C.amber,
-          background: isApproved ? C.greenLight : C.amberBg,
+          color: isPending ? C.indigo : C.faint,
+          background: isPending ? C.indigoBg : C.surfaceAlt,
           padding: '3px 9px', borderRadius: 20,
         }}>
-          {isAutoApproved ? 'Auto-approved' : isApproved ? 'Approved' : 'Pending'}
+          {isAutoApproved ? 'Auto-approved' : isApproved ? 'Done' : 'Awaiting'}
         </div>
       </div>
 
@@ -344,11 +285,11 @@ function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved }) {
         </div>
       )}
 
-      {/* Approved footer */}
+      {/* Done footer */}
       {isApproved && (
         <div style={{ padding: '7px 14px 10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
-          <span style={{ fontSize: '11px', color: C.green, fontWeight: 600 }}>{isAutoApproved ? 'Auto-approved' : 'Approved'}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+          <span style={{ fontSize: '11px', color: C.muted, fontWeight: 500 }}>{isAutoApproved ? 'Auto-approved' : 'Approved'}</span>
           <span style={{ fontSize: '11px', color: C.faint }}>· {msg.approvedAt || msg.time}</span>
         </div>
       )}
@@ -607,11 +548,8 @@ function StrategyTermsContent({ c }) {
 export default function WorkspacePage() {
   const { id } = useParams()
   const openMobileSidebar = useOpenMobileSidebar()
-  const [messages, setMessages]         = React.useState([])
-  const [thinking, setThinking]         = React.useState(false)
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
-  const [approvalMode, setApprovalMode] = React.useState('manual')
-  const [actionStatuses, setActionStatuses] = React.useState({})
+  const [approvalMode, setApprovalMode]       = React.useState('manual')
 
   const scrollRef       = React.useRef(null)
   const desktopInputRef = React.useRef(null)
@@ -620,10 +558,19 @@ export default function WorkspacePage() {
 
   const c = ALL[id]
 
-  React.useEffect(() => {
-    setMessages(CHATS[id] || [])
-    setActionStatuses({})
-  }, [id])
+  const { messages, isThinking, appendMessage, sendMessage } = useMessages(id)
+
+  const { getStatus, approve } = useActionApprovals(id, {
+    onApproved: () => {
+      setTimeout(() => {
+        appendMessage({
+          role: 'agent',
+          text: "Action confirmed. Executing now — I'll report back with results.",
+          time: 'Just now',
+        })
+      }, 350)
+    },
+  })
 
   React.useEffect(() => {
     const saved = localStorage.getItem('outcomex-approval-mode')
@@ -646,31 +593,7 @@ export default function WorkspacePage() {
 
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-  }, [messages, thinking])
-
-  function handleActionApprove(msgId) {
-    setActionStatuses(prev => ({ ...prev, [msgId]: 'approved' }))
-    setTimeout(() => {
-      setMessages(prev => [...prev, {
-        role: 'agent',
-        text: "Action confirmed. Executing now — I'll report back with results.",
-        time: 'Just now',
-      }])
-    }, 350)
-  }
-
-  function handleSend(text) {
-    setMessages(prev => [...prev, { role: 'user', text, time: 'Just now' }])
-    setThinking(true)
-    setTimeout(() => {
-      setThinking(false)
-      setMessages(prev => [...prev, {
-        role: 'agent',
-        text: "Got it. I'm actively monitoring the campaign and will send you an update as soon as there's a meaningful change.",
-        time: 'Just now',
-      }])
-    }, 1400)
-  }
+  }, [messages, isThinking])
 
   if (!c) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -727,18 +650,18 @@ export default function WorkspacePage() {
                   <AgentActionCard
                     msg={msg}
                     effectiveStatus={
-                      approvalMode === 'auto' && (actionStatuses[msg.id] || msg.status) === 'pending'
+                      approvalMode === 'auto' && getStatus(msg.id, msg.status) === 'pending'
                         ? 'auto'
-                        : actionStatuses[msg.id] || msg.status
+                        : getStatus(msg.id, msg.status)
                     }
-                    onApprove={() => handleActionApprove(msg.id)}
+                    onApprove={() => approve(msg.id)}
                   />
                 )}
                 {msg.role === 'system'       && <SystemEvent msg={msg} />}
               </div>
             ))}
 
-            {thinking && (
+            {isThinking && (
               <div style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 16px' }}>
                 <ThinkingDots />
               </div>
@@ -749,9 +672,9 @@ export default function WorkspacePage() {
           <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '32px 14px 20px', background: 'linear-gradient(to bottom, transparent, var(--c-surface) 35%)' }}>
             <AgentInputBar
               key={`m-${inputKey.current}`}
-              onSend={handleSend}
-              chatReady={!isResolved && !thinking}
-              loading={thinking}
+              onSend={sendMessage}
+              chatReady={!isResolved && !isThinking}
+              loading={isThinking}
               placeholder={isResolved ? 'Contract resolved — read-only' : 'Ask the agent anything…'}
               fontSize="16px"
               paddingLeft="16px"
@@ -763,9 +686,9 @@ export default function WorkspacePage() {
             <div style={{ maxWidth: '680px', margin: '0 auto' }}>
               <AgentInputBar
                 key={`d-${inputKey.current}`}
-                onSend={handleSend}
-                chatReady={!isResolved && !thinking}
-                loading={thinking}
+                onSend={sendMessage}
+                chatReady={!isResolved && !isThinking}
+                loading={isThinking}
                 placeholder={isResolved ? 'Contract resolved — read-only' : 'Ask the agent or send an update…'}
                 fontSize="13px"
                 paddingLeft="18px"
