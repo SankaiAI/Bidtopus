@@ -69,10 +69,10 @@ gh issue edit NUMBER --remove-label "needs: backend" --add-label "needs: CORRECT
 
 ```bash
 gh issue comment NUMBER --body "Confirmed this is mine. Picking it up now." --repo SankaiAI/outcomeX
-bash "$(git rev-parse --show-toplevel)/.github/scripts/move_issue.sh" NUMBER "In Progress" || true
+gh issue edit NUMBER --add-label "status: in-progress" --repo SankaiAI/outcomeX
 ```
 
-The `|| true` prevents the board move failure (needs PROJECT_TOKEN with project scope) from blocking the rest of the workflow.
+The label triggers the GitHub Projects automation rule that moves the card to the In Progress column.
 
 ---
 
@@ -87,7 +87,8 @@ Complete everything described in the **Request** section. When finished, continu
 ```bash
 gh issue comment NUMBER --body "Done. SUMMARY OF WHAT WAS BUILT" --repo SankaiAI/outcomeX
 gh issue close NUMBER --repo SankaiAI/outcomeX
-bash "$(git rev-parse --show-toplevel)/.github/scripts/move_issue.sh" NUMBER "Done" || true
 ```
+
+Closing the issue triggers the GitHub Projects automation rule that moves the card to the Done column.
 
 Reference the issue in your commit: `git commit -m "fix: description (Closes #NUMBER)"`

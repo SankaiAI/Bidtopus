@@ -13,6 +13,7 @@ import db.repo as repo
 from auth.clerk import get_current_user
 from db.session import get_db
 from models.schemas import NegotiationRequest
+from services.contract_service import require_contract_owner
 from config import settings
 
 router = APIRouter(prefix="/api", tags=["negotiation"])
@@ -66,7 +67,34 @@ async def stream_negotiation(
     db: Session = Depends(get_db),
 ):
     clean_message = bleach.clean(body.message, tags=[], strip=True)
-    log.info("negotiation stream start user=%s msg_len=%d history=%d", current_user.id, len(clean_message), len(body.history))
+
+    # Resolve or create the contract row
+    if body.contract_id:
+        contract = require_contract_owner(db, body.contract_id, current_user)
+        contract_id = str(contract.id)
+        is_first_turn = False
+    else:
+        contract = repo.create_contract(
+            db,
+            merchant_id=current_user.id,
+            target_metric="ROAS",
+            status="Negotiating",
+        )
+        contract_id = str(contract.id)
+        is_first_turn = True
+        messages_repo.append(
+            db, contract_id, "system", "system_event",
+            content="Negotiation started",
+            extra={"status": "Negotiating"},
+        )
+
+    # Save user message before streaming — never lost regardless of what follows
+    messages_repo.append(db, contract_id, "merchant", "message", content=clean_message)
+
+    log.info(
+        "negotiation stream start user=%s contract=%s first=%s msg_len=%d",
+        current_user.id, contract_id, is_first_turn, len(clean_message),
+    )
 
     messages = [
         {"role": item.role, "content": item.content}
@@ -77,7 +105,11 @@ async def stream_negotiation(
     async def generate():
         try:
             aborted = False
+            accumulated = ""
             final_msg = None
+
+            if is_first_turn:
+                yield f"event: session_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
 
             with _anthropic.messages.stream(
                 model="claude-sonnet-4-6",
@@ -91,10 +123,16 @@ async def stream_negotiation(
                         aborted = True
                         stream.close()
                         break
+                    accumulated += text
                     yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
                 if not aborted:
                     final_msg = stream.get_final_message()
+
+            # Flush whatever accumulated — covers both normal completion and Stop button
+            if accumulated:
+                sanitized = bleach.clean(accumulated, tags=[], strip=True)
+                messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
             if aborted or final_msg is None:
                 return
@@ -105,39 +143,38 @@ async def stream_negotiation(
                         continue
 
                     inp = block.input
-                    contract = repo.create_contract(
+
+                    # Update the existing Negotiating row instead of creating a new contract
+                    repo.finalize_negotiating_contract(
                         db,
-                        merchant_id=current_user.id,
+                        contract_id=contract_id,
                         threshold=inp["target_roas"],
                         minimum_spend=inp["min_spend_usd"],
                         time_window_days=inp["time_window_days"],
                         success_fee_usdc=inp["success_fee_usdc"],
                         campaign_mode=inp["campaign_mode"],
                         campaign_goal=inp.get("campaign_goal", ""),
-                        status="Created",
                     )
 
                     repo.log_audit_event(
                         db,
-                        contract_id=contract.id,
+                        contract_id=contract_id,
                         component="llm_negotiation",
                         event_type="result",
-                        payload={"action": "contract_created_via_negotiation", "terms": inp},
+                        payload={"action": "contract_finalized_via_negotiation", "terms": inp},
                     )
 
                     messages_repo.append(
-                        db, contract.id, "system", "system_event",
+                        db, contract_id, "system", "system_event",
                         content="Contract created",
                         extra={"status": "Created"},
                     )
 
-                    log.info("contract created via negotiation contract=%s user=%s", contract.id, current_user.id)
-                    yield f"event: contract_created\ndata: {json.dumps({'contract_id': str(contract.id)})}\n\n"
+                    log.info("contract finalized via negotiation contract=%s user=%s", contract_id, current_user.id)
+                    yield f"event: contract_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
 
                     # Stream Claude's closing summary after the tool call
-                    assistant_content = [
-                        b.model_dump() for b in final_msg.content
-                    ]
+                    assistant_content = [b.model_dump() for b in final_msg.content]
                     follow_messages = messages + [
                         {"role": "assistant", "content": assistant_content},
                         {
@@ -145,7 +182,7 @@ async def stream_negotiation(
                             "content": [{
                                 "type": "tool_result",
                                 "tool_use_id": block.id,
-                                "content": json.dumps({"success": True, "contract_id": str(contract.id)}),
+                                "content": json.dumps({"success": True, "contract_id": contract_id}),
                             }],
                         },
                     ]
@@ -160,22 +197,19 @@ async def stream_negotiation(
                         follow_text = ""
                         for text in follow_stream.text_stream:
                             if await request.is_disconnected():
-                                aborted = True
                                 follow_stream.close()
                                 break
                             follow_text += text
                             yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
-                        if not aborted and follow_text:
+                        if follow_text:
                             sanitized = bleach.clean(follow_text, tags=[], strip=True)
-                            messages_repo.append(
-                                db, contract.id, "agent", "message", content=sanitized
-                            )
+                            messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
-                    break  # only one finalize_contract call expected
+                    break
 
         except Exception as e:
-            log.exception("negotiation stream error user=%s", current_user.id)
+            log.exception("negotiation stream error user=%s contract=%s", current_user.id, contract_id)
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

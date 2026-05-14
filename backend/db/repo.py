@@ -59,6 +59,29 @@ def update_contract_status(db: Session, contract_id: str, status: str, **extra) 
     return contract
 
 
+def finalize_negotiating_contract(
+    db: Session,
+    contract_id: str,
+    threshold: float,
+    minimum_spend: float,
+    time_window_days: int,
+    success_fee_usdc: float,
+    campaign_mode: str,
+    campaign_goal: str = "",
+) -> PerformanceContract:
+    contract = get_contract(db, contract_id)
+    contract.status = "Created"
+    contract.threshold = threshold
+    contract.minimum_spend = minimum_spend
+    contract.time_window_days = time_window_days
+    contract.success_fee_usdc = success_fee_usdc
+    contract.campaign_mode = campaign_mode
+    contract.campaign_goal = campaign_goal
+    db.commit()
+    db.refresh(contract)
+    return contract
+
+
 def list_contracts_for_merchant(db: Session, merchant_id: str) -> list[PerformanceContract]:
     return (
         db.query(PerformanceContract)

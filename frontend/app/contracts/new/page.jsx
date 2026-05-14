@@ -8,6 +8,10 @@ import { useAuth, useClerk } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
 import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
+import { createApiClient } from '@/lib/api'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const isUUID = (s) => UUID_RE.test(s)
 
 const C = {
   bg:         '#f4f4f8',
@@ -325,7 +329,7 @@ export default function ContractChatPage() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const sessionId    = searchParams.get('session')
-  const { isSignedIn, isLoaded } = useAuth()
+  const { isSignedIn, isLoaded, getToken } = useAuth()
   const { openSignIn }            = useClerk()
   const [messages,     setMessages]     = React.useState([])
   const [loading,      setLoading]      = React.useState(false)
@@ -334,6 +338,11 @@ export default function ContractChatPage() {
   const [chatStep,     setChatStep]     = React.useState('choose') // 'choose' | 'ready'
   const [inputKey,     setInputKey]     = React.useState(0)
   const [isMobile,     setIsMobile]     = React.useState(false)
+
+  const [contractId, setContractId] = React.useState(null)
+  const contractIdRef    = React.useRef(null)
+  // true only when contractId was set from the URL — triggers one server hydration
+  const shouldHydrateRef = React.useRef(false)
 
   const scrollRef          = React.useRef(null)
   const mobileInputRef     = React.useRef(null)
@@ -396,11 +405,6 @@ export default function ContractChatPage() {
 
     if (chatStep === 'choose') setChatStep('ready')
 
-    // Build history from prior turns (exclude messages without text content)
-    const history = messages
-      .filter(m => m.content?.trim())
-      .map(m => ({ role: m.role, content: m.content }))
-
     const userMsg = { role: 'user', content: text.trim() }
     const updated = [...messages, userMsg]
     setMessages(updated)
@@ -413,7 +417,11 @@ export default function ContractChatPage() {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim(), history }),
+        body: JSON.stringify({
+          message: text.trim(),
+          history: [],
+          ...(contractIdRef.current ? { contract_id: contractIdRef.current } : {}),
+        }),
         signal: controller.signal,
       })
 
@@ -509,8 +517,20 @@ export default function ContractChatPage() {
               })
             }
 
+          } else if (eventType === 'session_created') {
+            const cid = data.contract_id
+            setContractId(cid)
+            contractIdRef.current = cid
+            // Prevent the session-change effect from treating this URL update as a new session
+            prevSessionIdRef.current = cid
+            router.replace(`/contracts/new?session=${cid}`)
+            // Seed localStorage so the sidebar shows this session immediately
+            const firstUserMsg = updated.find(m => m.role === 'user')
+            const title = firstUserMsg?.content?.slice(0, 60) || 'New negotiation'
+            upsertSession(cid, { title, messages: updated, createdAt: new Date().toISOString() })
+
           } else if (eventType === 'contract_created') {
-            // Agent created a contract — redirect to its workspace where the detail panel lives
+            // Agent finalized terms — redirect to the contract workspace
             if (data.contract_id) router.push(`/contracts/${data.contract_id}/workspace`)
 
           } else if (eventType === 'error') {
@@ -589,9 +609,11 @@ export default function ContractChatPage() {
     setIsStreaming(false)
     setLoading(false)
     streamingDetailRef.current = ''
+    setContractId(null)
+    contractIdRef.current = null
   }
 
-  // On session change: restore from localStorage if it exists, otherwise start fresh
+  // On session change: reset state and show localStorage cache; server hydration runs separately
   const prevSessionIdRef = React.useRef(undefined)
   React.useEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
@@ -605,23 +627,67 @@ export default function ContractChatPage() {
     setInputKey(k => k + 1)
     streamingDetailRef.current = ''
 
-    const existing = sessionId ? getSession(sessionId) : null
-    if (existing?.messages?.length > 0) {
-      setMessages(existing.messages)
-      setChatStep('ready')
+    if (sessionId && isUUID(sessionId)) {
+      // Server-side contract session — set contractId and flag for hydration
+      setContractId(sessionId)
+      contractIdRef.current = sessionId
+      shouldHydrateRef.current = true
+      // Fast paint from localStorage cache while server fetch is in flight
+      const cached = getSession(sessionId)
+      if (cached?.messages?.length > 0) {
+        setMessages(cached.messages)
+        setChatStep('ready')
+      } else {
+        setMessages([])
+        setChatStep('choose')
+      }
     } else {
-      setMessages([])
-      setChatStep('choose')
+      setContractId(null)
+      contractIdRef.current = null
+      shouldHydrateRef.current = false
+      const existing = sessionId ? getSession(sessionId) : null
+      if (existing?.messages?.length > 0) {
+        setMessages(existing.messages)
+        setChatStep('ready')
+      } else {
+        setMessages([])
+        setChatStep('choose')
+      }
     }
   }, [sessionId])
 
-  // Persist messages to localStorage after each completed turn
+  // Hydrate from server when opening a bookmarked/shared session URL
   React.useEffect(() => {
-    if (!sessionId || messages.length === 0 || isStreaming) return
+    if (!contractId || !isLoaded || !isSignedIn || !shouldHydrateRef.current) return
+    shouldHydrateRef.current = false
+
+    createApiClient(getToken).getMessages(contractId)
+      .then(serverMsgs => {
+        const uiMsgs = serverMsgs
+          .filter(m => m.role !== 'system')
+          .map(m => {
+            const isAgent = m.role === 'agent' || m.role === 'assistant'
+            return isAgent
+              ? { role: 'assistant', content: m.content, acknowledgment: '', ackDone: true, thinking: null }
+              : { role: 'user', content: m.content }
+          })
+        if (uiMsgs.length > 0) {
+          setMessages(uiMsgs)
+          setChatStep('ready')
+        }
+      })
+      .catch(() => {}) // silently fall back to localStorage already shown
+  }, [contractId, isLoaded, isSignedIn])
+
+  // Write-through cache: persist messages to localStorage after each completed turn.
+  // Server is the source of truth; localStorage is for fast paint on next load.
+  React.useEffect(() => {
+    const cacheKey = contractId || sessionId
+    if (!cacheKey || messages.length === 0 || isStreaming) return
     const firstUserMsg = messages.find(m => m.role === 'user')
     const title = firstUserMsg?.content?.slice(0, 60) || 'New conversation'
-    upsertSession(sessionId, { title, messages })
-  }, [messages, isStreaming, sessionId])
+    upsertSession(cacheKey, { title, messages })
+  }, [messages, isStreaming, sessionId, contractId])
 
   const chatReady = true
   const lastMsgIdx = messages.length - 1

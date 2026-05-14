@@ -202,3 +202,4 @@ class NegotiationHistoryItem(BaseModel):
 class NegotiationRequest(BaseModel):
     message: str
     history: list[NegotiationHistoryItem] = []
+    contract_id: Optional[str] = None

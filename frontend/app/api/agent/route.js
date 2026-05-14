@@ -9,7 +9,7 @@ function sse(event, data) {
 
 export async function POST(request) {
   const reqStart = Date.now()
-  const { message, history = [] } = await request.json()
+  const { message, history = [], contract_id } = await request.json()
 
   if (!message?.trim()) {
     logWarn(SRC, 'empty message rejected')
@@ -29,7 +29,7 @@ export async function POST(request) {
   const { getToken } = await auth()
   const token = await getToken()
 
-  logInfo(SRC, 'POST received', { message: message.slice(0, 120), historyLen: history.length })
+  logInfo(SRC, 'POST received', { message: message.slice(0, 120), historyLen: history.length, contract_id: contract_id ?? null })
 
   try {
     const res = await fetch(`${backendUrl}/api/negotiation/stream`, {
@@ -38,7 +38,7 @@ export async function POST(request) {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, ...(contract_id ? { contract_id } : {}) }),
     })
 
     if (!res.ok) {

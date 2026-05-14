@@ -2,10 +2,11 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useClerk, useUser } from '@clerk/nextjs'
+import { useAuth, useClerk, useUser } from '@clerk/nextjs'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
 import { getAllSessions, subscribeToSessions, generateSessionId } from '@/lib/workspaceSessions'
+import { createApiClient } from '@/lib/api'
 
 const ACCENT    = 'var(--c-indigo)'
 const GREEN     = 'var(--c-green)'
@@ -563,6 +564,8 @@ function Workspace() {
   const [filter, setFilter]       = useState('all')
   const [panelOpen, setPanelOpen] = useState(false)
   const [sessions, setSessions]   = useState([])
+  const [contracts, setContracts] = useState([])
+  const { isSignedIn, isLoaded, getToken } = useAuth()
   const pathname = usePathname()
 
   useEffect(() => {
@@ -570,15 +573,43 @@ function Workspace() {
     return subscribeToSessions(() => setSessions(getAllSessions()))
   }, [])
 
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    createApiClient(getToken).listContracts()
+      .then(data => setContracts(data || []))
+      .catch(() => {})
+  }, [isLoaded, isSignedIn])
+
   const activeSessionId = (pathname === '/contracts/new' && typeof window !== 'undefined')
     ? new URLSearchParams(window.location.search).get('session')
     : null
   const wsMatch = pathname.match(/^\/contracts\/([^/]+)\/workspace/)
   const activeContractId = wsMatch ? wsMatch[1] : null
 
-  // Merge real sessions (negotiating) with mock contracts for UI preview
+  // Server-authoritative Negotiating contracts, with localStorage title as fallback
+  const sessionMap = new Map(sessions.map(s => [s.id, s]))
+  const serverNegotiating = contracts
+    .filter(c => c.status?.toLowerCase() === 'negotiating')
+    .map(c => {
+      const local = sessionMap.get(c.id)
+      return {
+        id: c.id,
+        title: local?.title || c.campaign_goal || 'New negotiation',
+        status: 'negotiating',
+        sub: relativeTime(c.created_at),
+        href: `/contracts/new?session=${c.id}`,
+      }
+    })
+
+  // Legacy localStorage-only sessions (ws_xxx) not yet on the server
+  const serverIds = new Set(serverNegotiating.map(c => c.id))
+  const localOnly = sessions
+    .filter(s => !serverIds.has(s.id))
+    .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}` }))
+
   const allItems = [
-    ...sessions.map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}` })),
+    ...serverNegotiating,
+    ...localOnly,
     ...MOCK_CONTRACTS,
   ]
 
