@@ -650,7 +650,7 @@ function SidebarContent({ activeItem, collapsed, onToggle, onNavigate }) {
         flexShrink: 0, background: 'var(--c-sidebar)',
         width: collapsed ? '56px' : '100%',
       }}>
-        {!collapsed && <Link href="/" style={{ textDecoration: 'none' }}><LogoWithTheme size={17} /></Link>}
+        {!collapsed && <Link href="/landing" style={{ textDecoration: 'none' }}><LogoWithTheme size={17} /></Link>}
         <button onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} style={iconBtn} onMouseEnter={hoverOn} onMouseLeave={hoverOff}>
           {collapsed ? <PanelOpen /> : <PanelClose />}
         </button>
