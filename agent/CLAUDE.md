@@ -24,6 +24,19 @@ pip install <package> && pip freeze > requirements.txt
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet | You need a UI change or new field surfaced to the merchant |
+| **backend** | REST API, PostgreSQL, state machine, Clerk JWT verification | You need a DB schema change, new endpoint, or different state gate behavior |
+| **agent** ← you are here | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | N/A — others submit tickets to you |
+| **contracts** | Solidity escrow contract on Arc — ABI, deployed address, settlement logic | You need the contract address/ABI to wire up the Arc escrow adapter |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts, or decisions that affect more than one component.
+
+---
+
 ## Non-Negotiable Rules
 
 1. LLM never makes the settlement call. The deterministic resolution engine does.

@@ -24,6 +24,19 @@ pip install <package> && pip freeze > requirements.txt
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet | You need to change what the API returns or a new response shape |
+| **backend** ← you are here | REST API, PostgreSQL, state machine, Clerk JWT verification | N/A — others submit tickets to you |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need a different data shape or new capability from the agent |
+| **contracts** | Solidity escrow contract on Arc — ABI, deployed address, settlement logic | You need the contract address/ABI or a change to on-chain settlement |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts, or decisions that affect more than one component.
+
+---
+
 ## Non-Negotiable Rules
 
 1. Every state-transition endpoint checks pre-conditions before calling the agent. If the gate fails, return 400. No agent call happens.

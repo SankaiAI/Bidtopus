@@ -6,6 +6,19 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** ← you are here | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet | N/A — others submit tickets to you |
+| **backend** | REST API, PostgreSQL, state machine, Clerk JWT verification | You need a new endpoint, response shape change, or new DB field |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need different data surfaced in chat/stream or agent behavior change |
+| **contracts** | Solidity escrow contract on Arc — ABI, deployed address, settlement logic | You need the Arc explorer URL format, contract address, or ABI for tx hash display |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts, or decisions that affect more than one component.
+
+---
+
 ## Non-Negotiable Rules
 
 1. Never put business logic in the frontend. Render what the backend returns.

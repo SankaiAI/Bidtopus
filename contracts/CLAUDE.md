@@ -6,6 +6,19 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet | You need a UI change or new field surfaced to the merchant |
+| **backend** | REST API, PostgreSQL, state machine, Clerk JWT verification | You need a DB schema change, new endpoint, or state gate behavior |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need the agent's settler wallet address to set as authorized settler at deploy time |
+| **contracts** ← you are here | Solidity escrow contract on Arc — ABI, deployed address, settlement logic | N/A — others submit tickets to you |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts, or decisions that affect more than one component.
+
+---
+
 ## Non-Negotiable Rules
 
 1. Check-effects-interactions on every state-changing function. Update contract state before making external calls. This prevents reentrancy.
