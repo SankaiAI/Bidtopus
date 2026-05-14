@@ -1,5 +1,6 @@
 /**
- * Server-side logger. Writes to logs/frontend.log in development only.
+ * Server-side logger. Each process start writes to its own timestamped file
+ * under logs/frontend-YYYY-MM-DDTHH-mm-ss.log (dev only).
  * Import and use in API routes — never in client components.
  *
  * Usage:
@@ -11,22 +12,20 @@
 import fs   from 'fs'
 import path from 'path'
 
-const isDev     = process.env.NODE_ENV !== 'production'
-const LOG_FILE  = path.join(process.cwd(), 'logs', 'frontend.log')
-const MAX_BYTES = 5 * 1024 * 1024  // rotate at 5 MB
+const isDev    = process.env.NODE_ENV !== 'production'
+const LOG_DIR  = path.join(process.cwd(), 'logs')
 
-function rotate() {
-  try {
-    const stat = fs.statSync(LOG_FILE)
-    if (stat.size > MAX_BYTES) {
-      fs.renameSync(LOG_FILE, LOG_FILE.replace('.log', '.1.log'))
-    }
-  } catch { /* file doesn't exist yet — fine */ }
+// One file per process start — timestamp uses dashes so it's valid on Windows
+const startTs  = new Date().toISOString().replace(/:/g, '-').replace(/\.\d+Z$/, 'Z')
+const LOG_FILE = path.join(LOG_DIR, `frontend-${startTs}.log`)
+
+function ensureDir() {
+  if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true })
 }
 
 function write(line) {
   try {
-    rotate()
+    ensureDir()
     fs.appendFileSync(LOG_FILE, line + '\n', 'utf8')
   } catch (e) {
     // Never let logging crash the app
