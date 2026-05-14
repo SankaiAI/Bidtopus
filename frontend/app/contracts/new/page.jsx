@@ -282,6 +282,25 @@ const MD_COMPONENTS = {
   td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
 }
 
+// While streaming, strip any GFM table that hasn't finished yet so ReactMarkdown
+// doesn't render broken pipe chars. The table appears all at once when complete.
+function visibleContent(text, streaming) {
+  if (!streaming) return text
+  const lines = text.split('\n')
+  // Find the last non-empty line
+  let last = lines.length - 1
+  while (last >= 0 && !lines[last].trim()) last--
+  if (last < 0 || !lines[last].trim().startsWith('|')) return text
+  // Last content is a table row — walk back to find where this table block started
+  let start = last
+  while (start > 0 && lines[start - 1].trim().startsWith('|')) start--
+  // Only suppress real GFM tables (must contain a separator row like |---|---|)
+  const block = lines.slice(start, last + 1)
+  if (!block.some(l => /^\|[\s\-|:]+\|/.test(l))) return text
+  // Return everything before the incomplete table block
+  return lines.slice(0, start).join('\n')
+}
+
 const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle, streaming }) {
   if (msg.role === 'user') {
     return (
@@ -297,6 +316,8 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
     )
   }
 
+  const content = visibleContent(msg.content || '', streaming)
+
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', gap: '10px' }}>
       <div style={{ maxWidth: '100%', width: '100%', background: 'transparent', color: C.text, padding: '0', fontSize: '13px', lineHeight: 1.65 }}>
@@ -306,14 +327,10 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
             <ThinkingBlock thinking={msg.thinking} activeStepId={activeStepId} liveDetail={liveDetail} onToggle={() => onThinkingToggle(msgIndex)} />
           </div>
         )}
-        {msg.content && (
-          streaming
-            // Raw text while streaming — avoids broken partial-table rendering
-            ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-            // Full rich markdown once the stream is complete
-            : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
-                {msg.content}
-              </ReactMarkdown>
+        {content && (
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+            {content}
+          </ReactMarkdown>
         )}
       </div>
     </div>

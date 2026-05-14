@@ -47,23 +47,23 @@ function demoStream(encoder, controller) {
     q(() => {
       logDebug(SRC, 'demo thinking_step_start', { step_id: step.id })
       enq(encoder.encode(sse('thinking_step_start', { step_id: step.id, label: step.label })))
-    }, i === 0 ? 200 : 600)
+    }, i === 0 ? 80 : 250)
 
     const words = step.detail.split(' ')
     words.forEach((word, wi) => {
-      q(() => enq(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 30)
+      q(() => enq(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 12)
     })
 
     q(() => {
       logDebug(SRC, 'demo thinking_step_end', { step_id: step.id })
       enq(encoder.encode(sse('thinking_step_end', { step_id: step.id })))
-    }, 120)
+    }, 60)
   })
 
   q(() => {
     logDebug(SRC, 'demo thinking_end')
     enq(encoder.encode(sse('thinking_end', {})))
-  }, 200)
+  }, 80)
 
   const response = `**Underwriting Decision: Accept** ✓
 
@@ -97,7 +97,7 @@ Ready to proceed? I'll generate a full strategy plan once you fund the escrow.`
           try { controller.close() } catch (_) {}
         }, 50)
       }
-    }, ci * 4)
+    }, ci * 1.5)
   })
 
   return () => { stopped = true }
