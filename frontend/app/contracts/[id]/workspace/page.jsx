@@ -567,7 +567,7 @@ export default function WorkspacePage() {
 
   const c = ALL[id]
 
-  const { messages, isThinking, appendMessage, sendMessage } = useMessages(id)
+  const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage } = useMessages(id)
 
   const { getStatus, approve } = useActionApprovals(id, {
     onApproved: () => {
@@ -691,7 +691,9 @@ export default function WorkspacePage() {
             <AgentInputBar
               key={`m-${inputKey.current}`}
               onSend={sendMessage}
-              chatReady={!isResolved && !isThinking}
+              onStop={stopGeneration}
+              isGenerating={isThinking || isStreaming}
+              chatReady={!isResolved}
               loading={isThinking}
               placeholder={isResolved ? 'Contract resolved — read-only' : 'Ask the agent anything…'}
               fontSize="16px"
@@ -705,7 +707,9 @@ export default function WorkspacePage() {
               <AgentInputBar
                 key={`d-${inputKey.current}`}
                 onSend={sendMessage}
-                chatReady={!isResolved && !isThinking}
+                onStop={stopGeneration}
+                isGenerating={isThinking || isStreaming}
+                chatReady={!isResolved}
                 loading={isThinking}
                 placeholder={isResolved ? 'Contract resolved — read-only' : 'Ask the agent or send an update…'}
                 fontSize="13px"

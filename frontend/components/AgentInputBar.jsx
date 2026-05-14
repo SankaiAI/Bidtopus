@@ -18,6 +18,8 @@ const MAX_HEIGHT = 200   // px — beyond this the textarea scrolls instead of g
  *
  * Props:
  *   onSend(text: string) — called when the user submits
+ *   onStop() — called when user clicks Stop; renders Stop pill when provided + isGenerating
+ *   isGenerating: boolean — when true and onStop provided, shows Stop button instead of input
  *   chatReady: boolean   — disables/grays the bar when false
  *   loading: boolean     — disables send while the agent is responding
  *   placeholder: string
@@ -27,6 +29,8 @@ const MAX_HEIGHT = 200   // px — beyond this the textarea scrolls instead of g
  */
 const AgentInputBar = React.memo(function AgentInputBar({
   onSend,
+  onStop,
+  isGenerating,
   chatReady,
   loading,
   placeholder,
@@ -77,6 +81,31 @@ const AgentInputBar = React.memo(function AgentInputBar({
 
   const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  }
+
+  // ── Stop button (replaces entire pill while agent is generating) ────────────
+  if (isGenerating && onStop) {
+    return (
+      <button
+        onClick={onStop}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+          width: '100%', padding: '11px 20px', borderRadius: '24px',
+          background: BG, border: `1.5px solid ${BORDER}`,
+          cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif',
+          fontSize, fontWeight: 600, color: TEXT,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
+          transition: 'border-color 0.15s, background 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = '#EF4444'; e.currentTarget.style.background = '#fef2f2' }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER;    e.currentTarget.style.background = BG }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#EF4444" style={{ flexShrink: 0 }}>
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+        </svg>
+        <span style={{ color: '#EF4444' }}>Stop generating</span>
+      </button>
+    )
   }
 
   const sendDisabled = loading || !input.trim() || !chatReady

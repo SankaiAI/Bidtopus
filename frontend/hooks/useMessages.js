@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@clerk/nextjs'
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || ''
@@ -43,7 +43,13 @@ export function useMessages(contractId) {
   const { getToken } = useAuth()
   const [messages,    setMessages]    = useState([])
   const [isThinking,  setIsThinking]  = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
+  const abortRef = useRef(null)
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort()
+  }, [])
 
   // Step 1: hydrate full history from DB
   // Step 2: open SSE /events stream for live updates
@@ -125,6 +131,9 @@ export function useMessages(contractId) {
     appendMessage({ role: 'user', text, time: 'Just now' })
     setIsThinking(true)
 
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
       const token = await getToken()
       const res = await fetch(`${BASE_URL}/api/contracts/${contractId}/chat/stream`, {
@@ -134,6 +143,7 @@ export function useMessages(contractId) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({ message: text }),
+        signal: controller.signal,
       })
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -141,6 +151,7 @@ export function useMessages(contractId) {
       // Append an empty agent bubble that fills in as chunks arrive
       setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
       setIsThinking(false)
+      setIsStreaming(true)
 
       let agentText = ''
       const reader  = res.body.getReader()
@@ -172,6 +183,12 @@ export function useMessages(contractId) {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        // User stopped — leave partial content, clean up state silently
+        setIsThinking(false)
+        setIsStreaming(false)
+        return
+      }
       console.error('[OutcomeX] chat stream error', err)
       setIsThinking(false)
       appendMessage({
@@ -179,14 +196,19 @@ export function useMessages(contractId) {
         text: "Sorry, I couldn't process that. Please try again.",
         time: 'Just now',
       })
+    } finally {
+      setIsStreaming(false)
+      setIsThinking(false)
     }
   }, [contractId, getToken, appendMessage])
 
   return {
     messages,
     isThinking,
+    isStreaming,
     isConnected,
     sendMessage,
+    stopGeneration,
     appendMessage,
   }
 }

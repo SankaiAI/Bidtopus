@@ -326,12 +326,18 @@ export default function ContractChatPage() {
   const [inputKey,     setInputKey]     = React.useState(0)
   const [isMobile,     setIsMobile]     = React.useState(false)
 
-  const scrollRef         = React.useRef(null)
-  const mobileInputRef    = React.useRef(null)
-  const desktopInputRef   = React.useRef(null)
-  const sendMsgRef        = React.useRef(null)
+  const scrollRef          = React.useRef(null)
+  const mobileInputRef     = React.useRef(null)
+  const desktopInputRef    = React.useRef(null)
+  const sendMsgRef         = React.useRef(null)
   const streamingDetailRef = React.useRef('')
+  const abortControllerRef = React.useRef(null)
+  const [isStreaming,      setIsStreaming]     = React.useState(false)
   const [inputAreaHeight,  setInputAreaHeight] = React.useState(120)
+
+  const stopStream = React.useCallback(() => {
+    abortControllerRef.current?.abort()
+  }, [])
 
   React.useLayoutEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -386,11 +392,15 @@ export default function ContractChatPage() {
     setMessages(updated)
     setLoading(true)
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text.trim() }),
+        signal: controller.signal,
       })
 
       if (!res.ok) throw new Error('Agent unavailable')
@@ -468,7 +478,7 @@ export default function ContractChatPage() {
             })
 
           } else if (eventType === 'text') {
-            if (!streamingStarted) { streamingStarted = true; setLoading(false) }
+            if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
             fullText += data.delta || ''
             setMessages(prev => {
               const msgs = [...prev]
@@ -484,11 +494,20 @@ export default function ContractChatPage() {
         }
       }
     } catch (err) {
+      if (err.name === 'AbortError') {
+        // User stopped — leave partial content, clean up state silently
+        setLoading(false)
+        setIsStreaming(false)
+        setLiveDetail('')
+        setActiveStepId(null)
+        streamingDetailRef.current = ''
+        return
+      }
       setLoading(false)
+      setIsStreaming(false)
       setLiveDetail('')
       setActiveStepId(null)
       streamingDetailRef.current = ''
-      // Friendly fallback when backend not yet connected
       const isNetworkError = !err?.message || err.message.includes('fetch') || err.message === 'Agent unavailable'
       setMessages(prev => [...prev, {
         role: 'assistant', acknowledgment: '', ackDone: true, thinking: null,
@@ -497,6 +516,7 @@ export default function ContractChatPage() {
           : err.message,
       }])
     } finally {
+      setIsStreaming(false)
       setLoading(false)
       setLiveDetail('')
       setActiveStepId(null)
@@ -634,6 +654,8 @@ export default function ContractChatPage() {
             <AgentInputBar
               key={inputKey}
               onSend={handleSendStable}
+              onStop={stopStream}
+              isGenerating={loading || isStreaming}
               chatReady={chatReady}
               loading={loading}
               placeholder={chatReady ? "Describe your contract or ask a question…" : "Choose an option above to get started…"}
@@ -648,6 +670,8 @@ export default function ContractChatPage() {
               <AgentInputBar
                 key={inputKey}
                 onSend={handleSendStable}
+                onStop={stopStream}
+                isGenerating={loading || isStreaming}
                 chatReady={chatReady}
                 loading={loading}
                 placeholder={chatReady ? "Describe your ROAS target, budget, and time window…" : "Select or add a brand above to get started…"}
