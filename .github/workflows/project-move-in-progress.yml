@@ -6,7 +6,7 @@ on:
 
 jobs:
   move-to-in-progress:
-    if: github.event.label.name == 'status: in-progress'
+    if: "github.event.label.name == 'status: in-progress'"
     runs-on: ubuntu-latest
     steps:
       - name: Move issue to In Progress column
