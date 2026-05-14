@@ -1,5 +1,84 @@
 # OutcomeX — Agent
 
+## Quickstart — Running Locally
+
+The agent is a standalone FastAPI service running on port **8001**. The backend calls it over HTTP. Start them independently.
+
+### 1. Create and activate the virtual environment
+
+```bash
+cd agent/
+python -m venv .venv
+
+# Mac / Linux
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
+```
+
+### 2. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in the required values:
+
+| Variable | Required | Notes |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | Powers LLM negotiation and strategy generation |
+| `DATABASE_URL` | Yes | Postgres — use a Neon branch for local dev (see step 4) |
+| `META_ADS_ACCESS_TOKEN` | No | Leave blank — `META_ADS_MOCK=True` by default |
+| `CIRCLE_API_KEY` | No | Leave blank — `CIRCLE_MOCK=True` by default |
+| `ARC_RPC_URL` | No | Leave blank — `ARC_MOCK=True` by default |
+
+All three mock flags default to `True`, so the agent runs fully locally without any third-party credentials beyond `ANTHROPIC_API_KEY` and `DATABASE_URL`.
+
+### 4. Set up a local database branch (Neon)
+
+```bash
+npm install -g neonctl
+neon auth
+neon branches create --name dev/yourname
+neon connection-string --branch dev/yourname   # paste output into DATABASE_URL in .env
+```
+
+### 5. Start the agent service
+
+Run from inside the **`agent/` directory**:
+
+```bash
+uvicorn main:app --reload --port 8001
+```
+
+Confirm it's running:
+
+```bash
+curl http://localhost:8001/health
+# → {"status":"ok","model":"claude-sonnet-4-6","mock_mode":{...}}
+```
+
+API docs are available at `http://localhost:8001/docs`.
+
+### 7. Start the backend (separate terminal)
+
+```bash
+cd ../backend
+# ensure backend is configured to call agent at http://localhost:8001
+fastapi dev main.py
+```
+
+The backend routes agent calls to `http://localhost:8001/agent/<endpoint>` with `{ "contract_id": "..." }` in the request body.
+
+---
+
 ## Purpose
 The agent is the core of the product. It is an autonomous economic agent that evaluates performance contracts, negotiates terms, executes marketing strategies, monitors outcomes, and triggers settlement. It combines ML models for quantitative risk estimation with an LLM for reasoning, explanation, and strategy generation.
 
