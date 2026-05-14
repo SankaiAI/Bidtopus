@@ -34,20 +34,20 @@ export function useActionApprovals(contractId, { onApproved, onDeclined } = {}) 
     return overrides[actionId] ?? baseStatus
   }, [overrides])
 
-  const approve = useCallback((actionId) => {
+  const approve = useCallback((actionId, planId) => {
     setOverrides(prev => ({ ...prev, [actionId]: 'approved' }))
 
-    // TODO: POST /api/contracts/:contractId/actions/:actionId/approve
-    // On success the agent's next step arrives via useMessages SSE — no need
-    // to manually append; just let the stream handle it.
+    // TODO: POST /api/contracts/:contractId/approve-execution { plan_id: planId, approved: true }
+    // planId comes from msg.plan_id (set from extra.plan_id in backend approval_request rows).
+    // On success the agent's next step arrives via useMessages SSE stream.
 
     onApproved?.(actionId)
   }, [contractId, onApproved])
 
-  const decline = useCallback((actionId, reason = '') => {
+  const decline = useCallback((actionId, planId, reason = '') => {
     setOverrides(prev => ({ ...prev, [actionId]: 'declined' }))
 
-    // TODO: POST /api/contracts/:contractId/actions/:actionId/decline { reason }
+    // TODO: POST /api/contracts/:contractId/approve-execution { plan_id: planId, approved: false }
 
     onDeclined?.(actionId, reason)
   }, [contractId, onDeclined])

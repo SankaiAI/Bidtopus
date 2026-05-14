@@ -1,7 +1,6 @@
 /**
  * Backend API client factory.
  * Usage:
- *   const { useAuth } = require('@clerk/nextjs')
  *   const { getToken } = useAuth()
  *   const api = createApiClient(getToken)
  *   const contract = await api.getContract(id)
@@ -29,66 +28,80 @@ async function request(getToken, method, path, body) {
   return ct.includes('application/json') ? res.json() : res.text()
 }
 
+// Returns raw Response so the caller can read the body as a ReadableStream (SSE)
+async function requestRaw(getToken, method, path, body) {
+  const token = getToken ? await getToken() : null
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`API ${method} ${path} → ${res.status}: ${text}`)
+  }
+
+  return res
+}
+
 export function createApiClient(getToken) {
-  const get  = (path)       => request(getToken, 'GET',    path)
-  const post = (path, body) => request(getToken, 'POST',   path, body)
-  const put  = (path, body) => request(getToken, 'PUT',    path, body)
-  const del  = (path)       => request(getToken, 'DELETE', path)
+  const get     = (path)       => request(getToken, 'GET',  path)
+  const post    = (path, body) => request(getToken, 'POST', path, body)
+  const postRaw = (path, body) => requestRaw(getToken, 'POST', path, body)
 
   return {
     // ── Contracts ──────────────────────────────────────────────────────
-    // POST /contracts  { target_roas, min_spend_usd, window_days, success_fee_usdc, campaign_mode }
-    // → { id, status, ... }
-    createContract: (body) => post('/contracts', body),
+    createContract: (body) => post('/api/contracts', body),
+    getContract:    (id)   => get(`/api/contracts/${id}`),
+    listContracts:  ()     => get('/api/contracts'),
 
-    // GET /contracts/:id  → PerformanceContract
-    getContract: (id) => get(`/contracts/${id}`),
-
-    // GET /contracts  → PerformanceContract[]
-    listContracts: () => get('/contracts'),
-
-    // ── Underwriting ───────────────────────────────────────────────────
-    // POST /contracts/:id/underwrite  → UnderwritingResult
-    underwrite: (id) => post(`/contracts/${id}/underwrite`),
-
-    // POST /contracts/:id/accept  → { status: 'pending_escrow' }
-    acceptOffer: (id) => post(`/contracts/${id}/accept`),
-
-    // POST /contracts/:id/counter  { counter_fee_usdc }  → AgentOffer
-    counterOffer: (id, body) => post(`/contracts/${id}/counter`, body),
+    // ── Underwriting & Offer ───────────────────────────────────────────
+    underwrite:       (id)          => post(`/api/contracts/${id}/underwrite`),
+    generateAgentOffer: (id)        => post(`/api/contracts/${id}/agent-offer`),
+    // offerId comes from the agent-offer response
+    acceptOffer:      (id, offerId) => post(`/api/contracts/${id}/accept`, { offer_id: offerId }),
 
     // ── Messages / Timeline ────────────────────────────────────────────
-    // GET /contracts/:id/messages  → ContractMessage[]
-    getMessages: (id) => get(`/contracts/${id}/messages`),
+    getMessages: (id) => get(`/api/contracts/${id}/messages`),
 
     // ── Escrow ─────────────────────────────────────────────────────────
-    // POST /contracts/:id/escrow/confirm  { tx_hash }  → { status: 'active' }
-    confirmEscrow: (id, txHash) => post(`/contracts/${id}/escrow/confirm`, { tx_hash: txHash }),
+    // chainContractId: the Arc on-chain contract address returned by Circle App Kit
+    fundEscrow: (id, txHash, chainContractId, amountUsdc) =>
+      post(`/api/contracts/${id}/fund-escrow`, {
+        tx_hash: txHash,
+        chain_contract_id: chainContractId,
+        amount_usdc: amountUsdc,
+      }),
 
     // ── Strategy ───────────────────────────────────────────────────────
-    // GET /contracts/:id/strategy  → StrategyPlan
-    getStrategy: (id) => get(`/contracts/${id}/strategy`),
-
-    // POST /contracts/:id/strategy/approve  → { status: 'active' }
-    approveStrategy: (id) => post(`/contracts/${id}/strategy/approve`),
+    // Returns { plan_id, summary, planned_actions } — store in state, do not re-fetch
+    generateStrategy: (id) => post(`/api/contracts/${id}/generate-strategy`),
+    // planId comes from generateStrategy response; approved=false to decline
+    approveExecution: (id, planId, approved = true) =>
+      post(`/api/contracts/${id}/approve-execution`, { plan_id: planId, approved }),
+    // Fire-and-forget immediately after approveExecution
+    executeAdsActions: (id) => post(`/api/contracts/${id}/execute-ads-actions`),
 
     // ── Performance ────────────────────────────────────────────────────
-    // GET /contracts/:id/performance  → PerformanceSnapshot
-    getPerformance: (id) => get(`/contracts/${id}/performance`),
-
-    // ── Actions ────────────────────────────────────────────────────────
-    // POST /contracts/:id/actions/:actionId/approve  → { ok: true }
-    approveAction: (id, actionId) => post(`/contracts/${id}/actions/${actionId}/approve`),
-
-    // POST /contracts/:id/actions/:actionId/decline  → { ok: true }
-    declineAction: (id, actionId) => post(`/contracts/${id}/actions/${actionId}/decline`),
+    getPerformance: (id) => get(`/api/contracts/${id}/performance`),
 
     // ── Resolution ─────────────────────────────────────────────────────
-    // GET /contracts/:id/resolution  → ResolutionResult
-    getResolution: (id) => get(`/contracts/${id}/resolution`),
+    resolveContract: (id) => post(`/api/contracts/${id}/resolve`),
 
-    // ── Chat (non-streaming) ───────────────────────────────────────────
-    // POST /contracts/:id/chat  { message }  → { reply: string }
-    sendChatMessage: (id, message) => post(`/contracts/${id}/chat`, { message }),
+    // ── Chat (SSE streaming) ───────────────────────────────────────────
+    // Returns raw Response — caller reads body as ReadableStream
+    // Stream format: lines of "data: {\"text\":\"...\"}" ending with "data: [DONE]"
+    // See useMessages.js sendMessage for the consumer implementation
+    streamChat: (id, message) =>
+      postRaw(`/api/contracts/${id}/chat/stream`, { message }),
+
+    // ── Users ──────────────────────────────────────────────────────────
+    getMe: () => get('/api/users/me'),
+    connectWallet: (walletAddress, signature) =>
+      post('/api/users/me/wallet', { wallet_address: walletAddress, signature }),
   }
 }
