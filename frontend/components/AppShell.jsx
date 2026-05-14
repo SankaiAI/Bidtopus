@@ -27,6 +27,10 @@ export default function AppShell({ children }) {
   const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
     const saved = localStorage.getItem('outcomex-theme')
     if (saved === 'dark') {
       setIsDark(true)
