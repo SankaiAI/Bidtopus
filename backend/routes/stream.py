@@ -83,36 +83,39 @@ async def stream_chat(
     ]
 
     async def generate():
-        full_response = ""
-        aborted = False
-        with _anthropic.messages.stream(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=(
-                "You are the OutcomeX performance-marketing agent. "
-                "Answer the merchant's question about their contract. "
-                "Do not execute any actions — this is a read-only Q&A."
-            ),
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Contract status: {contract.status}\n"
-                    f"Recent activity:\n" + "\n".join(context_snippets) +
-                    f"\n\nMerchant question: {clean_message}"
+        try:
+            full_response = ""
+            aborted = False
+            with _anthropic.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=1024,
+                system=(
+                    "You are the OutcomeX performance-marketing agent. "
+                    "Answer the merchant's question about their contract. "
+                    "Do not execute any actions — this is a read-only Q&A."
                 ),
-            }],
-        ) as stream:
-            for text in stream.text_stream:
-                if await request.is_disconnected():
-                    aborted = True
-                    stream.close()
-                    break
-                full_response += text
-                yield f"data: {json.dumps({'text': text})}\n\n"
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Contract status: {contract.status}\n"
+                        f"Recent activity:\n" + "\n".join(context_snippets) +
+                        f"\n\nMerchant question: {clean_message}"
+                    ),
+                }],
+            ) as stream:
+                for text in stream.text_stream:
+                    if await request.is_disconnected():
+                        aborted = True
+                        stream.close()
+                        break
+                    full_response += text
+                    yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
-        if not aborted:
-            sanitized = bleach.clean(full_response, tags=[], strip=True)
-            messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
-            yield "data: [DONE]\n\n"
+            if not aborted:
+                sanitized = bleach.clean(full_response, tags=[], strip=True)
+                messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

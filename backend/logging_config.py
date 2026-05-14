@@ -1,13 +1,17 @@
 import logging
 import logging.config
-import os
+from datetime import datetime
 from pathlib import Path
 
-LOG_DIR = Path(__file__).parent / "docs" / "logs"
+LOG_DIR = Path(__file__).parent / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def setup_logging(level: str = "INFO") -> None:
+    now = datetime.now()
+    date_dir = LOG_DIR / now.strftime("%Y-%m-%d")
+    date_dir.mkdir(parents=True, exist_ok=True)
+    run_ts = now.strftime("%H-%M-%S")
     logging.config.dictConfig({
         "version": 1,
         "disable_existing_loggers": False,
@@ -24,21 +28,19 @@ def setup_logging(level: str = "INFO") -> None:
                 "stream": "ext://sys.stdout",
             },
             "app_file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
+                "class": "logging.FileHandler",
                 "formatter": "detailed",
-                "filename": str(LOG_DIR / "app.log"),
-                "when": "midnight",
-                "backupCount": 14,
+                "filename": str(date_dir / f"app_{run_ts}.log"),
                 "encoding": "utf-8",
+                "delay": True,
             },
             "error_file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
+                "class": "logging.FileHandler",
                 "formatter": "detailed",
-                "filename": str(LOG_DIR / "error.log"),
-                "when": "midnight",
-                "backupCount": 30,
-                "level": "ERROR",
+                "filename": str(date_dir / f"error_{run_ts}.log"),
                 "encoding": "utf-8",
+                "level": "ERROR",
+                "delay": True,
             },
         },
         "root": {
