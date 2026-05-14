@@ -1,11 +1,12 @@
 'use client'
 import React, { useState, useEffect, useLayoutEffect } from 'react'
 import Link from 'next/link'
+import { createPortal } from 'react-dom'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth, useClerk, useUser } from '@clerk/nextjs'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
-import { getAllSessions, subscribeToSessions, generateSessionId } from '@/lib/workspaceSessions'
+import { getAllSessions, subscribeToSessions, generateSessionId, deleteSession } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
 
 const ACCENT    = 'var(--c-indigo)'
@@ -81,6 +82,11 @@ const Icon = {
   Search: () => (
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+  ),
+  MoreHorizontal: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
     </svg>
   ),
 }
@@ -532,7 +538,7 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
 
 // ─── WORKSPACE ───────────────────────────────────────────────────────────────
 const MOCK_CONTRACTS = [
-  { id: 'mock_c1', title: 'Summer Sale — Retargeting', status: 'active',          sub: 'ROAS 1.86× · 3 days left',   href: '/contracts/mock_c1/workspace' },
+  { id: 'mock_c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/contracts/mock_c1/workspace', hasContract: true },
 ]
 
 const WS_FILTERS = [
@@ -561,12 +567,18 @@ function relativeTime(iso) {
 }
 
 function Workspace() {
-  const [filter, setFilter]       = useState('all')
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [sessions, setSessions]   = useState([])
-  const [contracts, setContracts] = useState([])
+  const [filter, setFilter]             = useState('all')
+  const [panelOpen, setPanelOpen]       = useState(false)
+  const [sessions, setSessions]         = useState([])
+  const [contracts, setContracts]       = useState([])
+  const [hoveredId, setHoveredId]       = useState(null)
+  const [menuState, setMenuState]       = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [toast, setToast]               = useState(null)
   const { isSignedIn, isLoaded, getToken } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
 
   useEffect(() => {
     setSessions(getAllSessions())
@@ -579,6 +591,19 @@ function Workspace() {
       .then(data => setContracts(data || []))
       .catch(() => {})
   }, [isLoaded, isSignedIn])
+
+  useEffect(() => {
+    if (!menuState) return
+    const close = (e) => { if (!e.target.closest('[data-ws-menu]')) setMenuState(null) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [menuState])
+
+  useEffect(() => {
+    if (!toast) return
+    const t = setTimeout(() => setToast(null), 4000)
+    return () => clearTimeout(t)
+  }, [toast])
 
   const activeSessionId = (pathname === '/contracts/new' && typeof window !== 'undefined')
     ? new URLSearchParams(window.location.search).get('session')
@@ -598,6 +623,8 @@ function Workspace() {
         status: 'negotiating',
         sub: relativeTime(c.created_at),
         href: `/contracts/new?session=${c.id}`,
+        hasContract: true,
+        _ts: c.created_at,
       }
     })
 
@@ -605,16 +632,55 @@ function Workspace() {
   const serverIds = new Set(serverNegotiating.map(c => c.id))
   const localOnly = sessions
     .filter(s => !serverIds.has(s.id))
-    .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}` }))
+    .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}`, hasContract: false, _ts: s.createdAt }))
 
   const allItems = [
     ...serverNegotiating,
     ...localOnly,
     ...MOCK_CONTRACTS,
-  ]
+  ].sort((a, b) => {
+    if (!a._ts) return 1
+    if (!b._ts) return -1
+    return new Date(b._ts) - new Date(a._ts)
+  })
 
   const current  = WS_FILTERS.find(f => f.id === filter)
   const filtered = allItems.filter(current.match)
+
+  const openMenu = (e, item) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = e.currentTarget.getBoundingClientRect()
+    setMenuState({ item, right: window.innerWidth - rect.right, top: rect.bottom + 4 })
+  }
+
+  const handleDeleteClick = (item) => {
+    setMenuState(null)
+    if (!item.hasContract) {
+      const wasActive = item.id === activeSessionId || item.id === activeContractId
+      deleteSession(item.id)
+      if (wasActive) router.push('/contracts/new')
+    } else {
+      setDeleteTarget(item)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleteLoading) return
+    setDeleteLoading(true)
+    try {
+      await createApiClient(getToken).deleteContract(deleteTarget.id)
+      const wasActive = deleteTarget.id === activeSessionId || deleteTarget.id === activeContractId
+      deleteSession(deleteTarget.id)
+      setDeleteTarget(null)
+      if (wasActive) router.push('/contracts/new')
+    } catch {
+      setToast('Failed to delete workspace. Please try again.')
+      setDeleteTarget(null)
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   return (
     <div style={{ padding: '0 10px' }}>
@@ -660,27 +726,96 @@ function Workspace() {
           {filtered.map(item => {
             const dot      = DOT_COLOR[item.status] || DOT_COLOR.failure
             const isActive = item.id === activeSessionId || item.id === activeContractId
+            const showBtn  = hoveredId === item.id || menuState?.item?.id === item.id
             return (
-              <Link
+              <div
                 key={item.id}
-                href={item.href}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', borderRadius: '8px', textDecoration: 'none', transition: 'background 0.12s', background: isActive ? '#eef2ff' : 'transparent' }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f5f3ff' }}
-                onMouseLeave={e => { e.currentTarget.style.background = isActive ? '#eef2ff' : 'transparent' }}
+                style={{ position: 'relative', borderRadius: '8px', background: isActive ? '#eef2ff' : showBtn ? '#f5f3ff' : 'transparent', transition: 'background 0.12s' }}
+                onMouseEnter={() => setHoveredId(item.id)}
+                onMouseLeave={() => setHoveredId(null)}
               >
-                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot.bg, flexShrink: 0, marginTop: '5px', animation: dot.pulse ? 'agentThinkPulse 1.5s ease-in-out infinite' : 'none' }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.title}
+                <Link
+                  href={item.href}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', paddingRight: showBtn ? '28px' : '8px', borderRadius: '8px', textDecoration: 'none', transition: 'padding-right 0.1s' }}
+                >
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot.bg, flexShrink: 0, marginTop: '5px', animation: dot.pulse ? 'agentThinkPulse 1.5s ease-in-out infinite' : 'none' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.title}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
+                      {item.sub}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
-                    {item.sub}
-                  </div>
-                </div>
-              </Link>
+                </Link>
+                {showBtn && (
+                  <button
+                    data-ws-menu="btn"
+                    onClick={(e) => openMenu(e, item)}
+                    style={{ position: 'absolute', right: '4px', top: '50%', transform: 'translateY(-50%)', background: 'var(--c-sidebar-active)', border: 'none', cursor: 'pointer', color: 'var(--c-sidebar-muted)', padding: '3px 4px', borderRadius: '5px', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Icon.MoreHorizontal />
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
+      )}
+
+      {menuState && createPortal(
+        <div
+          data-ws-menu="dropdown"
+          style={{ position: 'fixed', top: menuState.top, right: menuState.right, background: '#ffffff', border: '1px solid #e4e3ed', borderRadius: '8px', boxShadow: '0 4px 16px rgba(14,13,26,0.12)', zIndex: 9999, minWidth: '120px', overflow: 'hidden' }}
+        >
+          <button
+            onClick={() => handleDeleteClick(menuState.item)}
+            style={{ display: 'flex', alignItems: 'center', width: '100%', padding: '8px 14px', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '14px', fontWeight: 500, color: '#ef4444', fontFamily: 'Plus Jakarta Sans, sans-serif', textAlign: 'left' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#fff1f2'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            Delete
+          </button>
+        </div>,
+        document.body
+      )}
+
+      {deleteTarget && createPortal(
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.4)' }}
+          onClick={(e) => { if (e.target === e.currentTarget && !deleteLoading) setDeleteTarget(null) }}
+        >
+          <div style={{ background: '#ffffff', borderRadius: '14px', padding: '24px', width: '360px', maxWidth: 'calc(100vw - 32px)', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            <h3 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: 700, color: '#0e0d1a' }}>Delete workspace?</h3>
+            <p style={{ margin: '0 0 20px', fontSize: '14px', color: '#6b6880', lineHeight: 1.5 }}>
+              This workspace contains a contract. Deleting it will permanently remove all messages and the contract.
+            </p>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteLoading}
+                style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid #e4e3ed', background: '#ffffff', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: '#3d3c54', fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                disabled={deleteLoading}
+                style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#ef4444', cursor: deleteLoading ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 600, color: '#ffffff', fontFamily: 'Plus Jakarta Sans, sans-serif', opacity: deleteLoading ? 0.7 : 1 }}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {toast && createPortal(
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 10001, background: '#ef4444', color: '#ffffff', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', fontFamily: 'Plus Jakarta Sans, sans-serif', boxShadow: '0 4px 16px rgba(0,0,0,0.2)', maxWidth: '320px' }}>
+          {toast}
+        </div>,
+        document.body
       )}
     </div>
   )

@@ -49,8 +49,9 @@ async function requestRaw(getToken, method, path, body) {
 }
 
 export function createApiClient(getToken) {
-  const get     = (path)       => request(getToken, 'GET',  path)
-  const post    = (path, body) => request(getToken, 'POST', path, body)
+  const get     = (path)       => request(getToken, 'GET',    path)
+  const post    = (path, body) => request(getToken, 'POST',   path, body)
+  const del     = (path)       => request(getToken, 'DELETE', path)
   const postRaw = (path, body) => requestRaw(getToken, 'POST', path, body)
 
   return {
@@ -58,6 +59,7 @@ export function createApiClient(getToken) {
     createContract: (body) => post('/api/contracts', body),
     getContract:    (id)   => get(`/api/contracts/${id}`),
     listContracts:  ()     => get('/api/contracts'),
+    deleteContract: (id)   => del(`/api/contracts/${id}`),
 
     // ── Underwriting & Offer ───────────────────────────────────────────
     underwrite:       (id)          => post(`/api/contracts/${id}/underwrite`),
