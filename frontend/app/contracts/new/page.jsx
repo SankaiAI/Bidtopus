@@ -529,6 +529,9 @@ export default function ContractChatPage() {
             const title = firstUserMsg?.content?.slice(0, 60) || 'New negotiation'
             upsertSession(cid, { title, messages: updated, createdAt: new Date().toISOString() })
 
+          } else if (eventType === 'title_generated') {
+            if (data.title && contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
+
           } else if (eventType === 'contract_created') {
             // Agent finalized terms — redirect to the contract workspace
             if (data.contract_id) router.push(`/contracts/${data.contract_id}/workspace`)
