@@ -1,22 +1,29 @@
 """
-Single import boundary to the agent module.
-All backend code calls through here — nothing else imports from agent/.
+Single HTTP boundary to the agent service.
+All backend code calls through here — nothing else talks to the agent directly.
+Request body is always { "contract_id": "<uuid>" }.
 Returns plain dicts; the service layer owns persistence.
 """
 
 from typing import Any
 
+import httpx
 
-def _stub(name: str, **kwargs) -> dict[str, Any]:
-    """Placeholder until agent/ module is wired up."""
-    raise NotImplementedError(
-        f"agent_client.{name} is not yet implemented — agent/ module not connected"
-    )
+from config import settings
+
+_TIMEOUT = 120.0  # agent calls can be slow (LLM + Meta Ads API)
+
+
+def _post(path: str, contract_id: str) -> dict[str, Any]:
+    url = f"{settings.agent_base_url}{path}"
+    resp = httpx.post(url, json={"contract_id": contract_id}, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
 
 
 def run_underwriting(contract_id: str) -> dict[str, Any]:
     """
-    Call agent ML underwriting model.
+    ML underwriting model.
     Expected return shape:
     {
         "success_probability": float,
@@ -26,16 +33,12 @@ def run_underwriting(contract_id: str) -> dict[str, Any]:
         "recommended_fee_usdc": float,
     }
     """
-    try:
-        from agent.orchestrator import underwrite
-        return underwrite(contract_id)
-    except ImportError:
-        return _stub("run_underwriting", contract_id=contract_id)
+    return _post("/agent/underwrite", contract_id)
 
 
 def generate_agent_offer(contract_id: str) -> dict[str, Any]:
     """
-    Call agent LLM negotiation to produce merchant offer.
+    LLM negotiation offer.
     Expected return shape:
     {
         "offer_type": "accept" | "counteroffer" | "reject",
@@ -45,48 +48,36 @@ def generate_agent_offer(contract_id: str) -> dict[str, Any]:
         "revised_time_window_days": int | None,
     }
     """
-    try:
-        from agent.orchestrator import generate_offer
-        return generate_offer(contract_id)
-    except ImportError:
-        return _stub("generate_agent_offer", contract_id=contract_id)
+    return _post("/agent/agent-offer", contract_id)
 
 
 def generate_strategy(contract_id: str) -> dict[str, Any]:
     """
-    Call agent LLM to produce Meta Ads strategy plan.
+    Meta Ads strategy plan.
     Expected return shape:
     {
         "summary": str,
         "planned_actions": list[dict],
     }
     """
-    try:
-        from agent.orchestrator import generate_strategy_plan
-        return generate_strategy_plan(contract_id)
-    except ImportError:
-        return _stub("generate_strategy", contract_id=contract_id)
+    return _post("/agent/generate-strategy", contract_id)
 
 
 def execute_ads_actions(contract_id: str) -> dict[str, Any]:
     """
-    Call agent Meta Ads adapter to execute approved strategy.
+    Execute approved Meta Ads actions.
     Expected return shape:
     {
         "summary": str,
         "actions_executed": list[dict],
     }
     """
-    try:
-        from agent.orchestrator import execute_ads
-        return execute_ads(contract_id)
-    except ImportError:
-        return _stub("execute_ads_actions", contract_id=contract_id)
+    return _post("/agent/execute-ads", contract_id)
 
 
 def resolve_contract(contract_id: str) -> dict[str, Any]:
     """
-    Call agent resolution logic + Arc on-chain settlement.
+    Deterministic resolution + on-chain settlement.
     Expected return shape:
     {
         "final_spend": float,
@@ -96,8 +87,4 @@ def resolve_contract(contract_id: str) -> dict[str, Any]:
         "settlement_tx_hash": str | None,
     }
     """
-    try:
-        from agent.orchestrator import resolve
-        return resolve(contract_id)
-    except ImportError:
-        return _stub("resolve_contract", contract_id=contract_id)
+    return _post("/agent/resolve", contract_id)

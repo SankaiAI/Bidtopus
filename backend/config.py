@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     meta_ads_account_id: str = ""
     circle_api_key: str = ""
     settler_private_key: str = ""
+    agent_base_url: str = "http://localhost:8001"
     environment: str = "development"
     allowed_origins: str = "http://localhost:3000"
 
