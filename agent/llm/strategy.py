@@ -52,6 +52,16 @@ class StrategyGenerator:
             messages=[{"role": "user", "content": user_payload}],
         )
 
+        thinking = self._extract_thinking(response)
+        if thinking:
+            logger.info(
+                "llm_thinking",
+                contract_id=contract_terms.contract_id,
+                component="strategy",
+                thinking_tokens=settings.STRATEGY_THINKING_BUDGET,
+                thinking=thinking,
+            )
+
         raw_text = self._extract_text(response)
         plan = self._validate(raw_text, contract_terms.contract_id)
 
@@ -64,6 +74,11 @@ class StrategyGenerator:
         return plan
 
     # ── Private ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _extract_thinking(response: anthropic.types.Message) -> str | None:
+        parts = [block.thinking for block in response.content if block.type == "thinking"]
+        return "\n\n".join(parts) if parts else None
 
     @staticmethod
     def _extract_text(response: anthropic.types.Message) -> str:

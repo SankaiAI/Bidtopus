@@ -71,6 +71,7 @@ def _assert_valid_action(contract_status: str, action: str) -> None:
             f"Action '{action}' is invalid for contract in state '{contract_status}'. "
             f"Allowed: {allowed}"
         )
+    logger.info("state_gate_passed", state=contract_status, action=action)
 
 
 # ── Lazy singletons — loaded once at startup ──────────────────────────────────
@@ -128,6 +129,20 @@ def underwrite(
     audit = AuditLogger(db)
     _assert_valid_action(contract_status, "run_underwriting")
 
+    terms = underwriting_input.contract_terms
+    ctx = underwriting_input.account_context
+    logger.info(
+        "underwriting_inputs",
+        contract_id=contract_id,
+        target_roas=terms.requested_target_roas,
+        min_spend=terms.minimum_spend,
+        window_days=terms.time_window_days,
+        campaign_type=terms.campaign_type,
+        historical_roas_7d=ctx.historical_roas_7d,
+        historical_roas_30d=ctx.historical_roas_30d,
+        avg_daily_spend=ctx.avg_daily_spend,
+    )
+
     audit.log(contract_id, "ml_underwriting", "intent", {
         "inputs": underwriting_input.model_dump(),
     })
@@ -144,10 +159,15 @@ def underwrite(
     })
 
     logger.info(
-        "underwriting_complete",
+        "underwriting_decision",
         contract_id=contract_id,
         probability=result.success_probability,
+        risk_level=result.risk_level,
+        expected_roas_range=result.expected_roas_range,
         recommendation=result.recommendation,
+        recommended_fee_usdc=result.recommended_fee_usdc,
+        accept_threshold=settings.ACCEPT_THRESHOLD,
+        reject_threshold=settings.REJECT_THRESHOLD,
     )
     return result
 
@@ -166,7 +186,26 @@ def generate_offer(
 
     _assert_valid_action(contract_status, "generate_offer")
 
+    logger.info(
+        "negotiation_inputs",
+        contract_id=contract_id,
+        turn=turn_count,
+        max_turns=settings.MAX_NEGOTIATION_TURNS,
+        probability=underwriting_result.success_probability,
+        risk_level=underwriting_result.risk_level,
+        recommendation=underwriting_result.recommendation,
+        requested_roas=contract_terms.requested_target_roas,
+        requested_fee=contract_terms.success_fee_usdc,
+        recommended_fee=underwriting_result.recommended_fee_usdc,
+    )
+
     if turn_count >= settings.MAX_NEGOTIATION_TURNS:
+        logger.warning(
+            "negotiation_turn_limit_reached",
+            contract_id=contract_id,
+            turn_count=turn_count,
+            max_turns=settings.MAX_NEGOTIATION_TURNS,
+        )
         auto_reject = AgentOffer(
             offer_type="reject",
             message=(
@@ -229,6 +268,9 @@ def generate_offer(
         contract_id=contract_id,
         offer_type=offer.offer_type,
         turn=turn_count,
+        revised_threshold=offer.revised_threshold,
+        revised_fee_usdc=offer.revised_fee_usdc,
+        revised_time_window_days=offer.revised_time_window_days,
     )
     return offer
 
@@ -245,6 +287,18 @@ def generate_strategy(
     messages = MessagesRepo(db)
 
     _assert_valid_action(contract_status, "generate_strategy")
+
+    logger.info(
+        "strategy_inputs",
+        contract_id=contract_id,
+        target_roas=contract_terms.requested_target_roas,
+        min_spend=contract_terms.minimum_spend,
+        window_days=contract_terms.time_window_days,
+        campaign_type=contract_terms.campaign_type,
+        campaign_goal=contract_terms.campaign_goal,
+        avg_daily_spend=account_context.avg_daily_spend,
+        historical_roas_30d=account_context.historical_roas_30d,
+    )
 
     audit.log(contract_id, "llm_strategy", "intent", {
         "contract_terms": contract_terms.model_dump(),
@@ -450,11 +504,32 @@ def resolve(
 
     _assert_valid_action(contract_status, "run_resolution_engine")
 
+    logger.info(
+        "resolution_inputs",
+        contract_id=contract_id,
+        final_roas=resolution_input.final_roas,
+        target_roas=resolution_input.target_roas,
+        final_spend=resolution_input.final_spend,
+        minimum_spend=resolution_input.minimum_spend,
+        window_complete=resolution_input.evaluation_window_complete,
+    )
+
     audit.log(contract_id, "resolution", "intent", {
         "inputs": resolution_input.model_dump(),
     })
 
     result = _get_resolution_engine().resolve(resolution_input)
+
+    logger.info(
+        "resolution_conditions",
+        contract_id=contract_id,
+        target_met=result.target_met,
+        minimum_spend_met=result.minimum_spend_met,
+        window_complete=result.evaluation_window_complete,
+        final_roas=result.final_roas,
+        threshold=result.threshold,
+        outcome=result.outcome,
+    )
 
     audit.log(contract_id, "resolution", "result", result.model_dump())
 

@@ -28,7 +28,7 @@ from models.types import (
     UnderwritingInput,
 )
 import orchestrator
-from utils.logging import get_logger
+from utils.logging import attach_session, get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -130,6 +130,8 @@ def _handle_agent_error(e: Exception, contract_id: str) -> None:
 def underwrite(body: ContractRequest, db: Session = Depends(get_db)):
     """Run ML underwriting model. Called when contract status = Created."""
     contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="underwrite", state=contract.status)
     try:
         result = orchestrator.underwrite(
             contract_id=body.contract_id,
@@ -143,6 +145,13 @@ def underwrite(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
 
+    logger.info(
+        "request_complete",
+        contract_id=body.contract_id,
+        action="underwrite",
+        probability=result.success_probability,
+        recommendation=result.recommendation,
+    )
     return UnderwriteResponse(
         success_probability=result.success_probability,
         risk_level=result.risk_level,
@@ -158,6 +167,8 @@ def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
     from db.audit_logger import AuditLogger
 
     contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="agent_offer", state=contract.status, turn=contract.negotiation_turn_count)
     audit = AuditLogger(db)
 
     # Read latest underwriting result from audit log
@@ -176,6 +187,15 @@ def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
 
+    logger.info(
+        "state_handoff",
+        contract_id=body.contract_id,
+        source="ml_underwriting audit_log",
+        probability=underwriting_result.success_probability,
+        risk_level=underwriting_result.risk_level,
+        recommendation=underwriting_result.recommendation,
+    )
+
     try:
         offer = orchestrator.generate_offer(
             contract_id=body.contract_id,
@@ -188,6 +208,13 @@ def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
 
+    logger.info(
+        "request_complete",
+        contract_id=body.contract_id,
+        action="agent_offer",
+        offer_type=offer.offer_type,
+        turn=contract.negotiation_turn_count,
+    )
     return AgentOfferResponse(
         offer_type=offer.offer_type,
         message=offer.message,
@@ -202,6 +229,8 @@ def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
 def generate_strategy(body: ContractRequest, db: Session = Depends(get_db)):
     """Generate Meta Ads strategy plan. Called when contract status = Funded."""
     contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="generate_strategy", state=contract.status)
     try:
         plan = orchestrator.generate_strategy(
             contract_id=body.contract_id,
@@ -213,6 +242,14 @@ def generate_strategy(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
 
+    logger.info(
+        "request_complete",
+        contract_id=body.contract_id,
+        action="generate_strategy",
+        action_count=len(plan.actions),
+        estimated_daily_spend=plan.estimated_daily_spend,
+        expected_roas=plan.expected_roas,
+    )
     return GenerateStrategyResponse(
         strategy_summary=plan.strategy_summary,
         actions=[a.model_dump() for a in plan.actions],
@@ -225,6 +262,8 @@ def generate_strategy(body: ContractRequest, db: Session = Depends(get_db)):
 def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
     """Execute approved strategy actions. Re-reads approval from DB with row lock."""
     contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="execute_ads", state=contract.status)
     try:
         results = orchestrator.execute_ads_actions(
             contract_id=body.contract_id,
@@ -234,6 +273,7 @@ def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
 
+    logger.info("request_complete", contract_id=body.contract_id, action="execute_ads", actions_executed=len(results))
     return ExecuteAdsResponse(
         actions_executed=results,
         summary=f"Executed {len(results)} action(s) for contract {body.contract_id}",
@@ -246,6 +286,8 @@ def resolve(body: ContractRequest, db: Session = Depends(get_db)):
     from db.audit_logger import AuditLogger
 
     contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="resolve", state=contract.status)
     audit = AuditLogger(db)
 
     # Read latest performance snapshot from audit log
@@ -260,6 +302,17 @@ def resolve(body: ContractRequest, db: Session = Depends(get_db)):
     window_complete = False
     if contract.window_end:
         window_complete = datetime.now(timezone.utc) >= contract.window_end.replace(tzinfo=timezone.utc)
+
+    logger.info(
+        "state_handoff",
+        contract_id=body.contract_id,
+        source="meta_ads snapshot audit_log",
+        final_roas=snapshot.get("roas"),
+        final_spend=snapshot.get("spend"),
+        target_roas=contract.target_roas,
+        minimum_spend=contract.minimum_spend,
+        window_complete=window_complete,
+    )
 
     try:
         result = orchestrator.resolve(
@@ -279,6 +332,15 @@ def resolve(body: ContractRequest, db: Session = Depends(get_db)):
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
 
+    logger.info(
+        "request_complete",
+        contract_id=body.contract_id,
+        action="resolve",
+        outcome=result.outcome,
+        target_met=result.target_met,
+        minimum_spend_met=result.minimum_spend_met,
+        final_roas=result.final_roas,
+    )
     return ResolveResponse(
         outcome=result.outcome,
         final_spend=result.final_spend,

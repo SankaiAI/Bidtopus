@@ -54,6 +54,16 @@ class NegotiationLayer:
             messages=[{"role": "user", "content": user_payload}],
         )
 
+        thinking = self._extract_thinking(response)
+        if thinking:
+            logger.info(
+                "llm_thinking",
+                contract_id=contract_terms.contract_id,
+                component="negotiation",
+                thinking_tokens=settings.NEGOTIATION_THINKING_BUDGET,
+                thinking=thinking,
+            )
+
         raw_text = self._extract_text(response)
         offer = self._validate(raw_text, contract_terms.contract_id)
 
@@ -66,6 +76,11 @@ class NegotiationLayer:
         return offer
 
     # ── Private ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _extract_thinking(response: anthropic.types.Message) -> str | None:
+        parts = [block.thinking for block in response.content if block.type == "thinking"]
+        return "\n\n".join(parts) if parts else None
 
     @staticmethod
     def _extract_text(response: anthropic.types.Message) -> str:
