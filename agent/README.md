@@ -61,6 +61,42 @@ Open `.env` and fill in the required values:
 
 All three mock flags default to `True`, so the agent runs fully locally without any third-party credentials beyond `ANTHROPIC_API_KEY` and `DATABASE_URL`.
 
+### Meta Ads MCP Authentication
+
+When you are ready to run against real Meta Ads (set `META_ADS_MOCK=False`), the agent connects to the **Meta Ads MCP server** at `https://mcp.facebook.com/ads` using the MCP protocol. It does **not** call the Graph API directly.
+
+**Required env var:** `META_ADS_ACCESS_TOKEN`
+
+This must be a Meta **user access token** with the following permissions:
+- `ads_management` — create/update campaigns, ad sets, and budgets
+- `ads_read` — read campaign performance (spend, revenue, ROAS)
+
+**How to obtain the token:**
+
+1. Go to [Meta for Developers](https://developers.facebook.com) and open your app.
+2. Navigate to **Tools → Graph API Explorer**.
+3. Select your app, set **User or Page** to your ad account user, and request the `ads_management` and `ads_read` permissions.
+4. Click **Generate Access Token** and complete the OAuth flow.
+5. Copy the token into your `.env`:
+
+```
+META_ADS_ACCESS_TOKEN=<your-token>
+META_ADS_MOCK=False
+```
+
+> **Note:** User access tokens expire in ~60 days. For production, use a long-lived token or the Meta Business SDK to automate refresh. The agent will raise `MetaAdsError` immediately on startup if `META_ADS_ACCESS_TOKEN` is empty and `META_ADS_MOCK=False`.
+
+**MCP tools called by the agent:**
+
+| Adapter method | MCP tool |
+|---|---|
+| `execute_action("create_campaign")` | `create_campaign` |
+| `execute_action("create_ad_set")` | `create_ad_set` |
+| `execute_action("set_budget")` | `set_budget` |
+| `execute_action("update_targeting")` | `update_targeting` |
+| `execute_action("pause_ad_set")` | `pause_ad_set` |
+| `get_performance(contract_id, day)` | `get_campaign_performance` |
+
 ### 4. Set up a local database branch (Neon)
 
 ```bash

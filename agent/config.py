@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     # ── ML artifacts ─────────────────────────────────────────────────────────
     MODEL_ARTIFACTS_DIR: str = str(Path(__file__).parent / "ml" / "model_artifacts")
 
+    # ── Meta Ads ──────────────────────────────────────────────────────────────
+    META_ADS_ACCESS_TOKEN: str = ""
+
     # ── Mock flags ────────────────────────────────────────────────────────────
     META_ADS_MOCK: bool = True
     ARC_MOCK: bool = True
