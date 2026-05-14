@@ -5,6 +5,21 @@ The contracts folder contains the on-chain smart contract that powers the escrow
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet connection | You need a UI change or a new field surfaced to the merchant |
+| **backend** | REST API, PostgreSQL database, state machine enforcement, Clerk JWT verification | You need a DB schema change, new endpoint, or state gate behavior |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need the agent's settler wallet address to set as the authorized settler at deploy time |
+| **contracts** ← you are here | Solidity escrow contract on Arc testnet — ABI, deployed address, settlement logic | N/A — others submit tickets to you |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts between components, or any decision that affects more than one component's behavior.
+
+**After every deploy:** notify backend and agent with the contract address and ABI location — they cannot function without it.
+
+---
+
 ## Engineering Principles (Read Before Building)
 
 ---

@@ -37,6 +37,19 @@ The backend is the API and data layer. It receives requests from the frontend, p
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet connection | You need to change what data the API returns, or a new endpoint response shape |
+| **backend** ← you are here | REST API, PostgreSQL database, state machine enforcement, Clerk JWT verification | N/A — others submit tickets to you |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need the agent to return a different data shape, or a new capability |
+| **contracts** | Solidity escrow contract on Arc testnet — ABI, deployed address, settlement logic | You need the escrow contract address/ABI, or a change to on-chain settlement behavior |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts between components, or any decision that affects more than one component's behavior.
+
+---
+
 ## Engineering Principles (Read Before Building)
 
 ---

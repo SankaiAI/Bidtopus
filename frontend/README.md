@@ -7,6 +7,19 @@ The frontend is the merchant-facing web app. It guides the merchant through the 
 
 ---
 
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** ← you are here | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet connection | N/A — others submit tickets to you |
+| **backend** | REST API, PostgreSQL database, state machine enforcement, Clerk JWT verification | You need a new endpoint, a change to an existing response shape, or a new DB field |
+| **agent** | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | You need the agent to surface different data or behave differently in the chat/stream |
+| **contracts** | Solidity escrow contract on Arc testnet — ABI, deployed address, settlement logic | You need the Arc block explorer URL format, contract address, or ABI for tx hash display |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts between components, or any decision that affects more than one component's behavior.
+
+---
+
 ## Engineering Principles (Read Before Building)
 
 ---

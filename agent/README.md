@@ -1,5 +1,25 @@
 # OutcomeX — Agent
 
+## Purpose
+The agent is the core of OutcomeX. It underwrites performance contracts (ML), negotiates terms (LLM), executes Meta Ads strategies, monitors campaign performance, and triggers USDC settlement on Arc. It runs as a standalone FastAPI service called by the backend over HTTP.
+
+**The agent decides. The backend routes and persists. The frontend renders.**
+
+---
+
+## Team Map — Who Does What
+
+| Component | What it owns | Submit a `needs:` ticket when... |
+|---|---|---|
+| **frontend** | Merchant-facing web app — all UI, Clerk auth, Circle App Kit wallet connection | You need a UI change or a new data field surfaced to the merchant |
+| **backend** | REST API, PostgreSQL database, state machine enforcement, Clerk JWT verification | You need a new DB field, a schema change, or a different endpoint behavior |
+| **agent** ← you are here | ML underwriting, LLM negotiation, strategy generation, Meta Ads execution, Arc settlement | N/A — others submit tickets to you |
+| **contracts** | Solidity escrow contract on Arc testnet — ABI, deployed address, settlement logic | You need the escrow contract address/ABI to wire up the Arc escrow adapter |
+
+**Escalate to `needs: human` for:** PRD changes, spec conflicts between components, or any decision that affects more than one component's behavior.
+
+---
+
 ## Quickstart — Running Locally
 
 The agent is a standalone FastAPI service running on port **8001**. The backend calls it over HTTP. Start them independently.
