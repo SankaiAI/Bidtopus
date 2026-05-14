@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
+import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
 
 const C = {
   bg:         '#f4f4f8',
@@ -323,7 +324,7 @@ export default function ContractChatPage() {
   const openMobileSidebar = useOpenMobileSidebar()
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const sessionKey   = searchParams.get('t')
+  const sessionId    = searchParams.get('session')
   const { isSignedIn, isLoaded } = useAuth()
   const { openSignIn }            = useClerk()
   const [messages,     setMessages]     = React.useState([])
@@ -590,14 +591,37 @@ export default function ContractChatPage() {
     streamingDetailRef.current = ''
   }
 
-  // Reset conversation whenever a new session is requested via ?t= (sidebar "New Contract" click)
-  const prevSessionKeyRef = React.useRef(sessionKey)
+  // On session change: restore from localStorage if it exists, otherwise start fresh
+  const prevSessionIdRef = React.useRef(undefined)
   React.useEffect(() => {
-    if (sessionKey && sessionKey !== prevSessionKeyRef.current) {
-      prevSessionKeyRef.current = sessionKey
-      reset()
+    if (sessionId === prevSessionIdRef.current) return
+    prevSessionIdRef.current = sessionId
+
+    abortControllerRef.current?.abort()
+    setIsStreaming(false)
+    setLoading(false)
+    setLiveDetail('')
+    setActiveStepId(null)
+    setInputKey(k => k + 1)
+    streamingDetailRef.current = ''
+
+    const existing = sessionId ? getSession(sessionId) : null
+    if (existing?.messages?.length > 0) {
+      setMessages(existing.messages)
+      setChatStep('ready')
+    } else {
+      setMessages([])
+      setChatStep('choose')
     }
-  }, [sessionKey])
+  }, [sessionId])
+
+  // Persist messages to localStorage after each completed turn
+  React.useEffect(() => {
+    if (!sessionId || messages.length === 0 || isStreaming) return
+    const firstUserMsg = messages.find(m => m.role === 'user')
+    const title = firstUserMsg?.content?.slice(0, 60) || 'New conversation'
+    upsertSession(sessionId, { title, messages })
+  }, [messages, isStreaming, sessionId])
 
   const chatReady = true
   const lastMsgIdx = messages.length - 1
@@ -606,7 +630,7 @@ export default function ContractChatPage() {
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
-      <div className="agent-app-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '56px', background: C.surface, borderBottom: `1px solid ${C.border}`, flexShrink: 0 }}>
+      <div className="agent-app-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '56px', background: C.surface, flexShrink: 0 }}>
         {/* Mobile menu btn */}
         <button onClick={openMobileSidebar} className="app-mobile-menu-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'none', alignItems: 'center' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
@@ -620,7 +644,7 @@ export default function ContractChatPage() {
 
         {chatStep === 'ready' && (
           <button
-            onClick={reset}
+            onClick={() => router.push(`/contracts/new?session=${generateSessionId()}`)}
             style={{ fontSize: '12px', fontWeight: 600, color: C.muted, background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', padding: '5px 12px', cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'border-color 0.15s, color 0.15s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = C.indigo; e.currentTarget.style.color = C.indigo }}
             onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.muted }}

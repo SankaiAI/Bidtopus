@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
+import { getAllSessions, subscribeToSessions, generateSessionId } from '@/lib/workspaceSessions'
 
 const ACCENT    = 'var(--c-indigo)'
 const GREEN     = 'var(--c-green)'
@@ -256,11 +257,11 @@ function NavItem({ item, active, collapsed, onNavigate }) {
   const zoomIn  = e => { e.currentTarget.querySelector('span[data-icon]').style.transform = 'scale(1.25)' }
   const zoomOut = e => { e.currentTarget.querySelector('span[data-icon]').style.transform = 'scale(1)' }
 
-  // Action items always create a fresh session via timestamp query param
+  // Action items always create a fresh session
   const handleAction = (e) => {
     zoomOut(e)
     onNavigate?.()
-    router.push(`${item.href}?t=${Date.now()}`)
+    router.push(`${item.href}?session=${generateSessionId()}`)
   }
 
   if (item.isAction) {
@@ -529,41 +530,63 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
 }
 
 // ─── WORKSPACE ───────────────────────────────────────────────────────────────
-const ALL_CONTRACTS = [
-  { id: 'c1', name: 'Summer Sale — Retargeting', status: 'active',          sub: 'ROAS 1.86× · 3 days left' },
-  { id: 'c2', name: 'New Product Launch',         status: 'pending_funding', sub: 'Awaiting escrow · 150 USDC' },
-  { id: 'c3', name: 'Brand Awareness Q1',         status: 'success',         sub: 'ROAS 2.73× · Settled' },
-  { id: 'c4', name: 'Flash Sale Push',             status: 'failure',         sub: 'ROAS 1.94× · Refunded' },
+const MOCK_CONTRACTS = [
+  { id: 'mock_c1', title: 'Summer Sale — Retargeting', status: 'active',          sub: 'ROAS 1.86× · 3 days left',   href: '/contracts/mock_c1/workspace' },
 ]
 
 const WS_FILTERS = [
   { id: 'all',      label: 'All',      match: () => true },
-  { id: 'active',   label: 'Active',   match: c => c.status === 'active' },
-  { id: 'pending',  label: 'Pending',  match: c => c.status === 'pending_funding' },
-  { id: 'resolved', label: 'Resolved', match: c => c.status === 'success' || c.status === 'failure' },
+  { id: 'active',   label: 'Active',   match: s => s.status === 'active' },
+  { id: 'pending',  label: 'Pending',  match: s => s.status === 'negotiating' || s.status === 'pending_funding' },
+  { id: 'resolved', label: 'Resolved', match: s => s.status === 'success' || s.status === 'failure' },
 ]
 
-const DOT_STYLE = {
+const DOT_COLOR = {
   active:          { bg: ACCENT,    pulse: true  },
+  negotiating:     { bg: '#F59E0B', pulse: false },
   pending_funding: { bg: '#F59E0B', pulse: false },
   success:         { bg: '#10B981', pulse: false },
   failure:         { bg: '#a8a5b8', pulse: false },
 }
 
+function relativeTime(iso) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
 function Workspace() {
   const [filter, setFilter]       = useState('all')
   const [panelOpen, setPanelOpen] = useState(false)
+  const [sessions, setSessions]   = useState([])
   const pathname = usePathname()
 
-  const wsMatch         = pathname.match(/^\/contracts\/([^/]+)\/workspace/)
+  useEffect(() => {
+    setSessions(getAllSessions())
+    return subscribeToSessions(() => setSessions(getAllSessions()))
+  }, [])
+
+  const activeSessionId = (pathname === '/contracts/new' && typeof window !== 'undefined')
+    ? new URLSearchParams(window.location.search).get('session')
+    : null
+  const wsMatch = pathname.match(/^\/contracts\/([^/]+)\/workspace/)
   const activeContractId = wsMatch ? wsMatch[1] : null
 
+  // Merge real sessions (negotiating) with mock contracts for UI preview
+  const allItems = [
+    ...sessions.map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}` })),
+    ...MOCK_CONTRACTS,
+  ]
+
   const current  = WS_FILTERS.find(f => f.id === filter)
-  const filtered = ALL_CONTRACTS.filter(current.match)
+  const filtered = allItems.filter(current.match)
 
   return (
     <div style={{ padding: '0 10px' }}>
-      {/* Section header — position:relative so the panel anchors here */}
       <div style={{ position: 'relative' }}>
         <div style={S.sectionLbl}>
           <span>Workspace</span>
@@ -576,7 +599,6 @@ function Workspace() {
           </button>
         </div>
 
-        {/* Filter panel — drops directly below the header row */}
         {panelOpen && (
           <div style={{ position: 'absolute', top: '100%', left: '0', right: '0', zIndex: 40, background: 'var(--c-surface)', border: '1px solid var(--c-border)', borderRadius: '12px', boxShadow: '0 8px 24px rgba(14,13,26,0.10)', padding: '14px' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--c-sidebar-section)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'Plus Jakarta Sans, sans-serif', marginBottom: '8px' }}>Status</div>
@@ -598,28 +620,31 @@ function Workspace() {
         )}
       </div>
 
-      {/* Contract list */}
       {filtered.length === 0 ? (
-        <div style={{ padding: '16px 8px', textAlign: 'center' }}>
-          <p style={{ fontSize: '12px', color: '#c4c2d4', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>No contracts match</p>
+        <div style={{ padding: '8px 8px 12px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>No contracts match</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {filtered.map(c => {
-            const dot      = DOT_STYLE[c.status] || DOT_STYLE.failure
-            const isActive = c.id === activeContractId
+          {filtered.map(item => {
+            const dot      = DOT_COLOR[item.status] || DOT_COLOR.failure
+            const isActive = item.id === activeSessionId || item.id === activeContractId
             return (
               <Link
-                key={c.id}
-                href={`/contracts/${c.id}/workspace`}
+                key={item.id}
+                href={item.href}
                 style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', borderRadius: '8px', textDecoration: 'none', transition: 'background 0.12s', background: isActive ? '#eef2ff' : 'transparent' }}
                 onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#f5f3ff' }}
                 onMouseLeave={e => { e.currentTarget.style.background = isActive ? '#eef2ff' : 'transparent' }}
               >
                 <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot.bg, flexShrink: 0, marginTop: '5px', animation: dot.pulse ? 'agentThinkPulse 1.5s ease-in-out infinite' : 'none' }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                  <div style={{ fontSize: '11px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>{c.sub}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
+                    {item.sub}
+                  </div>
                 </div>
               </Link>
             )
