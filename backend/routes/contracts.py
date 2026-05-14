@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 from limiter import limiter
@@ -45,6 +45,19 @@ def list_contracts(
     from db.repo import list_contracts_for_merchant
     contracts = list_contracts_for_merchant(db, current_user.id)
     return [ContractResponse.from_orm_contract(c) for c in contracts]
+
+
+@router.delete("/{contract_id}", status_code=204)
+def delete_contract(
+    contract_id: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract = contract_service.require_contract_owner(db, contract_id, current_user)
+    db.query(ContractMessage).filter_by(contract_id=contract.id).delete()
+    db.delete(contract)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/{contract_id}")

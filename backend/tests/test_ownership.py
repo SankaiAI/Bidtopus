@@ -83,6 +83,32 @@ def test_messages_forbidden_for_wrong_user(client, other_contract):
     assert res.status_code == 403
 
 
+def test_delete_forbidden_for_wrong_user(client, other_contract):
+    res = client.delete(f"/api/contracts/{other_contract.id}")
+    assert res.status_code == 403
+
+
+def test_delete_returns_404_for_missing_contract(client):
+    res = client.delete("/api/contracts/00000000-0000-0000-0000-nonexistent")
+    assert res.status_code == 404
+
+
+def test_delete_returns_204_and_removes_contract(client, db, contract_in_state):
+    from db.models import PerformanceContract, ContractMessage
+    c = contract_in_state("Created")
+    msg = ContractMessage(
+        contract_id=c.id, role="agent", type="info", content="hello"
+    )
+    db.add(msg)
+    db.commit()
+
+    res = client.delete(f"/api/contracts/{c.id}")
+    assert res.status_code == 204
+
+    assert db.query(PerformanceContract).filter_by(id=c.id).first() is None
+    assert db.query(ContractMessage).filter_by(contract_id=c.id).count() == 0
+
+
 def test_owner_can_access_own_contract(client, contract_in_state):
     """Sanity check: the owner can always read their own contract."""
     c = contract_in_state("Created")
