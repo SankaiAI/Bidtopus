@@ -29,26 +29,8 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 6. Clerk manages the session token. Never copy it to `localStorage`. Use `useAuth().getToken()` inline when sending requests.
 7. Wallet connect (Circle App Kit) is separate from login (Clerk). Wallet connect happens at the Escrow Funding screen only.
 8. One ticket per blocker, ever. Never open a second ticket for the same need. If you are unsure whether one exists, search first — opening duplicates is worse than missing a ticket.
-
----
-
-## When to Raise a Ticket
-
-Raise a ticket when you hit something you **cannot resolve by reading your own files**.
-
-| Situation | What to do |
-|---|---|
-| You need an endpoint, schema, or behavior owned by another component | Ticket to that component — `needs: backend/agent/contracts` |
-| The PRD and README contradict each other | Ticket to human — `needs: human` |
-| Completing your work requires changing another component's behavior | Ticket to that component before making any assumptions |
-| You think your own PRD needs to change | Ticket to human — `needs: human` — do not self-edit |
-
-**Do not raise a ticket for:**
-- Anything answerable by reading your own `PRD.md`, `README.md`, or `docs/`
-- Implementation decisions within your own directory
-- Clarifications you can resolve with a reasonable assumption — make the assumption, note it in a code comment, keep moving
-
-**Never edit another component's PRD or README.** If you believe a change is needed, raise a `needs: human` ticket describing what should change and why. The human decides.
+9. Prefer a documented assumption over a ticket. Only ticket when you genuinely cannot proceed without another component's help.
+10. Never edit another component's PRD or README. Raise `needs: human` if you believe a change is needed — the human decides.
 
 ---
 

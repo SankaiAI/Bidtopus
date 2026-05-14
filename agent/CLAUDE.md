@@ -48,26 +48,8 @@ pip install <package> && pip freeze > requirements.txt
 7. Three interaction modes never mix. Negotiation loop, background scheduler, and chat Q&A are separate code paths. Chat Q&A has zero imports from execution modules.
 8. Negotiation loop has a turn limit. Auto-reject when the limit is reached — see `config.py` for the value.
 9. One ticket per blocker, ever. Never open a second ticket for the same need. If you are unsure whether one exists, search first — opening duplicates is worse than missing a ticket.
-
----
-
-## When to Raise a Ticket
-
-Raise a ticket when you hit something you **cannot resolve by reading your own files**.
-
-| Situation | What to do |
-|---|---|
-| You need an endpoint, schema, or behavior owned by another component | Ticket to that component — `needs: backend/frontend/contracts` |
-| The PRD and README contradict each other | Ticket to human — `needs: human` |
-| Completing your work requires changing another component's behavior | Ticket to that component before making any assumptions |
-| You think your own PRD needs to change | Ticket to human — `needs: human` — do not self-edit |
-
-**Do not raise a ticket for:**
-- Anything answerable by reading your own `PRD.md`, `README.md`, `AGENT.md`, or `docs/`
-- Implementation decisions within your own directory
-- Clarifications you can resolve with a reasonable assumption — make the assumption, note it in a code comment, keep moving
-
-**Never edit another component's PRD or README.** If you believe a change is needed, raise a `needs: human` ticket describing what should change and why. The human decides.
+10. Prefer a documented assumption over a ticket. Only ticket when you genuinely cannot proceed without another component's help.
+11. Never edit another component's PRD or README. Raise `needs: human` if you believe a change is needed — the human decides.
 
 ---
 
