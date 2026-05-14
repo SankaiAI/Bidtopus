@@ -1,6 +1,8 @@
-# Claude & gstack
-.claude/
+# Claude & gstack — ignore settings (personal permissions) but track skills
+/.claude/
 .gstack/
+**/.claude/settings.json
+**/.claude/settings.local.json
 
 # Environment variables
 .env
