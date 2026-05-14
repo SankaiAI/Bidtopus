@@ -10,7 +10,8 @@ const ThemeCtx = createContext({ isDark: false, toggleTheme: () => {} })
 export const useTheme = () => useContext(ThemeCtx)
 
 function activeItemFromPath(pathname) {
-  // 'new-contract' is an action button, not a page — never highlight it
+  // 'new-contract' is an action button, not a page — never highlight anything for it
+  if (pathname === '/contracts/new')                         return ''
   if (/^\/contracts\/[^/]+\/workspace/.test(pathname))      return 'workspace'
   if (pathname.startsWith('/contracts'))                     return 'contracts'
   if (pathname.startsWith('/dashboard'))                     return 'dashboard'
