@@ -84,6 +84,7 @@ async def stream_chat(
 
     async def generate():
         full_response = ""
+        aborted = False
         with _anthropic.messages.stream(
             model="claude-sonnet-4-6",
             max_tokens=1024,
@@ -102,11 +103,16 @@ async def stream_chat(
             }],
         ) as stream:
             for text in stream.text_stream:
+                if await request.is_disconnected():
+                    aborted = True
+                    stream.close()
+                    break
                 full_response += text
                 yield f"data: {json.dumps({'text': text})}\n\n"
 
-        sanitized = bleach.clean(full_response, tags=[], strip=True)
-        messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
-        yield "data: [DONE]\n\n"
+        if not aborted:
+            sanitized = bleach.clean(full_response, tags=[], strip=True)
+            messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
