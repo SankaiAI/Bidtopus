@@ -111,7 +111,7 @@ Only do this after confirming ownership in Step 2.
 
 ```bash
 gh issue comment <number> --body "Confirmed this is mine. Picking it up now." --repo SankaiAI/outcomeX
-bash .github/scripts/move_issue.sh <number> "In Progress"
+bash "$(git rev-parse --show-toplevel)/.github/scripts/move_issue.sh" <number> "In Progress" || true
 ```
 
 This posts your pickup note and moves the card to the In Progress column on the project board.
@@ -121,7 +121,7 @@ This posts your pickup note and moves the card to the In Progress column on the 
 ```bash
 gh issue comment <number> --body "Done. [your answer or summary of what was built]" --repo SankaiAI/outcomeX
 gh issue close <number> --repo SankaiAI/outcomeX
-bash .github/scripts/move_issue.sh <number> "Done"
+bash "$(git rev-parse --show-toplevel)/.github/scripts/move_issue.sh" <number> "Done" || true
 ```
 
 Close the issue first, then move the card to Done. The requester sees your comment as the answer.
