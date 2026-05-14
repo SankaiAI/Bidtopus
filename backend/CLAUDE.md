@@ -69,25 +69,44 @@ This loads your GitHub token and adds `gh` to the PATH so all commands below wor
 
 ---
 
-### Step 1 — Check for tickets assigned to you
+### Step 1 — Find and read your tickets
 
 ```bash
 gh issue list --label "needs: backend" --state open --repo SankaiAI/outcomeX
 gh issue view <number> --repo SankaiAI/outcomeX
 ```
 
-Read the full issue before starting. The **Request** section says what to build. The **Definition of Done** says what your response must include.
+Read the full issue. The **Request** section says what to build. The **Definition of Done** says what your response must include.
 
-### Step 2 — Claim the ticket when you start working
+### Step 2 — Verify the ticket belongs to you
+
+Before claiming, check your own codebase to confirm the work described lives inside `backend/`.
+
+Ask yourself:
+- Does the change touch files I own?
+- Is the capability being requested something I build, not another component?
+
+**If yes — the ticket is yours:** proceed to Step 3.
+
+**If no — the ticket was mislabeled:** comment to redirect it and do not claim it.
 
 ```bash
-gh issue comment <number> --body "Picking this up now." --repo SankaiAI/outcomeX
+gh issue comment <number> --body "This looks like it belongs to [correct team]. Redirecting." --repo SankaiAI/outcomeX
+gh issue edit <number> --remove-label "needs: backend" --add-label "needs: [correct team]" --repo SankaiAI/outcomeX
+```
+
+### Step 3 — Claim the ticket and move it to In Progress
+
+Only do this after confirming ownership in Step 2.
+
+```bash
+gh issue comment <number> --body "Confirmed this is mine. Picking it up now." --repo SankaiAI/outcomeX
 bash .github/scripts/move_issue.sh <number> "In Progress"
 ```
 
 This posts your pickup note and moves the card to the In Progress column on the project board.
 
-### Step 3 — Close the ticket when done
+### Step 4 — Close the ticket when done
 
 ```bash
 gh issue comment <number> --body "Done. [your answer or summary of what was built]" --repo SankaiAI/outcomeX
