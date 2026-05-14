@@ -265,7 +265,24 @@ function ThinkingBlock({ thinking, activeStepId, liveDetail, onToggle }) {
 }
 
 // ─── MESSAGE BUBBLE ───────────────────────────────────────────────────────────
-const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle }) {
+const MD_COMPONENTS = {
+  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+  ul:     ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ul>,
+  ol:     ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ol>,
+  li:     ({ children }) => <li style={{ marginBottom: '3px' }}>{children}</li>,
+  strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'inherit' }}>{children}</strong>,
+  hr:     () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />,
+  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}>{children}</p>,
+  code:   ({ inline, children }) => inline
+    ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
+    : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
+  table:  ({ children }) => <div style={{ overflowX: 'auto', margin: '8px 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>{children}</table></div>,
+  thead:  ({ children }) => <thead style={{ background: C.surfaceAlt }}>{children}</thead>,
+  th:     ({ children }) => <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: C.sub, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{children}</th>,
+  td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
+}
+
+const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle, streaming }) {
   if (msg.role === 'user') {
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', gap: '10px' }}>
@@ -290,24 +307,13 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
           </div>
         )}
         {msg.content && (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-            p:      ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
-            ul:     ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ul>,
-            ol:     ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ol>,
-            li:     ({ children }) => <li style={{ marginBottom: '3px' }}>{children}</li>,
-            strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'inherit' }}>{children}</strong>,
-            hr:     () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />,
-            h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}>{children}</p>,
-            code:   ({ inline, children }) => inline
-              ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
-              : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
-            table:  ({ children }) => <div style={{ overflowX: 'auto', margin: '8px 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>{children}</table></div>,
-            thead:  ({ children }) => <thead style={{ background: C.surfaceAlt }}>{children}</thead>,
-            th:     ({ children }) => <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: C.sub, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{children}</th>,
-            td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
-          }}>
-            {msg.content}
-          </ReactMarkdown>
+          streaming
+            // Raw text while streaming — avoids broken partial-table rendering
+            ? <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+            // Full rich markdown once the stream is complete
+            : <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                {msg.content}
+              </ReactMarkdown>
         )}
       </div>
     </div>
@@ -414,7 +420,6 @@ export default function ContractChatPage() {
       let buffer = ''
       let fullText = ''
       let streamingStarted = false
-      let lastFlushTime = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -485,18 +490,14 @@ export default function ContractChatPage() {
           } else if (eventType === 'text') {
             if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
             fullText += data.delta || ''
-            // Throttle to 150ms so ReactMarkdown doesn't re-parse on every token
-            const now = Date.now()
-            if (now - lastFlushTime >= 150) {
-              lastFlushTime = now
-              setMessages(prev => {
-                const msgs = [...prev]
-                const last = msgs[msgs.length - 1]
-                if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
-                else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
-                return msgs
-              })
-            }
+            // Flush every token — safe because streaming mode skips ReactMarkdown parsing
+            setMessages(prev => {
+              const msgs = [...prev]
+              const last = msgs[msgs.length - 1]
+              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
+              else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
+              return msgs
+            })
 
           } else if (eventType === 'contract_created') {
             // Agent created a contract — redirect to its workspace where the detail panel lives
@@ -652,6 +653,7 @@ export default function ContractChatPage() {
                   activeStepId={i === lastMsgIdx ? activeStepId : null}
                   liveDetail={i === lastMsgIdx ? liveDetail : ''}
                   onThinkingToggle={handleThinkingToggle}
+                  streaming={isStreaming && i === lastMsgIdx}
                 />
               </div>
             ))}
