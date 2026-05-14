@@ -1,7 +1,7 @@
 'use client'
 import React, { useState, useEffect, useLayoutEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useClerk, useUser } from '@clerk/nextjs'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
@@ -103,7 +103,7 @@ const PanelOpen = () => (
 const PRODUCTS = [
   { id: 'dashboard',    label: 'Dashboard',    href: '/dashboard',     Icon: Icon.Home },
   { id: 'contracts',    label: 'My Contracts', href: '/contracts',     Icon: Icon.Contract },
-  { id: 'new-contract', label: 'New Contract', href: '/contracts/new', Icon: Icon.Plus },
+  { id: 'new-contract', label: 'New Contract', href: '/contracts/new', Icon: Icon.Plus, isAction: true },
 ]
 
 const S = {
@@ -238,7 +238,9 @@ function MetaAccountSelector({ collapsed }) {
 
 // ─── NAV ITEMS ───────────────────────────────────────────────────────────────
 function NavItem({ item, active, collapsed, onNavigate }) {
-  const isActive  = active === item.id
+  const router = useRouter()
+  // Action items (e.g. "New Contract") are never highlighted as active pages
+  const isActive  = item.isAction ? false : active === item.id
   const textColor = isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)'
   const iconColor = isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-muted)'
   const bgColor   = isActive ? 'var(--c-sidebar-active)' : 'transparent'
@@ -248,10 +250,44 @@ function NavItem({ item, active, collapsed, onNavigate }) {
     borderRadius: '8px', fontFamily: 'Plus Jakarta Sans, sans-serif',
     fontSize: '14px', fontWeight: 500, color: textColor,
     background: bgColor, cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
+    border: 'none',
   }
   const iconStyle = { display: 'inline-flex', flexShrink: 0, transition: 'transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)' }
   const zoomIn  = e => { e.currentTarget.querySelector('span[data-icon]').style.transform = 'scale(1.25)' }
   const zoomOut = e => { e.currentTarget.querySelector('span[data-icon]').style.transform = 'scale(1)' }
+
+  // Action items always create a fresh session via timestamp query param
+  const handleAction = (e) => {
+    zoomOut(e)
+    onNavigate?.()
+    router.push(`${item.href}?t=${Date.now()}`)
+  }
+
+  if (item.isAction) {
+    if (collapsed) {
+      return (
+        <button
+          title={item.label} onClick={handleAction}
+          style={{ ...baseStyle, width: '56px', justifyContent: 'center', padding: '9px 0' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-sidebar-hover)'; zoomIn(e) }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; zoomOut(e) }}
+        >
+          <span data-icon style={{ ...iconStyle, color: iconColor }}><item.Icon /></span>
+        </button>
+      )
+    }
+    return (
+      <button
+        onClick={handleAction}
+        style={{ ...baseStyle, gap: '10px', padding: '8px 10px', width: '100%', textAlign: 'left' }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--c-sidebar-hover)'; zoomIn(e) }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; zoomOut(e) }}
+      >
+        <span data-icon style={{ ...iconStyle, color: iconColor }}><item.Icon /></span>
+        <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
+      </button>
+    )
+  }
 
   if (collapsed) {
     return (

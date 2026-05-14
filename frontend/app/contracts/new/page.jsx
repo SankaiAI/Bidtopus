@@ -1,6 +1,7 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth, useClerk } from '@clerk/nextjs'
@@ -316,6 +317,9 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function ContractChatPage() {
   const openMobileSidebar = useOpenMobileSidebar()
+  const router       = useRouter()
+  const searchParams = useSearchParams()
+  const sessionKey   = searchParams.get('t')
   const { isSignedIn, isLoaded } = useAuth()
   const { openSignIn }            = useClerk()
   const [messages,     setMessages]     = React.useState([])
@@ -494,6 +498,10 @@ export default function ContractChatPage() {
               })
             }
 
+          } else if (eventType === 'contract_created') {
+            // Agent created a contract — redirect to its workspace where the detail panel lives
+            if (data.contract_id) router.push(`/contracts/${data.contract_id}/workspace`)
+
           } else if (eventType === 'error') {
             throw new Error(data.message || 'Agent error')
           }
@@ -564,13 +572,25 @@ export default function ContractChatPage() {
   }
 
   const reset = () => {
+    abortControllerRef.current?.abort()
     setMessages([])
     setChatStep('choose')
     setInputKey(k => k + 1)
     setLiveDetail('')
     setActiveStepId(null)
+    setIsStreaming(false)
+    setLoading(false)
     streamingDetailRef.current = ''
   }
+
+  // Reset conversation whenever a new session is requested via ?t= (sidebar "New Contract" click)
+  const prevSessionKeyRef = React.useRef(sessionKey)
+  React.useEffect(() => {
+    if (sessionKey && sessionKey !== prevSessionKeyRef.current) {
+      prevSessionKeyRef.current = sessionKey
+      reset()
+    }
+  }, [sessionKey])
 
   const chatReady = true
   const lastMsgIdx = messages.length - 1
