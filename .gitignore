@@ -1,5 +1,6 @@
 # Claude & gstack — ignore settings (personal permissions) but track skills
-/.claude/
+/.claude/settings.json
+/.claude/settings.local.json
 .gstack/
 **/.claude/settings.json
 **/.claude/settings.local.json
