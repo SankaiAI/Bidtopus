@@ -64,19 +64,20 @@ Read the full issue before starting. The **Request** section says what to build.
 
 ```bash
 gh issue comment <number> --body "Picking this up now." --repo SankaiAI/outcomeX
-gh issue edit <number> --add-label "status: in-progress" --repo SankaiAI/outcomeX
+bash .github/scripts/move_issue.sh <number> "In Progress"
 ```
 
-This signals to the human monitor that the ticket is active.
+This posts your pickup note and moves the card to the In Progress column on the project board.
 
 ### Step 3 — Close the ticket when done
 
 ```bash
 gh issue comment <number> --body "Done. [your answer or summary of what was built]" --repo SankaiAI/outcomeX
 gh issue close <number> --repo SankaiAI/outcomeX
+bash .github/scripts/move_issue.sh <number> "Done"
 ```
 
-Closing automatically moves the card to **Done** on the project board. The requester sees your comment as the answer.
+Close the issue first, then move the card to Done. The requester sees your comment as the answer.
 
 ---
 
