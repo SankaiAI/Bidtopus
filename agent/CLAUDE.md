@@ -100,6 +100,14 @@ Close the issue first, then move the card to Done. The requester sees your comme
 
 ---
 
+### Before creating any ticket — search first
+
+```bash
+gh issue list --repo SankaiAI/outcomeX --state open --search "keywords describing your issue"
+```
+
+If an open ticket already covers what you need, comment on it instead of opening a new one. Only create a new ticket if nothing matches.
+
 ### When you need something from another team
 
 ```bash
