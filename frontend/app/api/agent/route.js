@@ -97,7 +97,7 @@ export async function POST(request) {
     return new Response(JSON.stringify({ error: 'message required' }), { status: 400 })
   }
 
-  logInfo(SRC, 'POST received', { message: message.slice(0, 120), hasBackend: !!process.env.BACKEND_URL })
+  logInfo(SRC, 'POST received', { message: message.slice(0, 120) })
 
   const encoder = new TextEncoder()
   let stopDemo = null
