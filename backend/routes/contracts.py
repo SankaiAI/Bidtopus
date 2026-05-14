@@ -6,19 +6,17 @@ from limiter import limiter
 import db.messages_repo as messages_repo
 import db.repo as repo
 from auth.clerk import get_current_user
-from db.models import ContractMessage
+from db.models import (
+    AgentOffer, AuditEvent, ContractMessage, EscrowRecord,
+    PerformanceSnapshot, ResolutionRecord, StrategyPlan, UnderwritingResult,
+)
 from db.session import get_db
 from models.schemas import (
     AcceptOfferRequest,
-    AgentOfferResponse,
     ApproveExecutionRequest,
     ContractCreateRequest,
     ContractResponse,
-    EscrowResponse,
     FundEscrowRequest,
-    ResolutionResponse,
-    StrategyPlanResponse,
-    UnderwritingResponse,
 )
 from services import contract_service
 
@@ -53,8 +51,18 @@ def delete_contract(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    contract = contract_service.require_contract_owner(db, contract_id, current_user)
-    db.query(ContractMessage).filter_by(contract_id=contract.id).delete()
+    contract = repo.get_contract(db, contract_id)
+    if contract is None:
+        return Response(status_code=204)
+    if contract.merchant_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized for this contract")
+
+    for model in (
+        ContractMessage, AuditEvent, PerformanceSnapshot, ResolutionRecord,
+        StrategyPlan, EscrowRecord, AgentOffer, UnderwritingResult,
+    ):
+        db.query(model).filter_by(contract_id=contract.id).delete(synchronize_session=False)
+
     db.delete(contract)
     db.commit()
     return Response(status_code=204)

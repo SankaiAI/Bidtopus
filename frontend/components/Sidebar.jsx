@@ -672,6 +672,7 @@ function Workspace() {
       await createApiClient(getToken).deleteContract(deleteTarget.id)
       const wasActive = deleteTarget.id === activeSessionId || deleteTarget.id === activeContractId
       deleteSession(deleteTarget.id)
+      setContracts(prev => prev.filter(c => c.id !== deleteTarget.id))
       setDeleteTarget(null)
       if (wasActive) router.push('/contracts/new')
     } catch {
