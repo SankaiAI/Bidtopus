@@ -28,6 +28,7 @@ Read [README.md](README.md) for engineering principles. Read [PRD.md](PRD.md) fo
 5. Use a safe ERC20 transfer wrapper. Never use raw `transfer()` on ERC20 tokens.
 6. Verify the USDC token address at deploy time. Print it to console and require explicit confirmation before proceeding.
 7. Write the ABI and contract address to `out/` immediately after every deploy. The agent reads these on startup — if they're missing, the escrow adapter fails.
+8. One ticket per blocker, ever. Never open a second ticket for the same need. If you are unsure whether one exists, search first — opening duplicates is worse than missing a ticket.
 
 ---
 
@@ -127,15 +128,27 @@ Close the issue first, then move the card to Done. The requester sees your comme
 
 ---
 
-### Before creating any ticket — search first
+### Step 5 — Open a ticket to another team
+
+**One ticket per blocker, ever. If a ticket already exists for this need — in any state, open or closed — comment on it instead of opening a new one.**
+
+#### 5a — Search before you create (mandatory — do not skip)
+
+Run this command and read every result title before doing anything else:
 
 ```bash
-gh issue list --repo SankaiAI/outcomeX --state open --search "keywords describing your issue"
+gh issue list --repo SankaiAI/outcomeX --state open --search "3-5 keywords from your intended title"
 ```
 
-If an open ticket already covers what you need, comment on it instead of opening a new one. Only create a new ticket if nothing matches.
+Example: if you want to share the deployed contract address, search `"escrow deployed address ABI"` — not `"keywords"`.
 
-### When you need something from another team
+**If any result covers the same need:**
+- Comment on that issue with your additional context
+- **Do not create a new ticket. Stop here.**
+
+**If the list is empty or nothing matches:** continue to 5b.
+
+#### 5b — Create the ticket (only if 5a found no match)
 
 ```bash
 gh issue create \
@@ -151,7 +164,13 @@ gh issue create \
 ## Definition of Done"
 ```
 
-### When you need a human decision (spec conflict or PRD change)
+### Step 6 — Open a human decision ticket (spec conflict or PRD change)
+
+Same rule — run the search first, then create only if no match:
+
+```bash
+gh issue list --repo SankaiAI/outcomeX --state open --search "keywords from your intended title"
+```
 
 ```bash
 gh issue create \
@@ -169,7 +188,9 @@ gh issue create \
 ## What I propose"
 ```
 
-After a successful deploy, notify backend and agent:
+### After a successful deploy — notify backend and agent
+
+Search first (`"escrow deployed"`), then create only if no announcement exists:
 
 ```bash
 gh issue create \

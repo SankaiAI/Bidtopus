@@ -47,6 +47,7 @@ pip install <package> && pip freeze > requirements.txt
 6. Merchant input never in the system prompt. All merchant-controlled fields go in the `user` turn as structured JSON. The system prompt is a fixed constant.
 7. Three interaction modes never mix. Negotiation loop, background scheduler, and chat Q&A are separate code paths. Chat Q&A has zero imports from execution modules.
 8. Negotiation loop has a turn limit. Auto-reject when the limit is reached — see `config.py` for the value.
+9. One ticket per blocker, ever. Never open a second ticket for the same need. If you are unsure whether one exists, search first — opening duplicates is worse than missing a ticket.
 
 ---
 
@@ -146,15 +147,27 @@ Close the issue first, then move the card to Done. The requester sees your comme
 
 ---
 
-### Before creating any ticket — search first
+### Step 5 — Open a ticket to another team
+
+**One ticket per blocker, ever. If a ticket already exists for this need — in any state, open or closed — comment on it instead of opening a new one.**
+
+#### 5a — Search before you create (mandatory — do not skip)
+
+Run this command and read every result title before doing anything else:
 
 ```bash
-gh issue list --repo SankaiAI/outcomeX --state open --search "keywords describing your issue"
+gh issue list --repo SankaiAI/outcomeX --state open --search "3-5 keywords from your intended title"
 ```
 
-If an open ticket already covers what you need, comment on it instead of opening a new one. Only create a new ticket if nothing matches.
+Example: if you want to ask about the escrow contract address, search `"escrow contract address ABI"` — not `"keywords"`.
 
-### When you need something from another team
+**If any result covers the same need:**
+- Comment on that issue with your additional context
+- **Do not create a new ticket. Stop here.**
+
+**If the list is empty or nothing matches:** continue to 5b.
+
+#### 5b — Create the ticket (only if 5a found no match)
 
 ```bash
 gh issue create \
@@ -170,7 +183,13 @@ gh issue create \
 ## Definition of Done"
 ```
 
-### When you need a human decision (spec conflict or PRD change)
+### Step 6 — Open a human decision ticket (spec conflict or PRD change)
+
+Same rule — run the search first, then create only if no match:
+
+```bash
+gh issue list --repo SankaiAI/outcomeX --state open --search "keywords from your intended title"
+```
 
 ```bash
 gh issue create \
