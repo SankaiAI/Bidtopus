@@ -542,12 +542,9 @@ export default function ContractChatPage() {
       setLiveDetail('')
       setActiveStepId(null)
       streamingDetailRef.current = ''
-      const isNetworkError = !err?.message || err.message.includes('fetch') || err.message === 'Agent unavailable'
       setMessages(prev => [...prev, {
         role: 'assistant', acknowledgment: '', ackDone: true, thinking: null,
-        content: isNetworkError
-          ? "I'm not connected to the backend yet. Once the API is live, I'll evaluate your contract terms, estimate success probability, and walk you through the escrow process."
-          : err.message,
+        content: err.message || 'Something went wrong. Please try again.',
       }])
     } finally {
       setIsStreaming(false)
