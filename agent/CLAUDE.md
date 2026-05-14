@@ -74,12 +74,26 @@ Raise a ticket when you hit something you **cannot resolve by reading your own f
 
 ### Setup — run this once at the start of every session
 
+**If your shell is bash (Mac/Linux/Git Bash):**
 ```bash
 export GH_TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill 2>/dev/null | grep password | cut -d= -f2)
 export PATH="$PATH:/c/Program Files/GitHub CLI:/usr/local/bin"
+gh auth status
 ```
 
-This loads your GitHub token and adds `gh` to the PATH so all commands below work. Works on Windows, Mac, and Linux.
+**If your shell is PowerShell (Windows):**
+```powershell
+$env:GH_TOKEN = (printf "protocol=https`nhost=github.com`n" | git credential fill 2>$null | Select-String "password" | ForEach-Object { $_ -replace "password=","" })
+$env:PATH = "$env:PATH;C:\Program Files\GitHub CLI"
+gh auth status
+```
+
+If `gh auth status` still says "not logged in", run:
+```bash
+gh auth login --with-token <<< "$GH_TOKEN"
+```
+
+This loads your GitHub token and adds `gh` to the PATH. Run `gh auth status` to confirm it worked before proceeding.
 
 ---
 

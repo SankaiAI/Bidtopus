@@ -34,6 +34,7 @@ from llm.strategy import StrategyGenerator
 from ml.forecast import ForecastModel
 from ml.underwriting import UnderwritingModel
 from models.types import (
+    AcceptedContractTerms,
     AccountContext,
     AgentOffer,
     ContractTerms,
@@ -195,6 +196,18 @@ def generate_offer(
     })
 
     offer = _get_negotiation_layer().generate_offer(contract_terms, underwriting_result)
+
+    if offer.offer_type == "accept":
+        offer = offer.model_copy(update={
+            "accepted_terms": AcceptedContractTerms(
+                decision="accept",
+                roas_target=contract_terms.requested_target_roas,
+                min_spend_usd=contract_terms.minimum_spend,
+                window_days=contract_terms.time_window_days,
+                fee_usdc=contract_terms.success_fee_usdc,
+                success_probability=underwriting_result.success_probability,
+            )
+        })
 
     audit.log(contract_id, "llm_negotiation", "result", offer.model_dump())
 

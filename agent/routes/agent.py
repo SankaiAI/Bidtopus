@@ -54,6 +54,7 @@ class AgentOfferResponse(BaseModel):
     revised_threshold: float | None
     revised_fee_usdc: float | None
     revised_time_window_days: int | None
+    accepted_terms: dict | None
 
 
 class GenerateStrategyResponse(BaseModel):
@@ -193,6 +194,7 @@ def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
         revised_threshold=offer.revised_threshold,
         revised_fee_usdc=offer.revised_fee_usdc,
         revised_time_window_days=offer.revised_time_window_days,
+        accepted_terms=offer.accepted_terms.model_dump() if offer.accepted_terms else None,
     )
 
 

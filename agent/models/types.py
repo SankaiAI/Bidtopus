@@ -72,13 +72,31 @@ class ForecastResult(BaseModel):
 
 # ── LLM outputs ───────────────────────────────────────────────────────────────
 
+class AcceptedContractTerms(BaseModel):
+    """Structured contract terms emitted by the orchestrator on accept decisions.
+
+    Not part of the LLM output — populated from ContractTerms + UnderwritingResult
+    so the backend can persist the contract record without parsing free text.
+    """
+    decision: Literal["accept"]
+    roas_target: float
+    min_spend_usd: float
+    window_days: int
+    fee_usdc: float
+    success_probability: float = Field(ge=0.0, le=1.0)
+
+
 class AgentOffer(BaseModel):
-    """LLM negotiation output. All revised_* fields null on accept/reject."""
+    """LLM negotiation output. All revised_* fields null on accept/reject.
+
+    accepted_terms is set by the orchestrator (not the LLM) when offer_type == 'accept'.
+    """
     offer_type: Literal["accept", "counteroffer", "reject"]
     message: str = Field(max_length=1000)
     revised_threshold: float | None = Field(None, ge=0.1, le=10.0)
     revised_fee_usdc: float | None = Field(None, ge=1.0, le=100_000.0)
     revised_time_window_days: int | None = Field(None, ge=1, le=90)
+    accepted_terms: AcceptedContractTerms | None = None
 
 
 class StrategyAction(BaseModel):

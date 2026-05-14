@@ -190,3 +190,15 @@ class MessageResponse(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+
+
+# ── Negotiation ───────────────────────────────────────────────────────────────
+
+class NegotiationHistoryItem(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class NegotiationRequest(BaseModel):
+    message: str
+    history: list[NegotiationHistoryItem] = []

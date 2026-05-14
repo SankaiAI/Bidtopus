@@ -9,7 +9,7 @@ from config import settings
 from logging_config import setup_logging
 from limiter import limiter
 from db.session import Base, engine
-from routes import contracts, messages, stream, users
+from routes import contracts, messages, negotiation, stream, users
 
 setup_logging(level="DEBUG" if settings.environment == "development" else "INFO")
 log = logging.getLogger(__name__)
@@ -40,6 +40,7 @@ app.include_router(users.router)
 app.include_router(contracts.router)
 app.include_router(messages.router)
 app.include_router(stream.router)
+app.include_router(negotiation.router)
 
 
 @app.get("/health")
