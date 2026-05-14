@@ -10,26 +10,13 @@ You are the **backend** component submitting a ticket to another team.
 
 ## Step 1 — Set up GitHub CLI auth
 
-Detect platform by running `uname -s 2>/dev/null || echo windows`.
-
-**bash / Git Bash / Mac / Linux:**
 ```bash
-export PATH="$PATH:/usr/local/bin:/c/Program Files/GitHub CLI"
-export GH_TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill 2>/dev/null | grep password | cut -d= -f2)
-gh auth status
+export GH_TOKEN=$(printf "protocol=https\nhost=github.com\n" | git credential fill 2>/dev/null | grep "^password" | cut -d= -f2)
+export GH="/c/Program Files/GitHub CLI/gh.exe"
+"$GH" auth status
 ```
 
-**Windows PowerShell:**
-```powershell
-$env:PATH = "$env:PATH;C:\Program Files\GitHub CLI"
-gh auth status
-```
-
-If still not logged in after either block:
-```bash
-gh auth login --with-token <<< "$GH_TOKEN"
-```
-If that also fails: **stop and tell the user** "gh auth failed — please run `gh auth login` manually and retry `/submit-ticket`."
+If auth fails: **stop and tell the user** "gh auth failed — please run `gh auth login` manually and retry."
 
 ---
 
@@ -37,7 +24,7 @@ If that also fails: **stop and tell the user** "gh auth failed — please run `g
 
 Extract 3–5 keywords from your description and search:
 ```bash
-gh issue list --repo SankaiAI/outcomeX --state open --search "YOUR KEYWORDS"
+"$GH" issue list --repo SankaiAI/outcomeX --state open --search "YOUR KEYWORDS"
 ```
 
 Read every result title.
@@ -64,7 +51,7 @@ Label map:
 
 **To another team:**
 ```bash
-gh issue create \
+"$GH" issue create \
   --title "[backend → TARGET] SHORT DESCRIPTION" \
   --label "LABEL" \
   --repo SankaiAI/outcomeX \
@@ -83,7 +70,7 @@ WHAT THE RESPONSE MUST INCLUDE"
 
 **For a human decision (spec conflict / PRD change):**
 ```bash
-gh issue create \
+"$GH" issue create \
   --title "[backend → human] SHORT DESCRIPTION" \
   --label "needs: human" \
   --repo SankaiAI/outcomeX \
