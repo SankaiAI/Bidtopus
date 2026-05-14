@@ -18,8 +18,8 @@ const MAX_HEIGHT = 200   // px — beyond this the textarea scrolls instead of g
  *
  * Props:
  *   onSend(text: string) — called when the user submits
- *   onStop() — called when user clicks Stop; renders Stop pill when provided + isGenerating
- *   isGenerating: boolean — when true and onStop provided, shows Stop button instead of input
+ *   onStop() — called when user clicks Stop; replaces send button with red stop circle
+ *   isGenerating: boolean — when true and onStop provided, send button becomes a stop button
  *   chatReady: boolean   — disables/grays the bar when false
  *   loading: boolean     — disables send while the agent is responding
  *   placeholder: string
@@ -83,36 +83,30 @@ const AgentInputBar = React.memo(function AgentInputBar({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  // ── Stop button (replaces entire pill while agent is generating) ────────────
-  if (isGenerating && onStop) {
-    return (
-      <button
-        onClick={onStop}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          width: '100%', padding: '11px 20px', borderRadius: '24px',
-          background: BG, border: `1.5px solid ${BORDER}`,
-          cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize, fontWeight: 600, color: TEXT,
-          boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-          transition: 'border-color 0.15s, background 0.15s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#EF4444'; e.currentTarget.style.background = '#fef2f2' }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER;    e.currentTarget.style.background = BG }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#EF4444" style={{ flexShrink: 0 }}>
-          <rect x="4" y="4" width="16" height="16" rx="2" />
-        </svg>
-        <span style={{ color: '#EF4444' }}>Stop generating</span>
-      </button>
-    )
-  }
-
   const sendDisabled = loading || !input.trim() || !chatReady
   const borderColor  = (focused || input) ? accentColor : BORDER
 
-  // ── Send button ─────────────────────────────────────────────────────────────
-  const SendBtn = (
+  // ── Action button: stop (while generating) or send ──────────────────────────
+  const ActionBtn = (isGenerating && onStop) ? (
+    <button
+      onClick={onStop}
+      aria-label="Stop generating"
+      style={{
+        width: '34px', height: '34px', flexShrink: 0,
+        background: '#EF4444',
+        border: 'none', borderRadius: '50%',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'background 0.2s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = '#dc2626' }}
+      onMouseLeave={e => { e.currentTarget.style.background = '#EF4444' }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+      </svg>
+    </button>
+  ) : (
     <button
       onClick={handleSend}
       disabled={sendDisabled}
@@ -157,8 +151,8 @@ const AgentInputBar = React.memo(function AgentInputBar({
         ref={textareaRef}
         value={input}
         rows={1}
-        disabled={!chatReady}
-        placeholder={placeholder}
+        disabled={!chatReady || isGenerating}
+        placeholder={isGenerating ? 'Agent is responding…' : placeholder}
         className="agent-input"
         onChange={(e) => {
           setInput(e.target.value)
@@ -179,7 +173,7 @@ const AgentInputBar = React.memo(function AgentInputBar({
           lineHeight: '22px',
           resize: 'none',
           padding: 0,
-          // smooth height growth
+          cursor: isGenerating ? 'not-allowed' : 'text',
           transition: 'height 0.1s ease',
         }}
       />
@@ -188,10 +182,10 @@ const AgentInputBar = React.memo(function AgentInputBar({
       {isMultiLine
         ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '8px' }}>
-            {SendBtn}
+            {ActionBtn}
           </div>
         )
-        : SendBtn
+        : ActionBtn
       }
     </div>
   )

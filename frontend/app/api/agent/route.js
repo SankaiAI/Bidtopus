@@ -21,8 +21,16 @@ function sse(event, data) {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
 }
 
+// Returns a stop() function — call it to prevent any pending timeouts from
+// writing into an already-closed controller (avoids ERR_INVALID_STATE).
 function demoStream(encoder, controller) {
   logInfo(SRC, 'demo stream started (no ANTHROPIC_API_KEY)')
+
+  let stopped = false
+  const enq = (chunk) => {
+    if (stopped) return
+    try { controller.enqueue(chunk) } catch (_) { stopped = true }
+  }
 
   const steps = [
     { id: 's1', label: 'Evaluating ROAS benchmark', detail: 'Checking Meta Ads industry benchmarks... E-commerce average is 2.0–3.5x. A 2.0 target is achievable with proper audience targeting.' },
@@ -31,30 +39,30 @@ function demoStream(encoder, controller) {
   ]
 
   let delay = 0
-  const q = (fn, ms) => { delay += ms; setTimeout(fn, delay) }
+  const q = (fn, ms) => { delay += ms; setTimeout(() => { if (!stopped) fn() }, delay) }
 
-  controller.enqueue(encoder.encode(sse('acknowledgment', { sentence: 'Analyzing your contract terms now…' })))
+  enq(encoder.encode(sse('acknowledgment', { sentence: 'Analyzing your contract terms now…' })))
 
   steps.forEach((step, i) => {
     q(() => {
       logDebug(SRC, 'demo thinking_step_start', { step_id: step.id })
-      controller.enqueue(encoder.encode(sse('thinking_step_start', { step_id: step.id, label: step.label })))
+      enq(encoder.encode(sse('thinking_step_start', { step_id: step.id, label: step.label })))
     }, i === 0 ? 200 : 600)
 
     const words = step.detail.split(' ')
     words.forEach((word, wi) => {
-      q(() => controller.enqueue(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 30)
+      q(() => enq(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 30)
     })
 
     q(() => {
       logDebug(SRC, 'demo thinking_step_end', { step_id: step.id })
-      controller.enqueue(encoder.encode(sse('thinking_step_end', { step_id: step.id })))
+      enq(encoder.encode(sse('thinking_step_end', { step_id: step.id })))
     }, 120)
   })
 
   q(() => {
     logDebug(SRC, 'demo thinking_end')
-    controller.enqueue(encoder.encode(sse('thinking_end', {})))
+    enq(encoder.encode(sse('thinking_end', {})))
   }, 200)
 
   const response = `**Underwriting Decision: Accept** ✓
@@ -81,15 +89,18 @@ Ready to proceed? I'll generate a full strategy plan once you fund the escrow.`
   const chars = response.split('')
   chars.forEach((char, ci) => {
     q(() => {
-      controller.enqueue(encoder.encode(sse('text', { delta: char })))
+      enq(encoder.encode(sse('text', { delta: char })))
       if (ci === chars.length - 1) {
         setTimeout(() => {
+          if (stopped) return
           logInfo(SRC, 'demo stream complete', { chars: chars.length })
-          controller.close()
+          try { controller.close() } catch (_) {}
         }, 50)
       }
     }, ci * 4)
   })
+
+  return () => { stopped = true }
 }
 
 export async function POST(request) {
@@ -105,10 +116,13 @@ export async function POST(request) {
 
   const encoder = new TextEncoder()
 
+  let stopDemo = null
+  let claudeCancelled = false
+
   const stream = new ReadableStream({
     async start(controller) {
       if (!process.env.ANTHROPIC_API_KEY) {
-        demoStream(encoder, controller)
+        stopDemo = demoStream(encoder, controller)
         return
       }
 
@@ -133,6 +147,7 @@ export async function POST(request) {
         let textChars = 0
 
         for await (const event of claudeStream) {
+          if (claudeCancelled) break
           logDebug(SRC, 'anthropic event', { type: event.type })
 
           if (event.type === 'content_block_start') {
@@ -179,12 +194,20 @@ export async function POST(request) {
           }
         }
 
-        controller.close()
+        if (!claudeCancelled) controller.close()
       } catch (err) {
+        if (claudeCancelled) return
         logError(SRC, 'stream error', { error: err.message, elapsed_ms: Date.now() - reqStart })
-        controller.enqueue(encoder.encode(sse('error', { message: err.message || 'Agent error' })))
-        controller.close()
+        try {
+          controller.enqueue(encoder.encode(sse('error', { message: err.message || 'Agent error' })))
+          controller.close()
+        } catch (_) {}
       }
+    },
+    cancel() {
+      logInfo(SRC, 'client disconnected — cancelling stream')
+      if (stopDemo) stopDemo()
+      claudeCancelled = true
     },
   })
 
