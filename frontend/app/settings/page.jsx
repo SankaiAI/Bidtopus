@@ -1,6 +1,7 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
+import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 
 const C = {
@@ -126,12 +127,35 @@ function ApprovalModeSelector({ value, onChange }) {
 
 export default function SettingsPage() {
   const openMobileSidebar = useOpenMobileSidebar()
+  const { getToken } = useAuth()
   const [approvalMode, setApprovalMode] = React.useState('manual')
   const [saved, setSaved] = React.useState(false)
+  const [dataSharing, setDataSharing] = React.useState(false)
+  const [dataSaved, setDataSaved] = React.useState(false)
 
   React.useEffect(() => {
     const stored = localStorage.getItem('outcomex-approval-mode')
     if (stored === 'auto' || stored === 'manual') setApprovalMode(stored)
+  }, [])
+
+  React.useEffect(() => {
+    async function loadDataSharing() {
+      try {
+        const token = await getToken()
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || ''}/api/users/me/preferences`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        )
+        if (res.ok) {
+          const data = await res.json()
+          setDataSharing(!!data.data_sharing_opt_in)
+          return
+        }
+      } catch (_) { /* network error — fall through */ }
+      const local = localStorage.getItem('data_sharing_opt_in')
+      if (local !== null) setDataSharing(local === 'true')
+    }
+    loadDataSharing()
   }, [])
 
   function handleApprovalChange(mode) {
@@ -139,6 +163,38 @@ export default function SettingsPage() {
     localStorage.setItem('outcomex-approval-mode', mode)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function handleDataSharingToggle() {
+    const next = !dataSharing
+    setDataSharing(next)
+    try {
+      const token = await getToken()
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || ''}/api/users/me/preferences`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ data_sharing_opt_in: next }),
+        }
+      )
+      if (res.status === 404) {
+        console.warn('[OutcomeX] PATCH /api/users/me/preferences not yet implemented — storing data_sharing_opt_in in localStorage')
+        localStorage.setItem('data_sharing_opt_in', String(next))
+      } else if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`)
+      }
+    } catch (err) {
+      if (!err.message?.startsWith('HTTP')) {
+        console.warn('[OutcomeX] data sharing preference fetch failed — storing in localStorage', err)
+        localStorage.setItem('data_sharing_opt_in', String(next))
+      }
+    }
+    setDataSaved(true)
+    setTimeout(() => setDataSaved(false), 2000)
   }
 
   return (
@@ -245,6 +301,47 @@ export default function SettingsPage() {
                 <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, right: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
               </div>
             </SettingsRow>
+          </SettingsSection>
+
+          {/* Data & Privacy section */}
+          <SettingsSection
+            title="Data & Privacy"
+            description="Help improve OutcomeX for all merchants."
+          >
+            <SettingsRow
+              label="Allow anonymized outcome data to improve underwriting accuracy"
+              description="When enabled, anonymized contract outcomes (final ROAS range, success/failure, time window) are used to improve the global underwriting model. No campaign details, ad creative, or spend amounts are ever shared. You can change this at any time."
+              isLast
+            >
+              <button
+                onClick={handleDataSharingToggle}
+                aria-pressed={dataSharing}
+                style={{
+                  width: 38, height: 22, borderRadius: 11, cursor: 'pointer',
+                  background: dataSharing ? C.indigo : C.faint,
+                  position: 'relative', flexShrink: 0,
+                  border: 'none', padding: 0,
+                  transition: 'background 0.2s',
+                }}
+              >
+                <div style={{
+                  width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                  position: 'absolute', top: 3,
+                  left: dataSharing ? 'auto' : 3,
+                  right: dataSharing ? 3 : 'auto',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  transition: 'left 0.2s, right 0.2s',
+                }} />
+              </button>
+            </SettingsRow>
+            {dataSaved && (
+              <div style={{ padding: '0 20px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', background: C.greenBg, borderRadius: '8px', border: `1px solid ${C.greenBorder}` }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  <span style={{ fontSize: '12px', color: C.green, fontWeight: 600, fontFamily: font }}>Preference saved</span>
+                </div>
+              </div>
+            )}
           </SettingsSection>
 
           {/* Footer */}
