@@ -410,6 +410,7 @@ export default function ContractChatPage() {
       let buffer = ''
       let fullText = ''
       let streamingStarted = false
+      let lastFlushTime = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -480,18 +481,33 @@ export default function ContractChatPage() {
           } else if (eventType === 'text') {
             if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
             fullText += data.delta || ''
-            setMessages(prev => {
-              const msgs = [...prev]
-              const last = msgs[msgs.length - 1]
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
-              else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
-              return msgs
-            })
+            // Throttle to 150ms so ReactMarkdown doesn't re-parse on every token
+            const now = Date.now()
+            if (now - lastFlushTime >= 150) {
+              lastFlushTime = now
+              setMessages(prev => {
+                const msgs = [...prev]
+                const last = msgs[msgs.length - 1]
+                if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
+                else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
+                return msgs
+              })
+            }
 
           } else if (eventType === 'error') {
             throw new Error(data.message || 'Agent error')
           }
         }
+      }
+      // Final flush — ensure last tokens are visible after the throttle window
+      if (fullText) {
+        setMessages(prev => {
+          const msgs = [...prev]
+          const last = msgs[msgs.length - 1]
+          if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
+          else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
+          return msgs
+        })
       }
     } catch (err) {
       if (err.name === 'AbortError') {

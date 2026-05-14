@@ -157,6 +157,15 @@ export function useMessages(contractId) {
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
+      let lastFlushTime = 0
+
+      const flushAgentText = () => {
+        setMessages(prev => {
+          const next = [...prev]
+          next[next.length - 1] = { ...next[next.length - 1], text: agentText }
+          return next
+        })
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -172,16 +181,16 @@ export function useMessages(contractId) {
               const { text: chunk } = JSON.parse(raw)
               if (chunk) {
                 agentText += chunk
-                setMessages(prev => {
-                  const next = [...prev]
-                  next[next.length - 1] = { ...next[next.length - 1], text: agentText }
-                  return next
-                })
+                // Throttle to 150ms so markdown-heavy messages don't re-parse on every token
+                const now = Date.now()
+                if (now - lastFlushTime >= 150) { lastFlushTime = now; flushAgentText() }
               }
             } catch (_) {}
           }
         }
       }
+      // Final flush — ensure last tokens are visible after the throttle window
+      if (agentText) flushAgentText()
     } catch (err) {
       if (err.name === 'AbortError') {
         // User stopped — leave partial content, clean up state silently
