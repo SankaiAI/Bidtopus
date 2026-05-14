@@ -282,26 +282,7 @@ const MD_COMPONENTS = {
   td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
 }
 
-// While streaming, strip any GFM table that hasn't finished yet so ReactMarkdown
-// doesn't render broken pipe chars. The table appears all at once when complete.
-function visibleContent(text, streaming) {
-  if (!streaming) return text
-  const lines = text.split('\n')
-  // Find the last non-empty line
-  let last = lines.length - 1
-  while (last >= 0 && !lines[last].trim()) last--
-  if (last < 0 || !lines[last].trim().startsWith('|')) return text
-  // Last content is a table row — walk back to find where this table block started
-  let start = last
-  while (start > 0 && lines[start - 1].trim().startsWith('|')) start--
-  // Only suppress real GFM tables (must contain a separator row like |---|---|)
-  const block = lines.slice(start, last + 1)
-  if (!block.some(l => /^\|[\s\-|:]+\|/.test(l))) return text
-  // Return everything before the incomplete table block
-  return lines.slice(0, start).join('\n')
-}
-
-const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle, streaming }) {
+const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle }) {
   if (msg.role === 'user') {
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'flex-start', gap: '10px' }}>
@@ -316,7 +297,7 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
     )
   }
 
-  const content = visibleContent(msg.content || '', streaming)
+  const content = msg.content || ''
 
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', gap: '10px' }}>
@@ -437,6 +418,7 @@ export default function ContractChatPage() {
       let buffer = ''
       let fullText = ''
       let streamingStarted = false
+      let lastFlushTime = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -507,14 +489,19 @@ export default function ContractChatPage() {
           } else if (eventType === 'text') {
             if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
             fullText += data.delta || ''
-            // Flush every token — safe because streaming mode skips ReactMarkdown parsing
-            setMessages(prev => {
-              const msgs = [...prev]
-              const last = msgs[msgs.length - 1]
-              if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
-              else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
-              return msgs
-            })
+            // Throttle re-renders: ReactMarkdown re-parses the full string each render,
+            // so flushing every character is O(n²). Batch to ~20 updates/s instead.
+            const now = Date.now()
+            if (now - lastFlushTime >= 50) {
+              lastFlushTime = now
+              setMessages(prev => {
+                const msgs = [...prev]
+                const last = msgs[msgs.length - 1]
+                if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
+                else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
+                return msgs
+              })
+            }
 
           } else if (eventType === 'contract_created') {
             // Agent created a contract — redirect to its workspace where the detail panel lives
@@ -670,7 +657,6 @@ export default function ContractChatPage() {
                   activeStepId={i === lastMsgIdx ? activeStepId : null}
                   liveDetail={i === lastMsgIdx ? liveDetail : ''}
                   onThinkingToggle={handleThinkingToggle}
-                  streaming={isStreaming && i === lastMsgIdx}
                 />
               </div>
             ))}
