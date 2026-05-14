@@ -58,3 +58,6 @@ pip-log.txt
 # Test artifacts
 .pytest_cache/
 backend/tests/test.db
+
+# Research (internal only, not for repo)
+research/

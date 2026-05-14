@@ -1,6 +1,6 @@
 # OutcomeX
 
-**Performance-paid AI marketing agent. Merchants pay only when the agent delivers the contracted outcome. Settled in USDC on Arc.**
+**Performance-paid AI agent for Meta Ads. Merchants pay only when the agent delivers the contracted ROAS. Settled in USDC on Arc.**
 
 Agora Agents Hackathon · Canteen × Circle · May 11–25, 2026
 
@@ -9,6 +9,194 @@ Agora Agents Hackathon · Canteen × Circle · May 11–25, 2026
 ## What It Does
 
 A merchant offers a USDC success fee for a measurable marketing target (e.g. ROAS >= 2.0 within 7 days). The AI agent underwrites the contract using ML, negotiates terms, executes a Meta Ads strategy, monitors performance, and receives payment only if the agreed outcome is achieved. Settlement is trustless — USDC is held in escrow on Arc and released or refunded by a smart contract.
+
+---
+
+## How It Works
+
+### The Core Concept: A Risk-Sharing Economic Agent
+
+```mermaid
+flowchart LR
+    M["🏪 Merchant\n'Hit ROAS 2.0x\nin 7 days or I don't pay'"]
+
+    subgraph Agent["OutcomeX Agent"]
+        direction LR
+        ML["ML\nUnderwrites risk\n→ 68% prob of success"]
+        LLM1["LLM\nNegotiates terms\n→ 'Accept at 2.0x ROAS'"]
+        META["Meta Ads\nExecutes 24/7\n→ $75/day budget"]
+        RES["Resolution\nSettles on-chain\n→ ROAS 2.25x ≥ 2.0x ✓"]
+    end
+
+    ESC["🔐 Arc Escrow\nUSDC locked / released\nCode enforces the guarantee — not trust"]
+
+    M --> ML --> LLM1 --> META --> RES --> ESC
+```
+
+### Full Contract Lifecycle
+
+```mermaid
+sequenceDiagram
+    actor Merchant
+    participant OutcomeX
+    participant Arc/Meta
+
+    Note over Merchant,OutcomeX: 1. NEGOTIATE
+    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"
+    OutcomeX->>OutcomeX: Claude negotiates & locks terms
+    Note right of OutcomeX: Contract created
+
+    Note over Merchant,OutcomeX: 2. UNDERWRITE
+    Merchant->>OutcomeX: Click "Underwrite"
+    OutcomeX->>OutcomeX: ML evaluates historical ROAS,<br/>spend, target, time window, AOV
+    Note right of OutcomeX: prob: 0.68 · risk: medium · rec: accept
+
+    Note over Merchant,OutcomeX: 3. AGENT OFFER
+    OutcomeX-->>Merchant: accept / counteroffer / reject<br/>+ plain-language explanation
+
+    Note over Merchant,Arc/Meta: 4. ACCEPT + FUND ESCROW
+    Merchant->>Arc/Meta: Accept offer (Circle App Kit)
+    Arc/Meta->>Arc/Meta: USDC locked on Arc
+    Note right of Arc/Meta: fund tx_hash [on-chain ✓]
+
+    Note over Merchant,OutcomeX: 5. STRATEGY GENERATION
+    OutcomeX-->>Merchant: Strategy plan<br/>(campaign structure, audiences, budget)
+    Note over Merchant,OutcomeX: 6. MERCHANT APPROVES
+    Merchant->>OutcomeX: Approve strategy
+
+    Note over OutcomeX,Arc/Meta: 7. EXECUTE ADS
+    OutcomeX->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_ad_set · set_budget
+    Arc/Meta-->>OutcomeX: Campaign live on Meta
+
+    Note over Merchant,Arc/Meta: 8. LIVE MONITORING (every 24h)
+    loop Every 24h while Active
+        Arc/Meta-->>OutcomeX: Real spend / revenue data
+        OutcomeX->>OutcomeX: ML forecast: predicted ROAS,<br/>success probability, on_track / at_risk
+        OutcomeX-->>Merchant: Live dashboard update
+    end
+
+    Note over OutcomeX,Arc/Meta: 9. RESOLUTION & SETTLEMENT
+    OutcomeX->>OutcomeX: spend ≥ min AND roas ≥ target AND window elapsed
+    OutcomeX->>Arc/Meta: release() or refund()
+    Note right of Arc/Meta: settlement tx_hash [on-chain ✓]
+```
+
+### Contract Status Flow
+
+```mermaid
+stateDiagram-v2
+    [*] --> Negotiating
+
+    Negotiating --> Created : Claude agrees terms with merchant
+
+    Created --> Underwriting : ML underwrites → success probability
+
+    Underwriting --> Offered : LLM generates accept / counteroffer / reject
+
+    Offered --> FundedPending : Merchant accepts offer
+    Offered --> [*] : Merchant declines
+
+    FundedPending --> Funded : Circle App Kit → Arc escrow funded on-chain
+
+    Funded --> Active : LLM generates strategy → merchant approves
+
+    Active --> Active : ML monitoring tick every 24h
+    Active --> Settled : After time window\ndeterministic resolution\n→ Arc release or refund
+
+    Settled --> [*]
+```
+
+### The 5 Autonomous Decisions
+
+```mermaid
+flowchart TD
+    D1["**Decision 1 — ML Underwrites**\nEvaluates 9 features across merchant history\n→ 68% probability of success\n→ accept / counteroffer / reject"]
+
+    D2["**Decision 2 — LLM Negotiates**\nClaude reasons about fee vs. risk vs. window\n→ 'Accept at 2.0x ROAS. Here's why...'\n→ accept / counteroffer / reject"]
+
+    D3["**Decision 3 — LLM Strategizes**\nBuilds Meta Ads plan with extended thinking\n→ 'Retargeting, $75/day, warm audiences'\n→ merchant approves before any action"]
+
+    D4["**Decision 4 — ML Forecasts Live** *(every 24h)*\nExtrapolates ROAS trajectory from live data\n→ 'Day 4: ROAS 1.9x, on track for 2.2x by day 7'\n→ on_track / at_risk / off_track"]
+
+    D5["**Decision 5 — Engine Settles** *(deterministic)*\nPure logic — no LLM, no ML\nROAS 2.25x ≥ 2.0x ✓ · Spend $545 ≥ $500 ✓\n→ release USDC to agent or refund to merchant"]
+
+    D1 --> D2 --> D3 --> D4 --> D5
+
+    style D5 fill:#d4edda,stroke:#28a745
+```
+
+### How ML and LLM Work Together
+
+```mermaid
+flowchart LR
+    subgraph Input["Merchant Input"]
+        I["target_roas: 2.0\nmin_spend: $500\ntime_window: 7 days\ncampaign_mode: new\nhist_roas_7d: 1.8\navg_daily_spend: $80"]
+    end
+
+    subgraph ML["ML Layer"]
+        M1["Risk model evaluates\n9 features from contract\nterms + account history"]
+        M2["Output:\nprobability: 0.68\nrisk_level: medium\nrec: accept\nfee: $100"]
+        M1 --> M2
+    end
+
+    subgraph LLM["LLM Layer"]
+        L1["Claude with extended thinking\nreasons about fee vs. risk\nvs. window tradeoffs"]
+        L2["Output (structured):\noffer_type\nmessage to merchant\nrevised terms if counteroffer"]
+        L1 --> L2
+    end
+
+    Input --> ML --> LLM
+```
+
+### Why USDC & Circle
+
+Performance contracts require a settlement currency that is:
+- **Stable** — the merchant's locked fee doesn't change value between signing and settlement
+- **Programmable** — a smart contract can hold, release, or refund it without a human intermediary
+- **Regulated and trusted** — merchants won't lock real money into a token they don't recognize
+
+USDC is the answer to all three. It is the leading regulated digital dollar — fully backed 1:1 by cash and short-term US Treasuries, with monthly third-party attestations published by Circle. Unlike algorithmic stablecoins, USDC has never broken its peg. Unlike USDT, Circle operates under US money transmission regulation and publishes full reserve transparency.
+
+Arc is Circle's purpose-built L1 blockchain. USDC is Arc's native currency — every transaction (funding, release, refund) is denominated in USDC, including gas fees via Paymaster. There is no volatile token in the system. A merchant who funds a $200 USDC escrow on Monday will see exactly $200 USDC released or refunded at settlement — no slippage, no gas surprises, no exchange rate risk.
+
+This is why OutcomeX is built on Circle infrastructure rather than a general-purpose chain: the entire stack — stablecoin, wallets, gas, escrow — is unified under one regulated, dollar-denominated system that any ecommerce merchant can understand.
+
+### Circle Stack
+
+| Circle Product | How OutcomeX Uses It | Lifecycle Step |
+|---|---|---|
+| **Arc Escrow** | USDC locked at contract signing. Released on success, refunded on failure. Code enforces the guarantee — not the agent's word. | Step 4: Fund · Step 9: Settle |
+| **Circle Wallets** | Agent's receiving wallet. Funded by Arc escrow on success. Automated HSM-backed key management — agent never touches raw keys. | Step 9: Success path |
+| **Paymaster** | All on-chain transactions (fund, release, refund) paid in USDC. No volatile gas token. Merchant pays in USDC, agent earns in USDC — fees are invisible. | Steps 4, 9 |
+| **App Kit** | Drop-in wallet component in the merchant's browser. One-click USDC funding. No MetaMask required. | Step 4: Fund Escrow |
+| **USYC** *(roadmap)* | Park idle escrowed USDC in yield while contract is Active. Convert back to USDC at resolution. Merchant capital earns while the agent works. | Active (days 1–7) |
+
+### Why Arc Makes This Possible
+
+```mermaid
+flowchart LR
+    subgraph ETH["❌ Ethereum Mainnet"]
+        direction TB
+        E1["Gas: $5–30 per tx"]
+        E2["Finality: minutes / hours"]
+        E3["$100 contract:\ngas = 5–30% of fee\n→ DESTROYS unit economics"]
+    end
+
+    subgraph ARC["✅ Arc (Circle L1)"]
+        direction TB
+        A1["Gas: ~$0.01 per tx (USDC)"]
+        A2["Finality: sub-second, deterministic"]
+        A3["$100 contract:\ngas = 0.01% of fee\n→ VIABLE at any contract size"]
+    end
+
+    RESULT["Performance-based AI ads\nfor SMBs works at $50 contracts"]
+
+    ETH -. "not viable" .-> RESULT
+    ARC -- "unlocks" --> RESULT
+
+    style ETH fill:#fff0f0,stroke:#dc3545
+    style ARC fill:#f0fff0,stroke:#28a745
+```
 
 ---
 
@@ -200,53 +388,3 @@ For local backend → Arc testnet interaction, point `ARC_RPC_URL` to the Cantee
 | Frontend | `frontend/` |
 | Backend + Agent | `backend/` + `agent/` |
 | Smart Contracts | `contracts/` |
-
----
-
-## Hackathon Submission Checklist
-
-- [ ] Live frontend deployed and publicly accessible
-- [ ] Backend deployed and handling real requests
-- [ ] Escrow contract live on Arc testnet with a real contract address
-- [ ] End-to-end demo: contract → escrow → strategy → monitoring → settlement
-- [ ] Real Arc tx hashes visible in the UI (escrow funding + settlement)
-- [ ] Pitch video recorded
-- [ ] GitHub repo public
-- [ ] Submitted via Luma before May 25
-
----
-
-## Competitive Landscape
-
-OutcomeX sits at an intersection that no single competitor occupies. The table below shows the closest analogs and what each one is missing.
-
-| Platform | What they do | Autonomous AI Execution | Outcome-Based Pricing | On-Chain Escrow | ML Underwriting |
-|---|---|---|---|---|---|
-| **AdAmigo** | Autonomous AI agent for Meta Ads — manages campaigns 24/7 via natural-language commands, full autopilot mode | ✅ Very high | ❌ Flat subscription | ❌ No | ❌ No |
-| **Uniscrow** | Blockchain-based conditional payment platform — buyer defines a KPI, deposits USDC into a smart contract, funds release when an API confirms the KPI was hit | ❌ No agent | ✅ KPI-triggered release | ✅ Yes (Polygon/USDC) | ❌ No |
-| **Nobody** | Pre-screens whether a marketing target is achievable using ML before accepting a contract, then prices risk accordingly | ❌ | ❌ | ❌ | ✅ This is OutcomeX's novel contribution |
-
-**AdAmigo:** https://www.adamigo.ai
-**Uniscrow:** https://uniscrow.com
-
-### Why OutcomeX is different
-
-OutcomeX combines what each competitor does in isolation:
-- **AdAmigo's autonomous execution** — the agent actually runs the Meta Ads campaign
-- **Uniscrow's trustless escrow** — USDC is locked and released by a smart contract, not a human
-- **ML underwriting that nobody else does** — the agent tells the merchant upfront whether the target is achievable, prices the risk, and can refuse contracts it estimates it will lose
-
-No existing platform does all three. The ML underwriting mechanic — where the agent underwrites its own performance contract before accepting it — is the core differentiator and should be front and center in the demo pitch.
-
----
-
-## Key Links
-
-| Resource | URL |
-|---|---|
-| Arc developer docs | https://docs.arc.network |
-| Circle developer docs | https://developers.circle.com |
-| Canteen Arc node docs | https://arc-node.thecanteenapp.com |
-| Hackathon page | https://agora.thecanteenapp.com |
-| Canteen Discord | https://discord.gg/TGnyfKh23V |
-| Arc builder Discord | https://discord.com/invite/buildonarc |
