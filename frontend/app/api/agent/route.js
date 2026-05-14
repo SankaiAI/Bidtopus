@@ -43,7 +43,7 @@ function demoStream(encoder, controller) {
 
     const words = step.detail.split(' ')
     words.forEach((word, wi) => {
-      q(() => controller.enqueue(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 60)
+      q(() => controller.enqueue(encoder.encode(sse('thinking_step_detail', { delta: (wi === 0 ? '' : ' ') + word }))), 30)
     })
 
     q(() => {
@@ -88,7 +88,7 @@ Ready to proceed? I'll generate a full strategy plan once you fund the escrow.`
           controller.close()
         }, 50)
       }
-    }, ci * 8)
+    }, ci * 4)
   })
 }
 
@@ -120,8 +120,8 @@ export async function POST(request) {
 
         const claudeStream = await client.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 16000,
-          thinking: { type: 'enabled', budget_tokens: 8000 },
+          max_tokens: 3072,
+          thinking: { type: 'enabled', budget_tokens: 1024 },
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: message }],
           stream: true,
