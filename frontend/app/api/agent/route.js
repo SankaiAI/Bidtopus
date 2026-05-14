@@ -1,4 +1,5 @@
-import { logInfo, logWarn, logDebug } from '@/lib/logger'
+import { auth } from '@clerk/nextjs/server'
+import { logInfo, logWarn, logError, logDebug } from '@/lib/logger'
 
 const SRC = 'api/agent'
 
@@ -9,7 +10,7 @@ function sse(event, data) {
 // Returns a stop() function — call it to prevent any pending timeouts from
 // writing into an already-closed controller (avoids ERR_INVALID_STATE).
 function demoStream(encoder, controller) {
-  logInfo(SRC, 'demo stream started (no BACKEND_URL configured)')
+  logInfo(SRC, 'demo stream started (no NEXT_PUBLIC_API_URL configured)')
 
   let stopped = false
   const enq = (chunk) => {
@@ -90,35 +91,74 @@ Ready to proceed? I'll generate a full strategy plan once you fund the escrow.`
 
 export async function POST(request) {
   const reqStart = Date.now()
-  const { message } = await request.json()
+  const { message, history = [] } = await request.json()
 
   if (!message?.trim()) {
     logWarn(SRC, 'empty message rejected')
     return new Response(JSON.stringify({ error: 'message required' }), { status: 400 })
   }
 
-  logInfo(SRC, 'POST received', { message: message.slice(0, 120) })
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL
+  logInfo(SRC, 'POST received', { message: message.slice(0, 120), hasBackend: !!backendUrl })
 
-  const encoder = new TextEncoder()
-  let stopDemo = null
+  // ── Demo fallback (no backend configured) ────────────────────────────────
+  if (!backendUrl) {
+    const encoder = new TextEncoder()
+    let stopDemo = null
+    const stream = new ReadableStream({
+      start(controller) { stopDemo = demoStream(encoder, controller) },
+      cancel() {
+        logInfo(SRC, 'client disconnected — stopping demo stream')
+        if (stopDemo) stopDemo()
+      },
+    })
+    return new Response(stream, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+    })
+  }
 
-  const stream = new ReadableStream({
-    async start(controller) {
-      // TODO: proxy to backend agent endpoint once confirmed — see issue #18
-      // Until then, fall through to demo stream in all cases.
-      stopDemo = demoStream(encoder, controller)
-    },
-    cancel() {
-      logInfo(SRC, 'client disconnected — cancelling stream', { elapsed_ms: Date.now() - reqStart })
-      if (stopDemo) stopDemo()
-    },
-  })
+  // ── Proxy to backend negotiation stream ──────────────────────────────────
+  const { getToken } = await auth()
+  const token = await getToken()
 
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  })
+  const upstream = new AbortController()
+
+  try {
+    logInfo(SRC, 'proxying to backend', { endpoint: '/api/negotiation/stream', historyLen: history.length })
+
+    const res = await fetch(`${backendUrl}/api/negotiation/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ message, history }),
+      signal: upstream.signal,
+    })
+
+    if (!res.ok) {
+      logError(SRC, 'backend error', { status: res.status, elapsed_ms: Date.now() - reqStart })
+      const encoder = new TextEncoder()
+      return new Response(
+        encoder.encode(sse('error', { message: `Backend returned ${res.status}` })),
+        { headers: { 'Content-Type': 'text/event-stream' } }
+      )
+    }
+
+    logInfo(SRC, 'backend stream open', { elapsed_ms: Date.now() - reqStart })
+
+    // Pipe the backend SSE stream directly to the client — schemas match.
+    return new Response(res.body, {
+      headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
+    })
+
+  } catch (err) {
+    if (err.name === 'AbortError') return new Response(null, { status: 499 })
+    logError(SRC, 'proxy error', { error: err.message, elapsed_ms: Date.now() - reqStart })
+    const encoder = new TextEncoder()
+    return new Response(
+      encoder.encode(sse('error', { message: err.message || 'Agent unavailable' })),
+      { headers: { 'Content-Type': 'text/event-stream' } }
+    )
+  }
 }

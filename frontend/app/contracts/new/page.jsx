@@ -395,6 +395,11 @@ export default function ContractChatPage() {
 
     if (chatStep === 'choose') setChatStep('ready')
 
+    // Build history from prior turns (exclude messages without text content)
+    const history = messages
+      .filter(m => m.content?.trim())
+      .map(m => ({ role: m.role, content: m.content }))
+
     const userMsg = { role: 'user', content: text.trim() }
     const updated = [...messages, userMsg]
     setMessages(updated)
@@ -407,7 +412,7 @@ export default function ContractChatPage() {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text.trim() }),
+        body: JSON.stringify({ message: text.trim(), history }),
         signal: controller.signal,
       })
 
