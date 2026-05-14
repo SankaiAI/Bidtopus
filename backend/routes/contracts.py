@@ -1,9 +1,12 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from limiter import limiter
 
+import db.messages_repo as messages_repo
+import db.repo as repo
 from auth.clerk import get_current_user
+from db.models import ContractMessage
 from db.session import get_db
 from models.schemas import (
     AcceptOfferRequest,
@@ -182,3 +185,47 @@ def resolve(
     contract = contract_service.require_contract_owner(db, contract_id, current_user)
     result = contract_service.resolve_contract(db, contract)
     return result
+
+
+# ── Per-action approval (manual approval mode) ────────────────────────────────
+
+def _resolve_action_message(db: Session, contract_id: str, action_id: str, current_user):
+    contract = contract_service.require_contract_owner(db, contract_id, current_user)
+    msg = db.query(ContractMessage).filter_by(id=action_id, contract_id=contract_id).first()
+    if msg is None:
+        raise HTTPException(status_code=404, detail="Action not found")
+    if msg.type != "approval_request":
+        raise HTTPException(status_code=400, detail="Message is not an approval_request")
+    if msg.status != "pending":
+        raise HTTPException(status_code=400, detail="Action is not pending")
+    return contract, msg
+
+
+@router.post("/{contract_id}/actions/{action_id}/approve")
+def approve_action(
+    contract_id: str,
+    action_id: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract, _ = _resolve_action_message(db, contract_id, action_id, current_user)
+    messages_repo.update_status(db, action_id, "approved")
+    repo.log_audit_event(db, contract_id, "meta_ads", "intent", {
+        "action": "action_approved", "action_id": action_id,
+    })
+    return {"action_id": action_id, "status": "approved"}
+
+
+@router.post("/{contract_id}/actions/{action_id}/decline")
+def decline_action(
+    contract_id: str,
+    action_id: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract, _ = _resolve_action_message(db, contract_id, action_id, current_user)
+    messages_repo.update_status(db, action_id, "declined")
+    repo.log_audit_event(db, contract_id, "meta_ads", "intent", {
+        "action": "action_declined", "action_id": action_id,
+    })
+    return {"action_id": action_id, "status": "declined"}
