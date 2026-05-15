@@ -39,17 +39,35 @@ function mapMessage(msg) {
   }
 }
 
+const BLANK_THINKING = { steps: [], isComplete: false, isOpen: true }
+
 export function useMessages(contractId) {
   const { getToken } = useAuth()
-  const [messages,    setMessages]    = useState([])
-  const [isThinking,  setIsThinking]  = useState(false)
-  const [isStreaming, setIsStreaming] = useState(false)
-  const [isConnected, setIsConnected] = useState(false)
+  const [messages,     setMessages]     = useState([])
+  const [isThinking,   setIsThinking]   = useState(false)
+  const [isStreaming,  setIsStreaming]   = useState(false)
+  const [isConnected,  setIsConnected]  = useState(false)
+  const [thinking,     setThinking]     = useState(BLANK_THINKING)
+  const [activeStepId, setActiveStepId] = useState(null)
+  const [liveDetail,   setLiveDetail]   = useState('')
+  const streamingDetailRef = useRef('')
   const abortRef = useRef(null)
+
+  const toggleThinking = useCallback(() => {
+    setThinking(prev => ({ ...prev, isOpen: !prev.isOpen }))
+  }, [])
 
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort()
   }, [])
+
+  // Reset thinking state when switching contracts
+  useEffect(() => {
+    setThinking(BLANK_THINKING)
+    setActiveStepId(null)
+    setLiveDetail('')
+    streamingDetailRef.current = ''
+  }, [contractId])
 
   // Step 1: hydrate full history from DB
   // Step 2: open SSE /events stream for live updates
@@ -96,16 +114,60 @@ export function useMessages(contractId) {
           const { done, value } = await reader.read()
           if (done || cancelled) break
           buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() ?? ''
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const raw = line.slice(6).trim()
-              if (raw === '[DONE]') continue
-              try {
-                const msg = JSON.parse(raw)
-                if (!cancelled) setMessages(prev => [...prev, mapMessage(msg)])
-              } catch (_) {}
+
+          // SSE events are separated by double newlines; parse blocks so
+          // multi-line events (event: + data:) are handled correctly.
+          const blocks = buffer.split('\n\n')
+          buffer = blocks.pop() ?? ''
+
+          for (const block of blocks) {
+            if (!block.trim()) continue
+            let eventType = 'message'
+            let eventData = ''
+            for (const line of block.split('\n')) {
+              const l = line.replace(/\r$/, '')
+              if (l.startsWith('event: ')) eventType = l.slice(7).trim()
+              else if (l.startsWith('data: ')) eventData = l.slice(6).trim()
+            }
+            if (!eventData || eventData === '[DONE]') continue
+
+            let data
+            try { data = JSON.parse(eventData) } catch { continue }
+
+            if (cancelled) break
+
+            if (eventType === 'thinking_step_start') {
+              streamingDetailRef.current = ''
+              setLiveDetail('')
+              setActiveStepId(data.step_id)
+              setThinking(prev => {
+                const isNewSequence = prev.isComplete || prev.steps.length === 0
+                return {
+                  steps: [...(isNewSequence ? [] : prev.steps), { id: data.step_id, label: data.label, detail: '', isComplete: false }],
+                  isComplete: false,
+                  isOpen: true,
+                }
+              })
+            } else if (eventType === 'thinking_step_detail') {
+              streamingDetailRef.current += data.delta || ''
+              setLiveDetail(streamingDetailRef.current)
+            } else if (eventType === 'thinking_step_end') {
+              const committed = streamingDetailRef.current
+              streamingDetailRef.current = ''
+              setLiveDetail('')
+              setActiveStepId(null)
+              setThinking(prev => ({
+                ...prev,
+                steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s),
+              }))
+            } else if (eventType === 'thinking_end') {
+              streamingDetailRef.current = ''
+              setLiveDetail('')
+              setActiveStepId(null)
+              setThinking(prev => ({ ...prev, isComplete: true, isOpen: false }))
+            } else {
+              // Regular new-message event
+              setMessages(prev => [...prev, mapMessage(data)])
             }
           }
         }
@@ -216,6 +278,10 @@ export function useMessages(contractId) {
     isThinking,
     isStreaming,
     isConnected,
+    thinking,
+    activeStepId,
+    liveDetail,
+    toggleThinking,
     sendMessage,
     stopGeneration,
     appendMessage,
