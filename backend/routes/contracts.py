@@ -21,6 +21,7 @@ from models.schemas import (
     ContractCreateRequest,
     ContractResponse,
     FundEscrowRequest,
+    TitleUpdateRequest,
 )
 from services import contract_service
 
@@ -70,6 +71,18 @@ def delete_contract(
     db.delete(contract)
     db.commit()
     return Response(status_code=204)
+
+
+@router.patch("/{contract_id}/title")
+def update_title(
+    contract_id: str,
+    body: TitleUpdateRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract = contract_service.require_contract_owner(db, contract_id, current_user)
+    repo.update_contract_title(db, contract_id, body.title)
+    return {"id": str(contract.id), "title": body.title}
 
 
 @router.get("/{contract_id}")

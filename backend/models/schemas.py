@@ -212,6 +212,22 @@ class MessageResponse(BaseModel):
         return str(v) if v is not None else v
 
 
+# ── Title update ─────────────────────────────────────────────────────────────
+
+class TitleUpdateRequest(BaseModel):
+    title: str
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("title must be a non-empty string")
+        if len(v) > 200:
+            raise ValueError("title must be 200 characters or fewer")
+        return v
+
+
 # ── Chat ──────────────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
