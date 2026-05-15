@@ -428,6 +428,9 @@ export default function ContractChatPage() {
   const [showContractPanel,   setShowContractPanel]   = React.useState(false)
   const [finalContract,       setFinalContract]       = React.useState(null)
   const [conversationTitle,   setConversationTitle]   = React.useState('New Conversation')
+  const [isEditingTitle,      setIsEditingTitle]      = React.useState(false)
+  const [editTitleValue,      setEditTitleValue]      = React.useState('')
+  const titleInputRef = React.useRef(null)
 
   const [contractId, setContractId] = React.useState(null)
   const contractIdRef    = React.useRef(null)
@@ -825,6 +828,20 @@ export default function ContractChatPage() {
   const chatReady = true
   const lastMsgIdx = messages.length - 1
 
+  const commitTitleEdit = React.useCallback(() => {
+    const trimmed = editTitleValue.trim()
+    if (trimmed && trimmed !== conversationTitle) {
+      setConversationTitle(trimmed)
+      const cid = contractIdRef.current
+      if (cid) {
+        upsertSession(cid, { title: trimmed })
+        // Persist to DB (ticket #40 — endpoint not yet live, fails silently)
+        createApiClient(getToken).updateTitle(cid, trimmed).catch(() => {})
+      }
+    }
+    setIsEditingTitle(false)
+  }, [editTitleValue, conversationTitle, getToken])
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
@@ -835,8 +852,38 @@ export default function ContractChatPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-          <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conversationTitle}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+          {isEditingTitle ? (
+            <input
+              ref={titleInputRef}
+              value={editTitleValue}
+              onChange={e => setEditTitleValue(e.target.value)}
+              onBlur={commitTitleEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); commitTitleEdit() }
+                if (e.key === 'Escape') { setIsEditingTitle(false) }
+              }}
+              style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif', border: 'none', borderBottom: `1.5px solid ${C.indigo}`, outline: 'none', background: 'transparent', minWidth: 0, flex: 1, maxWidth: '320px', padding: '1px 2px' }}
+            />
+          ) : (
+            <>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conversationTitle}</span>
+              {contractId && (
+                <button
+                  onClick={() => { setEditTitleValue(conversationTitle); setIsEditingTitle(true); setTimeout(() => titleInputRef.current?.select(), 0) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.faint, padding: '2px', display: 'flex', alignItems: 'center', flexShrink: 0, transition: 'color 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.color = C.muted}
+                  onMouseLeave={e => e.currentTarget.style.color = C.faint}
+                  title="Rename"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         {chatStep === 'ready' && (

@@ -104,6 +104,9 @@ export function createApiClient(getToken) {
     streamChat: (id, message) =>
       postRaw(`/api/contracts/${id}/chat/stream`, { message }),
 
+    // ── Contract title (ticket #40) ────────────────────────────────────
+    updateTitle: (id, title) => post(`/api/contracts/${id}/title`, { title }),
+
     // ── Users ──────────────────────────────────────────────────────────
     getMe: () => get('/api/users/me'),
     connectWallet: (walletAddress, signature) =>
