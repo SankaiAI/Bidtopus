@@ -14,7 +14,7 @@ import db.messages_repo as messages_repo
 import db.repo as repo
 import event_bus
 from auth.clerk import get_current_user
-from db.session import get_db
+from db.session import get_db, SessionLocal
 from models.schemas import ChatRequest
 from services.contract_service import require_contract_owner
 from config import settings
@@ -32,23 +32,31 @@ async def stream_events(
     db: Session = Depends(get_db),
 ):
     require_contract_owner(db, contract_id, current_user)
+    initial_last_id = messages_repo.get_latest_id(db, contract_id)
+    db.close()  # release pool connection before entering the infinite SSE loop
 
     async def generator():
         q = event_bus.subscribe(contract_id)
         try:
-            last_id = messages_repo.get_latest_id(db, contract_id)
+            last_id = initial_last_id
             while True:
                 # Drain thinking events pushed by background threads first
                 while not q.empty():
                     yield q.get_nowait()
 
-                # Poll DB for new persisted messages
-                new_msgs = (
-                    messages_repo.get_after_id(db, contract_id, last_id)
-                    if last_id
-                    else messages_repo.get_all(db, contract_id)
-                )
-                for msg in new_msgs:
+                # Short-lived session per poll — never held across asyncio.sleep
+                poll_db = SessionLocal()
+                try:
+                    new_msgs = (
+                        messages_repo.get_after_id(poll_db, contract_id, last_id)
+                        if last_id
+                        else messages_repo.get_all(poll_db, contract_id)
+                    )
+                    msgs_snapshot = list(new_msgs)
+                finally:
+                    poll_db.close()
+
+                for msg in msgs_snapshot:
                     yield {
                         "event": msg.type,
                         "data": json.dumps({
@@ -91,6 +99,8 @@ async def stream_chat(
         f"[{e.component}/{e.event_type}] {json.dumps(e.payload)[:300]}"
         for e in audit_context[-20:]
     ]
+    contract_status = contract.status
+    db.close()  # release pool connection before streaming from Anthropic
 
     async def generate():
         try:
@@ -107,7 +117,7 @@ async def stream_chat(
                 messages=[{
                     "role": "user",
                     "content": (
-                        f"Contract status: {contract.status}\n"
+                        f"Contract status: {contract_status}\n"
                         f"Recent activity:\n" + "\n".join(context_snippets) +
                         f"\n\nMerchant question: {clean_message}"
                     ),
@@ -123,7 +133,11 @@ async def stream_chat(
 
             if not aborted:
                 sanitized = bleach.clean(full_response, tags=[], strip=True)
-                messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+                write_db = SessionLocal()
+                try:
+                    messages_repo.append(write_db, contract_id, "agent", "message", content=sanitized)
+                finally:
+                    write_db.close()
 
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
