@@ -463,12 +463,16 @@ export default function ContractChatPage() {
     return () => ro.disconnect()
   }, [chatStep])
 
-  // Auto-scroll to bottom on new messages
+  const suppressScrollRef = React.useRef(false)
+
+  // Auto-scroll to bottom on new messages, but not when the user merely toggles a thinking block
   React.useEffect(() => {
+    if (suppressScrollRef.current) { suppressScrollRef.current = false; return }
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
   const handleThinkingToggle = React.useCallback((msgIndex) => {
+    suppressScrollRef.current = true
     setMessages(prev => {
       const msgs = [...prev]
       const msg = { ...msgs[msgIndex] }
