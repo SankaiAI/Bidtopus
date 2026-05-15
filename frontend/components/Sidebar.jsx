@@ -597,7 +597,11 @@ function Workspace() {
   const [filter, setFilter]             = useState('all')
   const [panelOpen, setPanelOpen]       = useState(false)
   const [sessions, setSessions]         = useState([])
-  const [contracts, setContracts]       = useState([])
+  const [contracts, setContracts]       = useState(() => {
+    // Seed from cache so sidebar shows last-known contracts immediately and
+    // survives temporary backend 401s (DB pool exhaustion → token expiry cascade)
+    try { return JSON.parse(localStorage.getItem('outcomex_contracts') || 'null') || [] } catch { return [] }
+  })
   const [hoveredId, setHoveredId]       = useState(null)
   const [menuState, setMenuState]       = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -615,8 +619,12 @@ function Workspace() {
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
     createApiClient(getToken).listContracts()
-      .then(data => setContracts(data || []))
-      .catch(() => {})
+      .then(data => {
+        const list = data || []
+        setContracts(list)
+        try { localStorage.setItem('outcomex_contracts', JSON.stringify(list)) } catch {}
+      })
+      .catch(() => {}) // keep last-cached list on failure
   }, [isLoaded, isSignedIn])
 
   useEffect(() => {
