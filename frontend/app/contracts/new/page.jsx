@@ -618,11 +618,12 @@ export default function ContractChatPage() {
             if (data.title && contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
 
           } else if (eventType === 'contract_created') {
-            // Slide the workspace panel in alongside the chat — no page navigation.
-            // replaceState updates the URL so refresh/bookmark lands on workspace.
+            // Slide the contract panel in alongside the chat without navigating.
+            // The URL stays on /contracts/new?session=... so useSearchParams()
+            // doesn't change and the session-reset effect never fires.
+            // "Full detail →" in the panel does a proper navigation when needed.
             const cid = data.contract_id
             if (cid) {
-              window.history.replaceState(null, '', `/contracts/${cid}/workspace`)
               createApiClient(getToken).getContract(cid)
                 .then(c => { setFinalContract(c); setShowContractPanel(true) })
                 .catch(() => { router.push(`/contracts/${cid}/workspace`) })
