@@ -680,8 +680,9 @@ export default function WorkspacePage() {
 
   const c = contract
 
+  // Pass null for mock IDs (ALL[id] exists) so useMessages skips API calls
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage,
-          thinking, activeStepId, liveDetail, toggleThinking } = useMessages(id)
+          thinking, activeStepId, liveDetail, toggleThinking } = useMessages(ALL[id] ? null : id)
 
   // Group consecutive thinking-step rows by thinkingSequenceId into inline thinking-block entries
   const processedMessages = React.useMemo(() => {

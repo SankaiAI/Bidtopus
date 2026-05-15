@@ -564,7 +564,7 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
 
 // ─── WORKSPACE ───────────────────────────────────────────────────────────────
 const MOCK_CONTRACTS = [
-  { id: 'mock_c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/contracts/mock_c1/workspace', hasContract: true },
+  { id: 'c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/contracts/c1/workspace', hasContract: true },
 ]
 
 const WS_FILTERS = [
