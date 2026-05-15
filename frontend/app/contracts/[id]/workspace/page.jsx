@@ -106,6 +106,7 @@ function mapApiContract(a) {
   return {
     id: a.id,
     name: a.campaign_goal || 'Campaign',
+    title: a.title || null,
     status: a.status,
     targetRoas: a.target_roas,
     minSpend: a.min_spend_usd,
@@ -118,6 +119,13 @@ function mapApiContract(a) {
     agentDecision: null,
     agentNote: null,
   }
+}
+
+function readContractCache(id) {
+  try { return JSON.parse(localStorage.getItem(`outcomex_wc_${id}`)) } catch { return null }
+}
+function writeContractCache(id, c) {
+  try { localStorage.setItem(`outcomex_wc_${id}`, JSON.stringify(c)) } catch {}
 }
 
 function buildStages(c) {
@@ -653,8 +661,9 @@ export default function WorkspacePage() {
   const [approvalMode, setApprovalMode]       = React.useState('manual')
   const [isMobile, setIsMobile]               = React.useState(false)
   const [showPanel, setShowPanel]             = React.useState(false)
-  const [contract, setContract]               = React.useState(ALL[id] || null)
-  const [loadingContract, setLoadingContract] = React.useState(!ALL[id])
+  const cachedContract = ALL[id] ? null : (typeof window !== 'undefined' ? readContractCache(id) : null)
+  const [contract, setContract]               = React.useState(ALL[id] || cachedContract || null)
+  const [loadingContract, setLoadingContract] = React.useState(!ALL[id] && !cachedContract)
 
   const scrollRef       = React.useRef(null)
   const desktopInputRef = React.useRef(null)
@@ -673,8 +682,8 @@ export default function WorkspacePage() {
     if (!isLoaded) return
     if (!isSignedIn) { setLoadingContract(false); return }
     createApiClient(getToken).getContract(id)
-      .then(a => setContract(mapApiContract(a)))
-      .catch(() => setContract(null))
+      .then(a => { const mc = mapApiContract(a); writeContractCache(id, mc); setContract(mc) })
+      .catch(() => {})
       .finally(() => setLoadingContract(false))
   }, [id, isLoaded, isSignedIn])
 
