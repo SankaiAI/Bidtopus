@@ -759,9 +759,15 @@ export default function ContractChatPage() {
     if (!contractId || !isLoaded || !isSignedIn || !shouldHydrateRef.current) return
     shouldHydrateRef.current = false
 
-    createApiClient(getToken).getMessages(contractId)
-      .then(serverMsgs => {
-        const uiMsgs = serverMsgs
+    const api = createApiClient(getToken)
+
+    // Fetch messages and contract in parallel — contract panel should reappear on restore
+    Promise.allSettled([
+      api.getMessages(contractId),
+      api.getContract(contractId),
+    ]).then(([msgsResult, contractResult]) => {
+      if (msgsResult.status === 'fulfilled') {
+        const uiMsgs = msgsResult.value
           .filter(m => m.role !== 'system')
           .map(m => {
             const isAgent = m.role === 'agent' || m.role === 'assistant'
@@ -773,8 +779,12 @@ export default function ContractChatPage() {
           setMessages(uiMsgs)
           setChatStep('ready')
         }
-      })
-      .catch(() => {}) // silently fall back to localStorage already shown
+      }
+      if (contractResult.status === 'fulfilled' && contractResult.value) {
+        setFinalContract(contractResult.value)
+        setShowContractPanel(true)
+      }
+    })
   }, [contractId, isLoaded, isSignedIn])
 
   // Write-through cache: persist messages to localStorage after each completed turn.
