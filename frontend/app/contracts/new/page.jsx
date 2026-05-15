@@ -323,6 +323,88 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
   )
 })
 
+// ─── CONTRACT PANEL ──────────────────────────────────────────────────────────
+// Renders alongside the chat (no page nav) when agent confirms a contract.
+function ContractPanel({ contract }) {
+  const font = 'Plus Jakarta Sans, sans-serif'
+  const label = { created: 'Ready to Fund', pending_funding: 'Awaiting Escrow' }[contract.status] || 'Ready to Fund'
+  const terms = [
+    ['Target',    `ROAS ≥ ${contract.target_roas}×`],
+    ['Min spend', `$${Number(contract.min_spend_usd).toLocaleString()}`],
+    ['Window',    `${contract.time_window_days} days`],
+    ['Fee',       `${contract.success_fee_usdc} USDC`],
+  ]
+
+  const sectionHeader = (num, title, sub) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px 10px', flexShrink: 0 }}>
+      <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--c-indigo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{num}</span>
+      </div>
+      <div>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--c-text)', fontFamily: font }}>{title}</div>
+        <div style={{ fontSize: '11px', color: 'var(--c-muted)', marginTop: '2px', fontFamily: font }}>{sub}</div>
+      </div>
+    </div>
+  )
+
+  return (
+    <div style={{ width: '400px', flexShrink: 0, padding: '8px 8px 8px 0', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'panel-slide-in 0.32s cubic-bezier(0.4, 0, 0.2, 1)', background: 'var(--c-surface)' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: '12px', background: 'var(--c-panel-bg)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', flexShrink: 0, gap: '8px', borderBottom: '1px solid var(--c-inner-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--c-text)', fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {contract.campaign_goal || 'Campaign'}
+            </span>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: 'var(--c-amber)', background: 'var(--c-amber-bg)', padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {label}
+            </span>
+          </div>
+          <a href={`/contracts/${contract.id}/workspace`} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--c-muted)', border: '1px solid var(--c-border)', borderRadius: '6px', padding: '4px 10px', textDecoration: 'none', fontFamily: font, whiteSpace: 'nowrap', flexShrink: 0 }}>
+            Full detail →
+          </a>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
+
+          {/* Fund Escrow */}
+          {sectionHeader(1, 'Fund Escrow', 'Lock funds to launch the campaign')}
+          <div style={{ margin: '0 12px 4px', background: 'var(--c-inner-card)', borderRadius: '10px', border: '1px solid var(--c-inner-border)', overflow: 'hidden' }}>
+            <div style={{ padding: '16px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--c-sub)', lineHeight: 1.65, margin: '0 0 14px', fontFamily: font }}>
+                Your contract is confirmed. Fund the escrow to launch your campaign.
+              </p>
+              <a
+                href={`/contracts/${contract.id}/workspace`}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%', padding: '12px', borderRadius: '9px', background: 'var(--c-indigo)', color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: font, textDecoration: 'none', boxSizing: 'border-box' }}
+              >
+                Lock {contract.success_fee_usdc} USDC in Escrow
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </a>
+              <p style={{ fontSize: '11px', color: 'var(--c-faint)', textAlign: 'center', margin: '8px 0 0', fontFamily: font }}>Settlement enforced by Arc — not by OutcomeX.</p>
+            </div>
+          </div>
+
+          {/* Contract Terms */}
+          {sectionHeader(2, 'Contract Terms', 'Agreed parameters')}
+          <div style={{ margin: '0 12px 4px', background: 'var(--c-inner-card)', borderRadius: '10px', border: '1px solid var(--c-inner-border)', overflow: 'hidden' }}>
+            <div style={{ padding: '4px 0' }}>
+              {terms.map(([k, v], i) => (
+                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 14px', borderBottom: i < terms.length - 1 ? '1px solid var(--c-panel-bg)' : 'none' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--c-muted)', fontFamily: font }}>{k}</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: font }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function ContractChatPage() {
   const openMobileSidebar = useOpenMobileSidebar()
@@ -338,6 +420,8 @@ export default function ContractChatPage() {
   const [chatStep,     setChatStep]     = React.useState('choose') // 'choose' | 'ready'
   const [inputKey,     setInputKey]     = React.useState(0)
   const [isMobile,     setIsMobile]     = React.useState(false)
+  const [showContractPanel, setShowContractPanel] = React.useState(false)
+  const [finalContract,     setFinalContract]     = React.useState(null)
 
   const [contractId, setContractId] = React.useState(null)
   const contractIdRef    = React.useRef(null)
@@ -534,8 +618,15 @@ export default function ContractChatPage() {
             if (data.title && contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
 
           } else if (eventType === 'contract_created') {
-            // Agent finalized terms — redirect to the contract workspace
-            if (data.contract_id) router.push(`/contracts/${data.contract_id}/workspace`)
+            // Slide the workspace panel in alongside the chat — no page navigation.
+            // replaceState updates the URL so refresh/bookmark lands on workspace.
+            const cid = data.contract_id
+            if (cid) {
+              window.history.replaceState(null, '', `/contracts/${cid}/workspace`)
+              createApiClient(getToken).getContract(cid)
+                .then(c => { setFinalContract(c); setShowContractPanel(true) })
+                .catch(() => { router.push(`/contracts/${cid}/workspace`) })
+            }
 
           } else if (eventType === 'error') {
             throw new Error(data.message || 'Agent error')
@@ -630,6 +721,8 @@ export default function ContractChatPage() {
     setActiveStepId(null)
     setInputKey(k => k + 1)
     streamingDetailRef.current = ''
+    setShowContractPanel(false)
+    setFinalContract(null)
 
     if (sessionId && isUUID(sessionId)) {
       // Server-side contract session — set contractId and flag for hydration
@@ -832,6 +925,11 @@ export default function ContractChatPage() {
           </div>
 
         </div>
+
+        {/* Contract panel slides in from right when agent confirms a deal */}
+        {showContractPanel && finalContract && !isMobile && (
+          <ContractPanel contract={finalContract} />
+        )}
       </div>
     </div>
   )

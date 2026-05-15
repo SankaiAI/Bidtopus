@@ -3,6 +3,8 @@ import React from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
 import { useMessages } from '@/hooks/useMessages'
@@ -169,21 +171,22 @@ const ACTION_ICONS = {
 }
 
 // ─── CHAT MESSAGE COMPONENTS ──────────────────────────────────────────────────
-function SimpleText({ text }) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/)
-  return (
-    <>
-      {parts.map((p, i) =>
-        p.startsWith('**') && p.endsWith('**')
-          ? <strong key={i} style={{ fontWeight: 700 }}>{p.slice(2, -2)}</strong>
-          : p.split('\n').map((line, j, arr) =>
-              j < arr.length - 1
-                ? <React.Fragment key={`${i}-${j}`}>{line}<br /></React.Fragment>
-                : <React.Fragment key={`${i}-${j}`}>{line}</React.Fragment>
-            )
-      )}
-    </>
-  )
+const WS_MD_COMPONENTS = {
+  html:   () => null,
+  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+  ul:     ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ul>,
+  ol:     ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ol>,
+  li:     ({ children }) => <li style={{ marginBottom: '3px' }}>{children}</li>,
+  strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
+  hr:     () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />,
+  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}>{children}</p>,
+  code:   ({ inline, children }) => inline
+    ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
+    : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
+  table:  ({ children }) => <div style={{ overflowX: 'auto', margin: '8px 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>{children}</table></div>,
+  thead:  ({ children }) => <thead style={{ background: C.surfaceAlt }}>{children}</thead>,
+  th:     ({ children }) => <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: C.sub, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{children}</th>,
+  td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
 }
 
 function UserBubble({ msg }) {
@@ -205,7 +208,7 @@ function AgentBubble({ msg }) {
         </svg>
       </div>
       <div style={{ flex: 1, fontSize: '13px', lineHeight: 1.65, color: C.text, fontFamily: font, paddingTop: '3px' }}>
-        <SimpleText text={msg.text} />
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={WS_MD_COMPONENTS}>{msg.text || ''}</ReactMarkdown>
         <div style={{ fontSize: '11px', color: C.faint, marginTop: '6px' }}>{msg.time}</div>
       </div>
     </div>
@@ -782,6 +785,7 @@ export default function WorkspacePage() {
         } : {
           width: '420px', flexShrink: 0, display: 'flex', flexDirection: 'column',
           overflow: 'hidden', background: C.surface, padding: '8px 8px 8px 0',
+          animation: 'panel-slide-in 0.32s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: isMobile ? '0' : '12px', background: 'var(--c-panel-bg)' }}>
 

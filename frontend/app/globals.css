@@ -115,7 +115,8 @@
 @keyframes phSlideOut { from { transform: translateY(0);    opacity: 1; } to { transform: translateY(-110%); opacity: 0; } }
 @keyframes phSlideIn  { from { transform: translateY(110%); opacity: 0; } to { transform: translateY(0);    opacity: 1; } }
 
-@keyframes carouselScroll { to { transform: translateX(-50%); } }
+@keyframes carouselScroll  { to { transform: translateX(-50%); } }
+@keyframes panel-slide-in  { from { transform: translateX(6%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 @keyframes agentThinkPulse {
   0%, 100% { opacity: 0.4; }
