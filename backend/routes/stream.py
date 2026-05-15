@@ -52,14 +52,14 @@ async def stream_events(
                     yield {
                         "event": msg.type,
                         "data": json.dumps({
-                            "id": msg.id,
+                            "id": str(msg.id),
                             "role": msg.role,
                             "type": msg.type,
                             "content": msg.content,
                             "metadata": msg.extra,
                             "status": msg.status,
                             "created_at": msg.created_at.isoformat(),
-                        }),
+                        }, default=str),
                     }
                     last_id = msg.id
                 await asyncio.sleep(1)
