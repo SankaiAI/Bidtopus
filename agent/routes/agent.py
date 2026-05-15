@@ -106,12 +106,14 @@ def _get_contract_or_404(contract_id: str, db: Session) -> PerformanceContractOR
 
 
 def _to_contract_terms(c: PerformanceContractORM) -> ContractTerms:
+    # Fields are nullable during early negotiation — apply safe minimums so
+    # ContractTerms validation passes. Underwriting will recommend actual values.
     return ContractTerms(
         contract_id=str(c.id),
-        requested_target_roas=c.target_roas,
-        minimum_spend=c.minimum_spend,
-        time_window_days=c.time_window_days,
-        success_fee_usdc=c.success_fee_usdc,
+        requested_target_roas=max(0.1, c.target_roas or 0.1),
+        minimum_spend=c.minimum_spend or 0.0,
+        time_window_days=max(1, c.time_window_days or 7),
+        success_fee_usdc=max(1.0, c.success_fee_usdc or 1.0),
         campaign_type=c.campaign_type,
         campaign_goal=c.campaign_goal or "",
     )
