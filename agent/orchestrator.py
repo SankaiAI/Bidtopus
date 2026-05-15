@@ -17,7 +17,8 @@ Backend calls:
 """
 from __future__ import annotations
 
-from typing import Any
+import json
+from typing import Any, Generator
 
 from sqlalchemy.orm import Session
 
@@ -180,7 +181,7 @@ def generate_offer(
     contract_status: str,
     turn_count: int,
     db: Session,
-) -> AgentOffer:
+) -> tuple[AgentOffer, str | None]:
     """Step 2: LLM generates a structured offer from the underwriting result."""
     audit = AuditLogger(db)
     messages = MessagesRepo(db)
@@ -235,7 +236,7 @@ def generate_offer(
         "turn_count": turn_count,
     })
 
-    offer = _get_negotiation_layer().generate_offer(contract_terms, underwriting_result)
+    offer, thinking = _get_negotiation_layer().generate_offer(contract_terms, underwriting_result)
 
     if offer.offer_type == "accept":
         offer = offer.model_copy(update={
@@ -273,7 +274,7 @@ def generate_offer(
         revised_fee_usdc=offer.revised_fee_usdc,
         revised_time_window_days=offer.revised_time_window_days,
     )
-    return offer
+    return offer, thinking
 
 
 def generate_strategy(
@@ -282,7 +283,7 @@ def generate_strategy(
     account_context: AccountContext,
     contract_status: str,
     db: Session,
-) -> StrategyPlan:
+) -> tuple[StrategyPlan, str | None]:
     """Step 3: LLM generates a Meta Ads strategy plan for merchant approval."""
     audit = AuditLogger(db)
     messages = MessagesRepo(db)
@@ -306,7 +307,7 @@ def generate_strategy(
         "account_context": account_context.model_dump(),
     })
 
-    plan = _get_strategy_generator().generate_strategy(contract_terms, account_context)
+    plan, thinking = _get_strategy_generator().generate_strategy(contract_terms, account_context)
 
     audit.log(contract_id, "llm_strategy", "result", plan.model_dump())
 
@@ -327,7 +328,121 @@ def generate_strategy(
         contract_id=contract_id,
         action_count=len(plan.actions),
     )
-    return plan
+    return plan, thinking
+
+
+def stream_offer(
+    contract_id: str,
+    contract_terms: ContractTerms,
+    underwriting_result: UnderwritingResult,
+    contract_status: str,
+    turn_count: int,
+    db: Session,
+) -> Generator[str, None, None]:
+    """Streaming variant of generate_offer — yields SSE strings for live reasoning display."""
+    audit = AuditLogger(db)
+    messages = MessagesRepo(db)
+
+    _assert_valid_action(contract_status, "generate_offer")
+
+    if turn_count >= settings.MAX_NEGOTIATION_TURNS:
+        auto_reject = AgentOffer(
+            offer_type="reject",
+            message=(
+                "Negotiation limit reached. Please submit a new contract with revised terms. "
+                "I was unable to find mutually agreeable terms within the allowed rounds."
+            ),
+            revised_threshold=None,
+            revised_fee_usdc=None,
+            revised_time_window_days=None,
+        )
+        audit.log(contract_id, "llm_negotiation", "result", {
+            "offer_type": "reject",
+            "reason": "turn_limit_reached",
+            "turn_count": turn_count,
+        })
+        messages.append(
+            contract_id, role="agent", type="message",
+            content=auto_reject.message,
+            metadata={"offer_type": "reject", "reason": "turn_limit_reached"},
+        )
+        yield f"event: result\ndata: {auto_reject.model_dump_json()}\n\n"
+        return
+
+    audit.log(contract_id, "llm_negotiation", "intent", {
+        "underwriting": underwriting_result.model_dump(),
+        "contract_terms": contract_terms.model_dump(),
+        "turn_count": turn_count,
+    })
+
+    for event_type, data in _get_negotiation_layer().iter_offer_events(contract_terms, underwriting_result):
+        if event_type == "thinking":
+            yield f"event: reasoning_delta\ndata: {json.dumps({'text': data})}\n\n"
+        elif event_type == "result":
+            offer: AgentOffer = data
+            if offer.offer_type == "accept":
+                offer = offer.model_copy(update={
+                    "accepted_terms": AcceptedContractTerms(
+                        decision="accept",
+                        roas_target=contract_terms.requested_target_roas,
+                        min_spend_usd=contract_terms.minimum_spend,
+                        window_days=contract_terms.time_window_days,
+                        fee_usdc=contract_terms.success_fee_usdc,
+                        success_probability=underwriting_result.success_probability,
+                    )
+                })
+            audit.log(contract_id, "llm_negotiation", "result", offer.model_dump())
+            messages.append(
+                contract_id, role="agent", type="message",
+                content=offer.message,
+                metadata={
+                    "offer_type": offer.offer_type,
+                    "probability": underwriting_result.success_probability,
+                    "revised_threshold": offer.revised_threshold,
+                    "revised_fee_usdc": offer.revised_fee_usdc,
+                    "revised_time_window_days": offer.revised_time_window_days,
+                },
+            )
+            logger.info("offer_generated", contract_id=contract_id, offer_type=offer.offer_type, turn=turn_count)
+            yield f"event: result\ndata: {offer.model_dump_json()}\n\n"
+
+
+def stream_strategy(
+    contract_id: str,
+    contract_terms: ContractTerms,
+    account_context: AccountContext,
+    contract_status: str,
+    db: Session,
+) -> Generator[str, None, None]:
+    """Streaming variant of generate_strategy — yields SSE strings for live reasoning display."""
+    audit = AuditLogger(db)
+    messages = MessagesRepo(db)
+
+    _assert_valid_action(contract_status, "generate_strategy")
+
+    audit.log(contract_id, "llm_strategy", "intent", {
+        "contract_terms": contract_terms.model_dump(),
+        "account_context": account_context.model_dump(),
+    })
+
+    for event_type, data in _get_strategy_generator().iter_strategy_events(contract_terms, account_context):
+        if event_type == "thinking":
+            yield f"event: reasoning_delta\ndata: {json.dumps({'text': data})}\n\n"
+        elif event_type == "result":
+            plan: StrategyPlan = data
+            audit.log(contract_id, "llm_strategy", "result", plan.model_dump())
+            messages.append(
+                contract_id, role="agent", type="approval_request",
+                content=plan.strategy_summary,
+                metadata={
+                    "actions": [a.model_dump() for a in plan.actions],
+                    "estimated_daily_spend": plan.estimated_daily_spend,
+                    "expected_roas": plan.expected_roas,
+                },
+                status="pending",
+            )
+            logger.info("strategy_generated", contract_id=contract_id, action_count=len(plan.actions))
+            yield f"event: result\ndata: {plan.model_dump_json()}\n\n"
 
 
 def execute_ads_actions(

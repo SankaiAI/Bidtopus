@@ -14,6 +14,7 @@ Security:
 from __future__ import annotations
 
 import json
+from typing import Any, Generator
 
 import anthropic
 from pydantic import ValidationError
@@ -37,7 +38,7 @@ class NegotiationLayer:
         self,
         contract_terms: ContractTerms,
         underwriting_result: UnderwritingResult,
-    ) -> AgentOffer:
+    ) -> tuple[AgentOffer, str | None]:
         user_payload = json.dumps({
             "underwriting_result": underwriting_result.model_dump(),
             "contract_terms": contract_terms.model_dump(),
@@ -73,7 +74,36 @@ class NegotiationLayer:
             offer_type=offer.offer_type,
             model=settings.CLAUDE_MODEL,
         )
-        return offer
+        return offer, thinking
+
+    def iter_offer_events(
+        self,
+        contract_terms: ContractTerms,
+        underwriting_result: UnderwritingResult,
+    ) -> Generator[tuple[str, Any], None, None]:
+        """Yields ('thinking', str) deltas then a final ('result', AgentOffer)."""
+        user_payload = json.dumps({
+            "underwriting_result": underwriting_result.model_dump(),
+            "contract_terms": contract_terms.model_dump(),
+        })
+        accumulated_text: list[str] = []
+
+        with self._client.messages.stream(
+            model=settings.CLAUDE_MODEL,
+            max_tokens=1024 + settings.NEGOTIATION_THINKING_BUDGET,
+            thinking={"type": "enabled", "budget_tokens": settings.NEGOTIATION_THINKING_BUDGET},
+            system=NEGOTIATION_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_payload}],
+        ) as stream:
+            for event in stream:
+                if event.type == "content_block_delta":
+                    if event.delta.type == "thinking_delta":
+                        yield "thinking", event.delta.thinking
+                    elif event.delta.type == "text_delta":
+                        accumulated_text.append(event.delta.text)
+
+        offer = self._validate("".join(accumulated_text), contract_terms.contract_id)
+        yield "result", offer
 
     # ── Private ───────────────────────────────────────────────────────────────
 

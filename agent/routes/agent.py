@@ -11,10 +11,13 @@ Error mapping:
 """
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
+from typing import Generator
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -46,6 +49,7 @@ class UnderwriteResponse(BaseModel):
     expected_roas_range: list[float]
     recommendation: str
     recommended_fee_usdc: float
+    reasoning: str | None = None
 
 
 class AgentOfferResponse(BaseModel):
@@ -55,6 +59,7 @@ class AgentOfferResponse(BaseModel):
     revised_fee_usdc: float | None
     revised_time_window_days: int | None
     accepted_terms: dict | None
+    reasoning: str | None = None
 
 
 class GenerateStrategyResponse(BaseModel):
@@ -62,11 +67,13 @@ class GenerateStrategyResponse(BaseModel):
     actions: list[dict]
     estimated_daily_spend: float | None
     expected_roas: float | None
+    reasoning: str | None = None
 
 
 class ExecuteAdsResponse(BaseModel):
     actions_executed: list[dict]
     summary: str
+    reasoning: str | None = None
 
 
 class ResolveResponse(BaseModel):
@@ -344,6 +351,124 @@ def activate(body: ContractRequest, db: Session = Depends(get_db)):
 
     logger.info("request_complete", contract_id=body.contract_id, action="activate")
     return ActivateResponse(contract_id=body.contract_id, monitoring_scheduled=True)
+
+
+_SSE_HEADERS = {
+    "Cache-Control": "no-cache",
+    "X-Accel-Buffering": "no",
+}
+
+
+def _sse_stream(gen: Generator[str, None, None]) -> StreamingResponse:
+    """Wrap a SSE string generator in a StreamingResponse with correct headers."""
+    def safe_gen():
+        try:
+            yield from gen
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+
+    return StreamingResponse(safe_gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+@router.post("/underwrite/stream")
+def underwrite_stream(body: ContractRequest, db: Session = Depends(get_db)):
+    """SSE variant of /underwrite — emits a single result event (no LLM thinking)."""
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+
+    def gen():
+        try:
+            result = orchestrator.underwrite(
+                contract_id=body.contract_id,
+                underwriting_input=UnderwritingInput(
+                    contract_terms=_to_contract_terms(contract),
+                    account_context=_to_account_context(contract),
+                ),
+                contract_status=contract.status,
+                db=db,
+            )
+            payload = UnderwriteResponse(
+                success_probability=result.success_probability,
+                risk_level=result.risk_level,
+                expected_roas_range=list(result.expected_roas_range),
+                recommendation=result.recommendation,
+                recommended_fee_usdc=result.recommended_fee_usdc,
+            )
+            yield f"event: result\ndata: {payload.model_dump_json()}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
+
+
+@router.post("/agent-offer/stream")
+def agent_offer_stream(body: ContractRequest, db: Session = Depends(get_db)):
+    """SSE variant of /agent-offer — streams reasoning_delta events then result."""
+    from db.audit_logger import AuditLogger
+    from models.types import UnderwritingResult
+
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+
+    audit = AuditLogger(db)
+    underwriting_events = audit.get_by_component(body.contract_id, "ml_underwriting")
+    result_events = [e for e in underwriting_events if e.event_type == "result"]
+    if not result_events:
+        raise HTTPException(status_code=422, detail="No underwriting result found. Call /underwrite first.")
+
+    latest = result_events[-1].payload.get("outputs", {})
+    try:
+        underwriting_result = UnderwritingResult(**latest)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
+
+    return _sse_stream(orchestrator.stream_offer(
+        contract_id=body.contract_id,
+        contract_terms=_to_contract_terms(contract),
+        underwriting_result=underwriting_result,
+        contract_status=contract.status,
+        turn_count=contract.negotiation_turn_count,
+        db=db,
+    ))
+
+
+@router.post("/generate-strategy/stream")
+def generate_strategy_stream(body: ContractRequest, db: Session = Depends(get_db)):
+    """SSE variant of /generate-strategy — streams reasoning_delta events then result."""
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+
+    return _sse_stream(orchestrator.stream_strategy(
+        contract_id=body.contract_id,
+        contract_terms=_to_contract_terms(contract),
+        account_context=_to_account_context(contract),
+        contract_status=contract.status,
+        db=db,
+    ))
+
+
+@router.post("/execute-ads/stream")
+def execute_ads_stream(body: ContractRequest, db: Session = Depends(get_db)):
+    """SSE variant of /execute-ads — emits a single result event (no LLM thinking)."""
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+
+    def gen():
+        try:
+            results = orchestrator.execute_ads_actions(
+                contract_id=body.contract_id,
+                contract_status=contract.status,
+                db=db,
+            )
+            payload = ExecuteAdsResponse(
+                actions_executed=results,
+                summary=f"Executed {len(results)} action(s) for contract {body.contract_id}",
+            )
+            yield f"event: result\ndata: {payload.model_dump_json()}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.post("/resolve", response_model=ResolveResponse)

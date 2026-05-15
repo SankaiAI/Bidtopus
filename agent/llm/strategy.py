@@ -14,6 +14,7 @@ Security:
 from __future__ import annotations
 
 import json
+from typing import Any, Generator
 
 import anthropic
 from pydantic import ValidationError
@@ -35,7 +36,7 @@ class StrategyGenerator:
         self,
         contract_terms: ContractTerms,
         account_context: AccountContext,
-    ) -> StrategyPlan:
+    ) -> tuple[StrategyPlan, str | None]:
         user_payload = json.dumps({
             "contract_terms": contract_terms.model_dump(),
             "account_context": account_context.model_dump(),
@@ -71,7 +72,36 @@ class StrategyGenerator:
             action_count=len(plan.actions),
             model=settings.CLAUDE_MODEL,
         )
-        return plan
+        return plan, thinking
+
+    def iter_strategy_events(
+        self,
+        contract_terms: ContractTerms,
+        account_context: AccountContext,
+    ) -> Generator[tuple[str, Any], None, None]:
+        """Yields ('thinking', str) deltas then a final ('result', StrategyPlan)."""
+        user_payload = json.dumps({
+            "contract_terms": contract_terms.model_dump(),
+            "account_context": account_context.model_dump(),
+        })
+        accumulated_text: list[str] = []
+
+        with self._client.messages.stream(
+            model=settings.CLAUDE_MODEL,
+            max_tokens=2048 + settings.STRATEGY_THINKING_BUDGET,
+            thinking={"type": "enabled", "budget_tokens": settings.STRATEGY_THINKING_BUDGET},
+            system=STRATEGY_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_payload}],
+        ) as stream:
+            for event in stream:
+                if event.type == "content_block_delta":
+                    if event.delta.type == "thinking_delta":
+                        yield "thinking", event.delta.thinking
+                    elif event.delta.type == "text_delta":
+                        accumulated_text.append(event.delta.text)
+
+        plan = self._validate("".join(accumulated_text), contract_terms.contract_id)
+        yield "result", plan
 
     # ── Private ───────────────────────────────────────────────────────────────
 
