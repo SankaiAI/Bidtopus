@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -184,6 +184,11 @@ class MessageResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("id", "contract_id", mode="before")
+    @classmethod
+    def coerce_uuid(cls, v: Any) -> str:
+        return str(v) if v is not None else v
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
