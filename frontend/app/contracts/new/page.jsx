@@ -425,8 +425,9 @@ export default function ContractChatPage() {
   const [chatStep,     setChatStep]     = React.useState('choose') // 'choose' | 'ready'
   const [inputKey,     setInputKey]     = React.useState(0)
   const [isMobile,     setIsMobile]     = React.useState(false)
-  const [showContractPanel, setShowContractPanel] = React.useState(false)
-  const [finalContract,     setFinalContract]     = React.useState(null)
+  const [showContractPanel,   setShowContractPanel]   = React.useState(false)
+  const [finalContract,       setFinalContract]       = React.useState(null)
+  const [conversationTitle,   setConversationTitle]   = React.useState('New Conversation')
 
   const [contractId, setContractId] = React.useState(null)
   const contractIdRef    = React.useRef(null)
@@ -627,7 +628,10 @@ export default function ContractChatPage() {
             upsertSession(cid, { title: '', messages: updated, createdAt: new Date().toISOString() })
 
           } else if (eventType === 'title_generated') {
-            if (data.title && contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
+            if (data.title) {
+              setConversationTitle(data.title)
+              if (contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
+            }
 
           } else if (eventType === 'contract_created') {
             // Slide the contract panel in alongside the chat without navigating.
@@ -736,6 +740,7 @@ export default function ContractChatPage() {
     streamingDetailRef.current = ''
     setShowContractPanel(false)
     setFinalContract(null)
+    setConversationTitle('New Conversation')
 
     if (sessionId && isUUID(sessionId)) {
       // Server-side contract session — set contractId and flag for hydration
@@ -744,6 +749,7 @@ export default function ContractChatPage() {
       shouldHydrateRef.current = true
       // Fast paint from localStorage cache while server fetch is in flight
       const cached = getSession(sessionId)
+      if (cached?.title) setConversationTitle(cached.title)
       if (cached?.messages?.length > 0) {
         setMessages(cached.messages)
         setChatStep('ready')
@@ -829,10 +835,9 @@ export default function ContractChatPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
           <AgentAvatar size={24} />
-          <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>OutcomeX Agent</span>
-          <span style={{ fontSize: '10px', fontWeight: 600, color: C.green, background: '#f0fdf4', padding: '2px 8px', borderRadius: '20px' }}>Underwriting</span>
+          <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conversationTitle}</span>
         </div>
 
         {chatStep === 'ready' && (
