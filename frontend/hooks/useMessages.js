@@ -23,6 +23,7 @@ function mapMessage(msg) {
   if (msg.type === 'daily_update')     role = 'agent-update'
   if (msg.type === 'approval_request') role = 'agent-action'
   if (msg.type === 'system_event')     role = 'system'
+  if (msg.type === 'thinking_step')    role = 'thinking-step'
 
   return {
     id: msg.id,
@@ -30,12 +31,15 @@ function mapMessage(msg) {
     text: msg.content || '',
     time: formatTime(msg.created_at),
     status: msg.status ?? null,
-    metric:     extra.metric      ?? undefined,
-    title:      extra.title       ?? undefined,
-    detail:     extra.detail      ?? undefined,
-    actionType: extra.action_type ?? extra.actionType ?? undefined,
-    approvedAt: extra.approved_at ? formatTime(extra.approved_at) : undefined,
-    plan_id:    extra.plan_id     ?? undefined,
+    metric:             extra.metric               ?? undefined,
+    title:              extra.title                ?? undefined,
+    detail:             extra.detail               ?? undefined,
+    actionType:         extra.action_type          ?? extra.actionType ?? undefined,
+    approvedAt:         extra.approved_at          ? formatTime(extra.approved_at) : undefined,
+    plan_id:            extra.plan_id              ?? undefined,
+    stepId:             extra.step_id              ?? undefined,
+    label:              extra.label                ?? undefined,
+    thinkingSequenceId: extra.thinking_sequence_id ?? undefined,
   }
 }
 
@@ -83,8 +87,26 @@ export function useMessages(contractId) {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         if (res.ok && !cancelled) {
-          const data = await res.json()
-          if (!cancelled) setMessages(data.map(mapMessage))
+          const allMapped = (await res.json()).map(mapMessage)
+          if (cancelled) return
+
+          const regularMsgs  = allMapped.filter(m => m.role !== 'thinking-step')
+          const thinkingMsgs = allMapped.filter(m => m.role === 'thinking-step')
+          setMessages(regularMsgs)
+
+          if (thinkingMsgs.length > 0) {
+            // Group by sequence ID, reconstruct the last sequence as a collapsed ThinkingBlock
+            const seqMap = {}
+            for (const m of thinkingMsgs) {
+              const sid = m.thinkingSequenceId || '_'
+              if (!seqMap[sid]) seqMap[sid] = []
+              seqMap[sid].push(m)
+            }
+            const seqIds  = Object.keys(seqMap)
+            const lastSeq = seqMap[seqIds[seqIds.length - 1]]
+            const steps   = lastSeq.map(m => ({ id: m.stepId, label: m.label, detail: m.text, isComplete: true }))
+            setThinking({ steps, isComplete: true, isOpen: false })
+          }
         }
       } catch (err) {
         console.warn('[OutcomeX] failed to load message history', err)

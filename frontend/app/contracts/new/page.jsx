@@ -775,7 +775,7 @@ export default function ContractChatPage() {
     ]).then(([msgsResult, contractResult]) => {
       if (msgsResult.status === 'fulfilled') {
         const uiMsgs = msgsResult.value
-          .filter(m => m.role !== 'system')
+          .filter(m => m.role !== 'system' && m.type !== 'thinking_step')
           .map(m => {
             const isAgent = m.role === 'agent' || m.role === 'assistant'
             return isAgent
