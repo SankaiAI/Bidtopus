@@ -30,6 +30,10 @@ export function upsertSession(id, patch) {
   write(all)
 }
 
+export function deleteSession(id) {
+  write(read().filter(s => s.id !== id))
+}
+
 export function subscribeToSessions(handler) {
   window.addEventListener(UPDATE_EVENT, handler)
   return () => window.removeEventListener(UPDATE_EVENT, handler)
