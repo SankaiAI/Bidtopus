@@ -526,10 +526,9 @@ export default function ContractChatPage() {
             // Prevent the session-change effect from treating this URL update as a new session
             prevSessionIdRef.current = cid
             router.replace(`/contracts/new?session=${cid}`)
-            // Seed localStorage so the sidebar shows this session immediately
-            const firstUserMsg = updated.find(m => m.role === 'user')
-            const title = firstUserMsg?.content?.slice(0, 60) || 'New negotiation'
-            upsertSession(cid, { title, messages: updated, createdAt: new Date().toISOString() })
+            // Seed localStorage so the sidebar shows this session immediately.
+            // Leave title empty so the sidebar uses the backend fallback until title_generated arrives.
+            upsertSession(cid, { title: '', messages: updated, createdAt: new Date().toISOString() })
 
           } else if (eventType === 'title_generated') {
             if (data.title && contractIdRef.current) upsertSession(contractIdRef.current, { title: data.title })
@@ -689,11 +688,17 @@ export default function ContractChatPage() {
   React.useEffect(() => {
     const cacheKey = contractId || sessionId
     if (!cacheKey || messages.length === 0 || isStreaming) return
-    const firstUserMsg = messages.find(m => m.role === 'user')
-    const fallbackTitle = firstUserMsg?.content?.slice(0, 60) || 'New conversation'
     const existing = getSession(cacheKey)
-    upsertSession(cacheKey, { title: existing?.title || fallbackTitle, messages })
+    upsertSession(cacheKey, { title: existing?.title || 'New conversation', messages })
   }, [messages, isStreaming, sessionId, contractId])
+
+  // Remove stale ws_xxx session as soon as the server assigns a real contract ID.
+  // Belt-and-suspenders: the SSE handler also deletes it, but this effect fires
+  // reliably on every render where contractId and sessionId diverge.
+  React.useEffect(() => {
+    if (!contractId || !sessionId || contractId === sessionId) return
+    deleteSession(sessionId)
+  }, [contractId, sessionId])
 
   const chatReady = true
   const lastMsgIdx = messages.length - 1
