@@ -12,6 +12,7 @@ from limiter import limiter
 
 import db.messages_repo as messages_repo
 import db.repo as repo
+import event_bus
 from auth.clerk import get_current_user
 from db.session import get_db
 from models.schemas import ChatRequest
@@ -33,28 +34,37 @@ async def stream_events(
     require_contract_owner(db, contract_id, current_user)
 
     async def generator():
-        last_id = messages_repo.get_latest_id(db, contract_id)
-        while True:
-            new_msgs = (
-                messages_repo.get_after_id(db, contract_id, last_id)
-                if last_id
-                else messages_repo.get_all(db, contract_id)
-            )
-            for msg in new_msgs:
-                yield {
-                    "event": msg.type,
-                    "data": json.dumps({
-                        "id": msg.id,
-                        "role": msg.role,
-                        "type": msg.type,
-                        "content": msg.content,
-                        "metadata": msg.extra,
-                        "status": msg.status,
-                        "created_at": msg.created_at.isoformat(),
-                    }),
-                }
-                last_id = msg.id
-            await asyncio.sleep(2)
+        q = event_bus.subscribe(contract_id)
+        try:
+            last_id = messages_repo.get_latest_id(db, contract_id)
+            while True:
+                # Drain thinking events pushed by background threads first
+                while not q.empty():
+                    yield q.get_nowait()
+
+                # Poll DB for new persisted messages
+                new_msgs = (
+                    messages_repo.get_after_id(db, contract_id, last_id)
+                    if last_id
+                    else messages_repo.get_all(db, contract_id)
+                )
+                for msg in new_msgs:
+                    yield {
+                        "event": msg.type,
+                        "data": json.dumps({
+                            "id": msg.id,
+                            "role": msg.role,
+                            "type": msg.type,
+                            "content": msg.content,
+                            "metadata": msg.extra,
+                            "status": msg.status,
+                            "created_at": msg.created_at.isoformat(),
+                        }),
+                    }
+                    last_id = msg.id
+                await asyncio.sleep(1)
+        finally:
+            event_bus.unsubscribe(contract_id, q)
 
     return EventSourceResponse(generator())
 

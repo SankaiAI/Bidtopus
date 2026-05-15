@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from limiter import limiter
 import agent_client
+import event_bus
 import db.messages_repo as messages_repo
 import db.repo as repo
 from db.models import PerformanceContract
@@ -36,14 +37,53 @@ def _post_contract_background(contract_id: str) -> None:
         if contract is None or contract.status != "Created":
             log.warning("post_contract_bg: unexpected state contract=%s status=%s", contract_id, getattr(contract, "status", None))
             return
+
+        # ── Underwriting ──────────────────────────────────────────────────────
+        event_bus.publish(contract_id, "thinking_step_start", {
+            "step_id": "post_underwrite",
+            "label": "Running final ML underwriting assessment...",
+        })
         log.info("post_contract_bg: starting underwriting contract=%s", contract_id)
-        contract_service.run_underwriting(db, contract)
+        try:
+            uw = contract_service.run_underwriting(db, contract)
+            prob = uw.get("success_probability", 0)
+            risk = uw.get("risk_level", "unknown")
+            rec = uw.get("recommendation", "unknown")
+            roas_range = uw.get("expected_roas_range", [])
+            lines = [
+                f"Success probability: {prob:.0%}",
+                f"Risk level: {risk}",
+                f"Recommendation: {rec}",
+            ]
+            if len(roas_range) >= 2:
+                lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "\n".join(lines)})
+        except Exception:
+            log.exception("post_contract_bg: underwriting failed contract=%s", contract_id)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "Underwriting completed with defaults."})
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "post_underwrite"})
+
+        # ── Agent offer ───────────────────────────────────────────────────────
         contract = repo.get_contract(db, contract_id)
+        event_bus.publish(contract_id, "thinking_step_start", {
+            "step_id": "agent_offer",
+            "label": "Generating negotiated offer...",
+        })
         log.info("post_contract_bg: generating agent offer contract=%s", contract_id)
-        contract_service.generate_agent_offer(db, contract)
+        try:
+            offer = contract_service.generate_agent_offer(db, contract)
+            detail = offer.get("message", "Offer generated.")[:400]
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
+        except Exception:
+            log.exception("post_contract_bg: agent offer failed contract=%s", contract_id)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "Offer generated with default terms."})
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "agent_offer"})
+
+        event_bus.publish(contract_id, "thinking_end", {})
         log.info("post_contract_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("post_contract_bg: failed contract=%s", contract_id)
+        event_bus.publish(contract_id, "thinking_end", {})
     finally:
         db.close()
 
@@ -332,8 +372,25 @@ async def stream_negotiation(
                     })
                     db.commit()
 
+                    yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'ml_underwrite', 'label': 'Running ML underwriting model...'})}\n\n"
+
                     try:
                         ml_result = await asyncio.to_thread(agent_client.run_underwriting, contract_id)
+                        prob = ml_result.get("success_probability", 0)
+                        risk = ml_result.get("risk_level", "unknown")
+                        rec = ml_result.get("recommendation", "unknown")
+                        roas_range = ml_result.get("expected_roas_range", [])
+                        fee = ml_result.get("recommended_fee_usdc")
+                        lines = [
+                            f"Success probability: {prob:.0%}",
+                            f"Risk level: {risk}",
+                            f"Recommendation: {rec}",
+                        ]
+                        if len(roas_range) >= 2:
+                            lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
+                        if fee is not None:
+                            lines.append(f"Recommended fee: {fee} USDC")
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chr(10).join(lines)})}\n\n"
                         tool_result = json.dumps(ml_result)
                         log.info(
                             "ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
@@ -343,7 +400,11 @@ async def stream_negotiation(
                         )
                     except Exception as exc:
                         log.warning("evaluate_contract_terms: underwriting failed contract=%s: %s", contract_id, exc)
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': f'ML model unavailable — using conservative estimate.'})}\n\n"
                         tool_result = json.dumps({"error": str(exc), "recommendation": "counteroffer"})
+
+                    yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'ml_underwrite'})}\n\n"
+                    yield f"event: thinking_end\ndata: {json.dumps({})}\n\n"
 
                     # Append assistant turn + tool result and continue the loop
                     current_messages = current_messages + [

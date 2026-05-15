@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 import db.repo as repo
 import db.messages_repo as messages_repo
 import agent_client
+import event_bus
 from db.models import PerformanceContract, User
 from db.session import SessionLocal
 
@@ -23,33 +24,63 @@ def _bg(fn, *args):
 
 def _generate_strategy_bg(contract_id: str) -> None:
     db = SessionLocal()
+    event_bus.publish(contract_id, "thinking_step_start", {
+        "step_id": "strategy",
+        "label": "Generating Meta Ads campaign strategy...",
+    })
     try:
         contract = repo.get_contract(db, contract_id)
         if contract is None or contract.status != "Funded":
             log.warning("generate_strategy_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
             return
         log.info("generate_strategy_bg: starting contract=%s", contract_id)
-        generate_strategy(db, contract)
+        result = generate_strategy(db, contract)
+        summary = result.get("summary", "Campaign strategy generated.")
+        actions = result.get("planned_actions") or []
+        detail = summary
+        if actions:
+            detail += f"\n\n{len(actions)} action(s) queued for your review."
+        event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
         log.info("generate_strategy_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("generate_strategy_bg: failed contract=%s", contract_id)
+        event_bus.publish(contract_id, "thinking_step_detail", {
+            "delta": "Strategy generation encountered an error. Will retry automatically."
+        })
     finally:
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "strategy"})
+        event_bus.publish(contract_id, "thinking_end", {})
         db.close()
 
 
 def _execute_ads_bg(contract_id: str) -> None:
     db = SessionLocal()
+    event_bus.publish(contract_id, "thinking_step_start", {
+        "step_id": "execute",
+        "label": "Executing Meta Ads campaign actions...",
+    })
     try:
         contract = repo.get_contract(db, contract_id)
         if contract is None or contract.status != "Active":
             log.warning("execute_ads_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
             return
         log.info("execute_ads_bg: starting contract=%s", contract_id)
-        execute_ads_actions(db, contract)
+        result = execute_ads_actions(db, contract)
+        summary = result.get("summary", "Ad actions executed.")
+        executed = result.get("actions_executed") or []
+        detail = summary
+        if executed:
+            detail += f"\n\n{len(executed)} action(s) completed successfully."
+        event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
         log.info("execute_ads_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("execute_ads_bg: failed contract=%s", contract_id)
+        event_bus.publish(contract_id, "thinking_step_detail", {
+            "delta": "Execution encountered an error. The monitoring scheduler will retry."
+        })
     finally:
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "execute"})
+        event_bus.publish(contract_id, "thinking_end", {})
         db.close()
 
 
