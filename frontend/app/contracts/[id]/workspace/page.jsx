@@ -2,10 +2,12 @@
 import React from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
 import { useMessages } from '@/hooks/useMessages'
 import { useActionApprovals } from '@/hooks/useActionApprovals'
+import { createApiClient } from '@/lib/api'
 
 const C = {
   bg:           'var(--c-bg)',
@@ -98,11 +100,32 @@ const ALL = {
   },
 }
 
+function mapApiContract(a) {
+  return {
+    id: a.id,
+    name: a.campaign_goal || 'Campaign',
+    status: a.status,
+    targetRoas: a.target_roas,
+    minSpend: a.min_spend_usd,
+    windowDays: a.time_window_days,
+    fee: a.success_fee_usdc,
+    createdAt: new Date(a.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    prob: null,
+    risk: null,
+    expectedRange: null,
+    agentDecision: null,
+    agentNote: null,
+  }
+}
+
 function buildStages(c) {
-  const currentIdx = { pending_funding: 3, active: 4, success: 7, failure: 7 }[c.status] ?? 0
+  const currentIdx = { created: 3, pending_funding: 3, active: 4, success: 7, failure: 7 }[c.status] ?? 0
+  const underwNote = (c.prob != null && c.expectedRange != null)
+    ? `${c.prob}% probability · ${c.risk} risk · expected ${c.expectedRange[0]}–${c.expectedRange[1]}×`
+    : null
   const raw = [
     { label: 'Contract created',  note: c.createdAt },
-    { label: 'ML underwriting',   note: `${c.prob}% probability · ${c.risk} risk · expected ${c.expectedRange[0]}–${c.expectedRange[1]}×` },
+    { label: 'ML underwriting',   note: underwNote },
     { label: c.agentDecision === 'counteroffer' ? 'Agent countered → accepted' : 'Agent accepted', note: null },
     { label: 'Escrow funded',     note: c.fundedAt ? `${c.fee} USDC locked · ${c.fundedAt}` : null },
     { label: 'Campaign running',  note: c.status === 'active' ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
@@ -112,9 +135,10 @@ function buildStages(c) {
   return raw.map((s, i) => ({ ...s, state: i < currentIdx ? 'done' : i === currentIdx ? 'current' : 'upcoming' }))
 }
 
-const STATUS_LABEL  = { active: 'Active', pending_funding: 'Awaiting Escrow', success: 'Success', failure: 'Refunded' }
+const STATUS_LABEL  = { active: 'Active', created: 'Ready to Fund', pending_funding: 'Awaiting Escrow', success: 'Success', failure: 'Refunded' }
 const STATUS_COLORS = {
   active:          { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  created:         { color: C.amber,  bg: 'var(--c-amber-bg)'  },
   pending_funding: { color: C.amber,  bg: 'var(--c-amber-bg)'  },
   success:         { color: C.green,  bg: 'var(--c-green-bg)'  },
   failure:         { color: C.muted,  bg: 'var(--c-bg)'        },
@@ -414,12 +438,12 @@ function StatusContent({ c }) {
     )
   }
 
-  if (c.status === 'pending_funding') {
+  if (c.status === 'pending_funding' || c.status === 'created') {
     return (
       <InnerCard>
         <div style={{ padding: '16px' }}>
           <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.65, margin: '0 0 14px', fontFamily: font }}>
-            Fund the escrow to launch your campaign. The agent is ready — <strong style={{ fontWeight: 700 }}>{c.prob}% probability</strong> of hitting your target.
+            Fund the escrow to launch your campaign.{c.prob != null && <> The agent is ready — <strong style={{ fontWeight: 700 }}>{c.prob}% probability</strong> of hitting your target.</>}
           </p>
           <button
             style={{ width: '100%', padding: '12px', borderRadius: '9px', border: 'none', background: C.indigo, color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: font, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s' }}
@@ -547,11 +571,14 @@ function StrategyTermsContent({ c }) {
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
 export default function WorkspacePage() {
   const { id } = useParams()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
   const openMobileSidebar = useOpenMobileSidebar()
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
   const [approvalMode, setApprovalMode]       = React.useState('manual')
   const [isMobile, setIsMobile]               = React.useState(false)
   const [showPanel, setShowPanel]             = React.useState(false)
+  const [contract, setContract]               = React.useState(ALL[id] || null)
+  const [loadingContract, setLoadingContract] = React.useState(!ALL[id])
 
   const scrollRef       = React.useRef(null)
   const desktopInputRef = React.useRef(null)
@@ -565,7 +592,17 @@ export default function WorkspacePage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const c = ALL[id]
+  React.useEffect(() => {
+    if (ALL[id]) return
+    if (!isLoaded) return
+    if (!isSignedIn) { setLoadingContract(false); return }
+    createApiClient(getToken).getContract(id)
+      .then(a => setContract(mapApiContract(a)))
+      .catch(() => setContract(null))
+      .finally(() => setLoadingContract(false))
+  }, [id, isLoaded, isSignedIn])
+
+  const c = contract
 
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage } = useMessages(id)
 
@@ -603,6 +640,12 @@ export default function WorkspacePage() {
   React.useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, isThinking])
+
+  if (loadingContract) return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+      <ThinkingDots />
+    </div>
+  )
 
   if (!c) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>

@@ -570,11 +570,12 @@ const MOCK_CONTRACTS = [
 const WS_FILTERS = [
   { id: 'all',      label: 'All',      match: () => true },
   { id: 'active',   label: 'Active',   match: s => s.status === 'active' },
-  { id: 'pending',  label: 'Pending',  match: s => s.status === 'negotiating' || s.status === 'pending_funding' },
+  { id: 'pending',  label: 'Pending',  match: s => s.status === 'negotiating' || s.status === 'pending_funding' || s.status === 'created' },
   { id: 'resolved', label: 'Resolved', match: s => s.status === 'success' || s.status === 'failure' },
 ]
 
 const DOT_COLOR = {
+  created:         { bg: '#F59E0B', pulse: false },
   active:          { bg: ACCENT,    pulse: true  },
   negotiating:     { bg: '#F59E0B', pulse: false },
   pending_funding: { bg: '#F59E0B', pulse: false },
@@ -654,14 +655,31 @@ function Workspace() {
       }
     })
 
+  // Created/pending_funding contracts — negotiation done, ready to fund escrow
+  const serverFunded = contracts
+    .filter(c => { const s = c.status?.toLowerCase(); return s === 'created' || s === 'pending_funding' })
+    .map(c => {
+      const local = sessionMap.get(c.id)
+      return {
+        id: c.id,
+        title: local?.title || c.campaign_goal || 'New Campaign',
+        status: c.status?.toLowerCase(),
+        sub: 'Ready to fund',
+        href: `/contracts/${c.id}/workspace`,
+        hasContract: true,
+        _ts: c.created_at,
+      }
+    })
+
   // Legacy localStorage-only sessions (ws_xxx) not yet on the server
-  const serverIds = new Set(serverNegotiating.map(c => c.id))
+  const serverIds = new Set([...serverNegotiating, ...serverFunded].map(c => c.id))
   const localOnly = sessions
     .filter(s => !serverIds.has(s.id))
     .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/contracts/new?session=${s.id}`, hasContract: false, _ts: s.createdAt }))
 
   const allItems = [
     ...serverNegotiating,
+    ...serverFunded,
     ...localOnly,
     ...MOCK_CONTRACTS,
   ].sort((a, b) => {
