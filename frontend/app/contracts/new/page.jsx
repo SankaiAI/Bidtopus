@@ -306,7 +306,11 @@ const AgentMessage = React.memo(function AgentMessage({ msg, msgIndex, activeSte
 
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'flex-start', gap: '10px' }}>
-      <AgentAvatar size={28} />
+      <div style={{ width: 26, height: 26, borderRadius: 8, background: `${C.indigo}15`, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+        </svg>
+      </div>
       <div style={{ flex: 1, background: 'transparent', color: C.text, padding: '0', fontSize: '13px', lineHeight: 1.65 }}>
         {msg.acknowledgment && <p style={{ margin: '0 0 8px 0' }}>{msg.acknowledgment}</p>}
         {msg.thinking && msg.ackDone !== false && (
