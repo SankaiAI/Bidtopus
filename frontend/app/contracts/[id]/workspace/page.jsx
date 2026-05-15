@@ -247,7 +247,7 @@ function AgentUpdate({ msg }) {
   )
 }
 
-function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved }) {
+function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved, error }) {
   const status = effectiveStatus || msg.status || 'pending'
   const isPending   = status === 'pending'
   const isApproved  = status === 'approved' || status === 'auto'
@@ -306,6 +306,14 @@ function AgentActionCard({ msg, effectiveStatus, onApprove, autoApproved }) {
           >
             Request changes
           </button>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div style={{ padding: '8px 14px 10px', display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+          <span style={{ fontSize: '11px', color: C.red, fontWeight: 500, fontFamily: font }}>{error}</span>
         </div>
       )}
 
@@ -606,7 +614,7 @@ export default function WorkspacePage() {
 
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage } = useMessages(id)
 
-  const { getStatus, approve } = useActionApprovals(id, {
+  const { getStatus, getError, approve } = useActionApprovals(id, {
     onApproved: () => {
       setTimeout(() => {
         appendMessage({
@@ -715,7 +723,8 @@ export default function WorkspacePage() {
                         ? 'auto'
                         : getStatus(msg.id, msg.status)
                     }
-                    onApprove={() => approve(msg.id)}
+                    onApprove={() => approve(msg.id, msg.plan_id)}
+                    error={getError(msg.id)}
                   />
                 )}
                 {msg.role === 'system'       && <SystemEvent msg={msg} />}

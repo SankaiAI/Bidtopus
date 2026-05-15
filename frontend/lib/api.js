@@ -87,6 +87,9 @@ export function createApiClient(getToken) {
       post(`/api/contracts/${id}/approve-execution`, { plan_id: planId, approved }),
     // Fire-and-forget immediately after approveExecution
     executeAdsActions: (id) => post(`/api/contracts/${id}/execute-ads-actions`),
+    // Per-action approvals (manual mode)
+    approveAction: (id, actionId) => post(`/api/contracts/${id}/actions/${actionId}/approve`),
+    declineAction: (id, actionId) => post(`/api/contracts/${id}/actions/${actionId}/decline`),
 
     // ── Performance ────────────────────────────────────────────────────
     getPerformance: (id) => get(`/api/contracts/${id}/performance`),

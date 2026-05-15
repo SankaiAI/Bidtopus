@@ -1,60 +1,65 @@
 'use client'
 import { useState, useCallback } from 'react'
-
-// ─── HOOK ─────────────────────────────────────────────────────────────────────
-// Manages the approve/decline lifecycle for agent-action cards.
-// Decoupled from useMessages intentionally: approval has its own write path
-// (POST to backend), while messages are read via SSE stream.
-//
-// Usage:
-//   const { getStatus, approve, decline } = useActionApprovals(contractId, {
-//     onApproved: (actionId) => appendMessage({ role: 'agent', text: '...' }),
-//   })
-//
-// Wire-up when backend is ready:
-//   approve  → POST /api/contracts/:id/actions/:actionId/approve
-//   decline  → POST /api/contracts/:id/actions/:actionId/decline { reason }
-//   After approval the agent's next message arrives via the useMessages SSE stream.
+import { useAuth } from '@clerk/nextjs'
+import { createApiClient } from '@/lib/api'
 
 export function useActionApprovals(contractId, { onApproved, onDeclined } = {}) {
+  const { getToken } = useAuth()
   // Keyed by actionId. Values: 'pending' | 'approved' | 'declined'
-  // Only overrides are stored here; baseline status comes from the message itself.
   const [overrides, setOverrides] = useState({})
+  const [errors,    setErrors]    = useState({})
 
-  // Reset overrides when switching contracts
-  // (approved actions from a previous contract shouldn't bleed through)
+  // Reset when switching contracts
   const [lastContractId, setLastContractId] = useState(contractId)
   if (contractId !== lastContractId) {
     setOverrides({})
+    setErrors({})
     setLastContractId(contractId)
   }
 
-  // Resolve effective status: local override wins, then falls back to message's own status
   const getStatus = useCallback((actionId, baseStatus = 'pending') => {
     return overrides[actionId] ?? baseStatus
   }, [overrides])
 
-  const approve = useCallback((actionId, planId) => {
+  const getError = useCallback((actionId) => {
+    return errors[actionId] ?? null
+  }, [errors])
+
+  const approve = useCallback(async (actionId, planId) => {
     setOverrides(prev => ({ ...prev, [actionId]: 'approved' }))
+    setErrors(prev => ({ ...prev, [actionId]: null }))
+    const api = createApiClient(getToken)
+    try {
+      if (planId) {
+        await api.approveExecution(contractId, planId, true)
+        // fire-and-forget — agent response arrives via SSE /events stream
+        api.executeAdsActions(contractId).catch(() => {})
+      } else {
+        await api.approveAction(contractId, actionId)
+      }
+      onApproved?.(actionId)
+    } catch {
+      setOverrides(prev => ({ ...prev, [actionId]: 'pending' }))
+      setErrors(prev => ({ ...prev, [actionId]: 'Failed to approve. Please try again.' }))
+    }
+  }, [contractId, getToken, onApproved])
 
-    // TODO: POST /api/contracts/:contractId/approve-execution { plan_id: planId, approved: true }
-    // planId comes from msg.plan_id (set from extra.plan_id in backend approval_request rows).
-    // On success the agent's next step arrives via useMessages SSE stream.
-
-    onApproved?.(actionId)
-  }, [contractId, onApproved])
-
-  const decline = useCallback((actionId, planId, reason = '') => {
+  const decline = useCallback(async (actionId, planId, reason = '') => {
     setOverrides(prev => ({ ...prev, [actionId]: 'declined' }))
+    setErrors(prev => ({ ...prev, [actionId]: null }))
+    const api = createApiClient(getToken)
+    try {
+      if (planId) {
+        await api.approveExecution(contractId, planId, false)
+      } else {
+        await api.declineAction(contractId, actionId)
+      }
+      onDeclined?.(actionId, reason)
+    } catch {
+      setOverrides(prev => ({ ...prev, [actionId]: 'pending' }))
+      setErrors(prev => ({ ...prev, [actionId]: 'Failed to decline. Please try again.' }))
+    }
+  }, [contractId, getToken, onDeclined])
 
-    // TODO: POST /api/contracts/:contractId/approve-execution { plan_id: planId, approved: false }
-
-    onDeclined?.(actionId, reason)
-  }, [contractId, onDeclined])
-
-  return {
-    getStatus,
-    approve,
-    decline,
-  }
+  return { getStatus, getError, approve, decline }
 }
