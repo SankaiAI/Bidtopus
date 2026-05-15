@@ -86,6 +86,7 @@ export function useMessages(contractId) {
         const token = await getToken()
         const res = await fetch(`${BASE_URL}/api/contracts/${contractId}/messages`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
+          cache: 'no-store',
         })
         if (res.ok && !cancelled) {
           const data = await res.json()

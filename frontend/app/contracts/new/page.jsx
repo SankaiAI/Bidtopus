@@ -818,8 +818,7 @@ export default function ContractChatPage() {
   React.useEffect(() => {
     const cacheKey = contractId || sessionId
     if (!cacheKey || messages.length === 0 || isStreaming) return
-    const existing = getSession(cacheKey)
-    upsertSession(cacheKey, { title: existing?.title || 'New conversation', messages })
+    upsertSession(cacheKey, { messages })
   }, [messages, isStreaming, sessionId, contractId])
 
   // Remove stale ws_xxx session as soon as the server assigns a real contract ID.
