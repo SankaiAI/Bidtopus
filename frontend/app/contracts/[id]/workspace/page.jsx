@@ -682,7 +682,12 @@ export default function WorkspacePage() {
 
   // Pass null for mock IDs (ALL[id] exists) so useMessages skips API calls
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage,
-          thinking, activeStepId, liveDetail, toggleThinking } = useMessages(ALL[id] ? null : id)
+          thinking, activeStepId, liveDetail, generatedTitle, toggleThinking } = useMessages(ALL[id] ? null : id)
+
+  // Apply live title from title_generated SSE event
+  React.useEffect(() => {
+    if (generatedTitle) setContract(prev => prev ? { ...prev, title: generatedTitle } : prev)
+  }, [generatedTitle])
 
   // Group consecutive thinking-step rows by thinkingSequenceId into inline thinking-block entries
   const processedMessages = React.useMemo(() => {
@@ -779,7 +784,7 @@ export default function WorkspacePage() {
         <button onClick={openMobileSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'flex', marginRight: '12px' }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18" /><path d="M13 9l3 3-3 3" /></svg>
         </button>
-        <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font }}>Workspace</span>
+        <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || c.name || 'Workspace'}</span>
         <button
           onClick={() => setShowPanel(true)}
           style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600 }}
@@ -912,7 +917,7 @@ export default function WorkspacePage() {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
                   </button>
                 )}
-                <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || c.name || 'Untitled'}</span>
                 <span style={{ fontSize: '10px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>{badgeLabel}</span>
               </div>
               <Link

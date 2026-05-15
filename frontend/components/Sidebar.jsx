@@ -646,7 +646,7 @@ function Workspace() {
       const local = sessionMap.get(c.id)
       return {
         id: c.id,
-        title: local?.title || c.campaign_goal || 'New negotiation',
+        title: c.title || local?.title || c.campaign_goal || 'New negotiation',
         status: 'negotiating',
         sub: relativeTime(c.created_at),
         href: `/contracts/new?session=${c.id}`,
@@ -662,7 +662,7 @@ function Workspace() {
       const local = sessionMap.get(c.id)
       return {
         id: c.id,
-        title: local?.title || c.campaign_goal || 'New Campaign',
+        title: c.title || local?.title || c.campaign_goal || 'New Campaign',
         status: c.status?.toLowerCase(),
         sub: 'Ready to fund',
         href: `/contracts/${c.id}/workspace`,

@@ -802,8 +802,13 @@ export default function ContractChatPage() {
         }
       }
       if (contractResult.status === 'fulfilled' && contractResult.value) {
-        setFinalContract(contractResult.value)
+        const ct = contractResult.value
+        setFinalContract(ct)
         setShowContractPanel(true)
+        if (ct.title) {
+          setConversationTitle(ct.title)
+          upsertSession(contractId, { title: ct.title })
+        }
       }
     })
   }, [contractId, isLoaded, isSignedIn])

@@ -47,13 +47,14 @@ const BLANK_THINKING = { steps: [], isComplete: false, isOpen: true }
 
 export function useMessages(contractId) {
   const { getToken } = useAuth()
-  const [messages,     setMessages]     = useState([])
-  const [isThinking,   setIsThinking]   = useState(false)
-  const [isStreaming,  setIsStreaming]   = useState(false)
-  const [isConnected,  setIsConnected]  = useState(false)
-  const [thinking,     setThinking]     = useState(BLANK_THINKING)
-  const [activeStepId, setActiveStepId] = useState(null)
-  const [liveDetail,   setLiveDetail]   = useState('')
+  const [messages,        setMessages]        = useState([])
+  const [isThinking,      setIsThinking]      = useState(false)
+  const [isStreaming,     setIsStreaming]      = useState(false)
+  const [isConnected,     setIsConnected]     = useState(false)
+  const [thinking,        setThinking]        = useState(BLANK_THINKING)
+  const [activeStepId,    setActiveStepId]    = useState(null)
+  const [liveDetail,      setLiveDetail]      = useState('')
+  const [generatedTitle,  setGeneratedTitle]  = useState(null)
   const streamingDetailRef = useRef('')
   const abortRef = useRef(null)
 
@@ -140,7 +141,9 @@ export function useMessages(contractId) {
 
             if (cancelled) break
 
-            if (eventType === 'thinking_step') {
+            if (eventType === 'title_generated') {
+              if (data.title) setGeneratedTitle(data.title)
+            } else if (eventType === 'thinking_step') {
               // Historical replay — step already complete, render inline in message stream
               setMessages(prev => [...prev, mapMessage(data)])
             } else if (eventType === 'thinking_step_start') {
@@ -288,6 +291,7 @@ export function useMessages(contractId) {
     thinking,
     activeStepId,
     liveDetail,
+    generatedTitle,
     toggleThinking,
     sendMessage,
     stopGeneration,
