@@ -71,9 +71,10 @@ def _post_contract_background(contract_id: str) -> None:
         })
         log.info("post_contract_bg: generating agent offer contract=%s", contract_id)
         try:
-            offer = contract_service.generate_agent_offer(db, contract)
-            detail = offer.get("message", "Offer generated.")[:400]
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
+            def on_offer_reasoning(text: str):
+                event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
+
+            contract_service.generate_agent_offer(db, contract, on_reasoning=on_offer_reasoning)
         except Exception:
             log.exception("post_contract_bg: agent offer failed contract=%s", contract_id)
             event_bus.publish(contract_id, "thinking_step_detail", {"delta": "Offer generated with default terms."})

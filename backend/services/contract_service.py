@@ -34,13 +34,16 @@ def _generate_strategy_bg(contract_id: str) -> None:
             log.warning("generate_strategy_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
             return
         log.info("generate_strategy_bg: starting contract=%s", contract_id)
-        result = generate_strategy(db, contract)
-        summary = result.get("summary", "Campaign strategy generated.")
+
+        def on_reasoning(text: str):
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
+
+        result = generate_strategy(db, contract, on_reasoning=on_reasoning)
         actions = result.get("planned_actions") or []
-        detail = summary
         if actions:
-            detail += f"\n\n{len(actions)} action(s) queued for your review."
-        event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
+            event_bus.publish(contract_id, "thinking_step_detail", {
+                "delta": f"\n\n{len(actions)} action(s) queued for your review."
+            })
         log.info("generate_strategy_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("generate_strategy_bg: failed contract=%s", contract_id)
@@ -171,7 +174,7 @@ def run_underwriting(db: Session, contract: PerformanceContract) -> dict:
 
 # ── Agent Offer ───────────────────────────────────────────────────────────────
 
-def generate_agent_offer(db: Session, contract: PerformanceContract) -> dict:
+def generate_agent_offer(db: Session, contract: PerformanceContract, on_reasoning=None) -> dict:
     log.info("Generating agent offer contract=%s", contract.id)
     _require_status(contract, "Underwriting")
 
@@ -181,7 +184,7 @@ def generate_agent_offer(db: Session, contract: PerformanceContract) -> dict:
 
     repo.log_audit_event(db, contract.id, "llm_negotiation", "intent", {"contract_id": contract.id})
 
-    result = agent_client.generate_agent_offer(contract.id)
+    result = agent_client.generate_agent_offer(contract.id, on_reasoning=on_reasoning)
 
     offer = repo.save_agent_offer(
         db,
@@ -269,13 +272,13 @@ def fund_escrow(
 
 # ── Generate Strategy ─────────────────────────────────────────────────────────
 
-def generate_strategy(db: Session, contract: PerformanceContract) -> dict:
+def generate_strategy(db: Session, contract: PerformanceContract, on_reasoning=None) -> dict:
     log.info("Generating strategy contract=%s", contract.id)
     _require_status(contract, "Funded")
 
     repo.log_audit_event(db, contract.id, "llm_strategy", "intent", {"contract_id": contract.id})
 
-    result = agent_client.generate_strategy(contract.id)
+    result = agent_client.generate_strategy(contract.id, on_reasoning=on_reasoning)
 
     plan = repo.save_strategy_plan(
         db,

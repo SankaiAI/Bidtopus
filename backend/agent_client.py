@@ -5,6 +5,8 @@ Request body is always { "contract_id": "<uuid>" }.
 Returns plain dicts; the service layer owns persistence.
 """
 
+import json
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -28,6 +30,31 @@ def _get(path: str, **params) -> dict[str, Any]:
     return resp.json()
 
 
+def _stream_sse(path: str, contract_id: str, on_reasoning: Callable[[str], None]) -> dict[str, Any]:
+    """Call a /stream SSE endpoint, invoke on_reasoning for each reasoning_delta, return the result dict."""
+    url = f"{settings.agent_base_url}{path}"
+    result: dict[str, Any] = {}
+    current_event: str | None = None
+    with httpx.stream("POST", url, json={"contract_id": contract_id}, timeout=_TIMEOUT) as resp:
+        resp.raise_for_status()
+        for line in resp.iter_lines():
+            if line.startswith("event: "):
+                current_event = line[7:].strip()
+            elif line.startswith("data: "):
+                try:
+                    data = json.loads(line[6:])
+                except Exception:
+                    data = {}
+                if current_event == "reasoning_delta":
+                    on_reasoning(data.get("text", ""))
+                elif current_event == "result":
+                    result = data
+                elif current_event == "error":
+                    raise RuntimeError(data.get("detail", "agent stream error"))
+                current_event = None
+    return result
+
+
 def run_underwriting(contract_id: str) -> dict[str, Any]:
     """
     ML underwriting model.
@@ -43,9 +70,10 @@ def run_underwriting(contract_id: str) -> dict[str, Any]:
     return _post("/agent/underwrite", contract_id)
 
 
-def generate_agent_offer(contract_id: str) -> dict[str, Any]:
+def generate_agent_offer(contract_id: str, on_reasoning: Callable[[str], None] | None = None) -> dict[str, Any]:
     """
     LLM negotiation offer.
+    Pass on_reasoning to stream reasoning tokens via /agent/agent-offer/stream.
     Expected return shape:
     {
         "offer_type": "accept" | "counteroffer" | "reject",
@@ -55,18 +83,23 @@ def generate_agent_offer(contract_id: str) -> dict[str, Any]:
         "revised_time_window_days": int | None,
     }
     """
+    if on_reasoning is not None:
+        return _stream_sse("/agent/agent-offer/stream", contract_id, on_reasoning)
     return _post("/agent/agent-offer", contract_id)
 
 
-def generate_strategy(contract_id: str) -> dict[str, Any]:
+def generate_strategy(contract_id: str, on_reasoning: Callable[[str], None] | None = None) -> dict[str, Any]:
     """
     Meta Ads strategy plan.
+    Pass on_reasoning to stream reasoning tokens via /agent/generate-strategy/stream.
     Expected return shape:
     {
         "summary": str,
         "planned_actions": list[dict],
     }
     """
+    if on_reasoning is not None:
+        return _stream_sse("/agent/generate-strategy/stream", contract_id, on_reasoning)
     return _post("/agent/generate-strategy", contract_id)
 
 
