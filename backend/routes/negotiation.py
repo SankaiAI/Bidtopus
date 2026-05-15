@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
+import random
 
 import bleach
-from anthropic import Anthropic
+from anthropic import Anthropic, APIStatusError
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -114,11 +115,20 @@ async def stream_negotiation(
         current_user.id, contract_id, is_first_turn, len(clean_message),
     )
 
-    messages = [
-        {"role": item.role, "content": item.content}
-        for item in body.history
-    ]
-    messages.append({"role": "user", "content": clean_message})
+    # Build history from DB — server-authoritative, never relies on frontend state.
+    # Consecutive same-role messages are merged (Claude requires strict alternation).
+    messages: list[dict] = []
+    for m in messages_repo.get_all(db, contract_id):
+        if m.role == "merchant":
+            role = "user"
+        elif m.role == "agent":
+            role = "assistant"
+        else:
+            continue  # skip system events
+        if messages and messages[-1]["role"] == role:
+            messages[-1]["content"] += "\n" + m.content
+        else:
+            messages.append({"role": role, "content": m.content})
 
     async def generate():
         try:
@@ -131,23 +141,39 @@ async def stream_negotiation(
                 yield f"event: session_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
                 title_task = asyncio.create_task(_generate_title(clean_message))
 
-            with _anthropic.messages.stream(
-                model="claude-sonnet-4-6",
-                max_tokens=1024,
-                system=_SYSTEM_PROMPT,
-                tools=[_FINALIZE_TOOL],
-                messages=messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    if await request.is_disconnected():
-                        aborted = True
-                        stream.close()
-                        break
-                    accumulated += text
-                    yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+            _RETRYABLE = {429, 500, 503, 529}
+            _MAX_RETRIES = 3
+            for _attempt in range(_MAX_RETRIES + 1):
+                try:
+                    with _anthropic.messages.stream(
+                        model="claude-sonnet-4-6",
+                        max_tokens=1024,
+                        system=_SYSTEM_PROMPT,
+                        tools=[_FINALIZE_TOOL],
+                        messages=messages,
+                    ) as stream:
+                        for text in stream.text_stream:
+                            if await request.is_disconnected():
+                                aborted = True
+                                stream.close()
+                                break
+                            accumulated += text
+                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
-                if not aborted:
-                    final_msg = stream.get_final_message()
+                        if not aborted:
+                            final_msg = stream.get_final_message()
+                    break  # success — exit retry loop
+                except APIStatusError as exc:
+                    retryable = exc.status_code in _RETRYABLE or "overloaded" in str(exc).lower()
+                    if retryable and not accumulated and _attempt < _MAX_RETRIES:
+                        delay = (2 ** _attempt) * 0.5 + random.uniform(0, 0.5)
+                        log.warning(
+                            "API transient error (attempt %d/%d), retrying in %.1fs: %s",
+                            _attempt + 1, _MAX_RETRIES + 1, delay, exc,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
+                    raise
 
             # Flush whatever accumulated — covers both normal completion and Stop button
             if accumulated:
