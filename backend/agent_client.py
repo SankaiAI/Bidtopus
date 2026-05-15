@@ -21,6 +21,13 @@ def _post(path: str, contract_id: str) -> dict[str, Any]:
     return resp.json()
 
 
+def _get(path: str, **params) -> dict[str, Any]:
+    url = f"{settings.agent_base_url}{path}"
+    resp = httpx.get(url, params=params, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def run_underwriting(contract_id: str) -> dict[str, Any]:
     """
     ML underwriting model.
@@ -88,3 +95,33 @@ def resolve_contract(contract_id: str) -> dict[str, Any]:
     }
     """
     return _post("/agent/resolve", contract_id)
+
+
+def get_account_context(meta_ads_account_id: str) -> dict[str, Any]:
+    """
+    Fetch historical Meta Ads performance context for ML underwriting.
+    Always returns 200 — falls back to all-null fields if account is unknown.
+    Expected return shape:
+    {
+        "historical_roas_7d": float | None,
+        "historical_roas_30d": float | None,
+        "avg_daily_spend": float | None,
+        "aov": float | None,
+        "meta_ads_account_id": str,
+    }
+    """
+    return _get("/agent/account-context", meta_ads_account_id=meta_ads_account_id)
+
+
+def activate_contract(contract_id: str) -> dict[str, Any]:
+    """
+    Register the 24h monitoring job in the agent's APScheduler.
+    Call this immediately after a contract transitions to Active.
+    Idempotent — safe to call even if already registered.
+    Expected return shape:
+    {
+        "contract_id": str,
+        "monitoring_scheduled": true,
+    }
+    """
+    return _post("/agent/activate", contract_id)

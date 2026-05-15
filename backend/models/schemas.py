@@ -15,9 +15,23 @@ class UserResponse(BaseModel):
     clerk_user_id: str
     email: str
     wallet_address: Optional[str] = None
+    approval_mode: str = "manual"
+    meta_ads_account_id: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserSettingsRequest(BaseModel):
+    approval_mode: Optional[str] = None   # "manual" | "auto"
+    meta_ads_account_id: Optional[str] = None
+
+    @field_validator("approval_mode")
+    @classmethod
+    def validate_approval_mode(cls, v):
+        if v is not None and v not in ("manual", "auto"):
+            raise ValueError("approval_mode must be 'manual' or 'auto'")
+        return v
 
 
 # ── Contract Create ───────────────────────────────────────────────────────────
@@ -36,21 +50,26 @@ class ContractResponse(BaseModel):
     id: str
     merchant_id: str
     status: str
-    target_roas: float
-    min_spend_usd: float
-    time_window_days: int
-    success_fee_usdc: float
-    campaign_mode: str
+    target_roas: Optional[float] = None
+    min_spend_usd: Optional[float] = None
+    time_window_days: Optional[int] = None
+    success_fee_usdc: Optional[float] = None
+    campaign_mode: Optional[str] = None
     campaign_goal: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
 
+    @field_validator("id", "merchant_id", mode="before")
+    @classmethod
+    def coerce_uuid(cls, v: Any) -> str:
+        return str(v) if v is not None else v
+
     @classmethod
     def from_orm_contract(cls, c) -> "ContractResponse":
         return cls(
-            id=c.id,
-            merchant_id=c.merchant_id,
+            id=str(c.id),
+            merchant_id=str(c.merchant_id),
             status=c.status,
             target_roas=c.threshold,
             min_spend_usd=c.minimum_spend,

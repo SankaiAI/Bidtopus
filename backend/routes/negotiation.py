@@ -10,17 +10,45 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from limiter import limiter
+import agent_client
 import db.messages_repo as messages_repo
 import db.repo as repo
+from db.models import PerformanceContract
 from auth.clerk import get_current_user
-from db.session import get_db
+from db.session import get_db, SessionLocal
 from models.schemas import NegotiationRequest
 from services.contract_service import require_contract_owner
+from services import contract_service
 from config import settings
 
 router = APIRouter(prefix="/api", tags=["negotiation"])
 _anthropic = Anthropic(api_key=settings.anthropic_api_key)
 log = logging.getLogger(__name__)
+
+
+# ── Background task ───────────────────────────────────────────────────────────
+
+def _post_contract_background(contract_id: str) -> None:
+    """Run underwriting + agent offer after negotiation finalizes (own DB session)."""
+    db = SessionLocal()
+    try:
+        contract = repo.get_contract(db, contract_id)
+        if contract is None or contract.status != "Created":
+            log.warning("post_contract_bg: unexpected state contract=%s status=%s", contract_id, getattr(contract, "status", None))
+            return
+        log.info("post_contract_bg: starting underwriting contract=%s", contract_id)
+        contract_service.run_underwriting(db, contract)
+        contract = repo.get_contract(db, contract_id)
+        log.info("post_contract_bg: generating agent offer contract=%s", contract_id)
+        contract_service.generate_agent_offer(db, contract)
+        log.info("post_contract_bg: complete contract=%s", contract_id)
+    except Exception:
+        log.exception("post_contract_bg: failed contract=%s", contract_id)
+    finally:
+        db.close()
+
+
+# ── Title generation ──────────────────────────────────────────────────────────
 
 _TITLE_PROMPT = (
     "Generate a 4-6 word title for a marketing campaign workspace based on this "
@@ -39,6 +67,9 @@ async def _generate_title(user_message: str) -> str:
 
     return await asyncio.wait_for(asyncio.to_thread(_call), timeout=8.0)
 
+
+# ── Prompts & tools ───────────────────────────────────────────────────────────
+
 _SYSTEM_PROMPT = (
     "You are the OutcomeX performance-marketing agent. Help the merchant negotiate "
     "the terms of a new performance contract.\n\n"
@@ -49,15 +80,46 @@ _SYSTEM_PROMPT = (
     "- success_fee_usdc: fee paid to you in USDC only if the target is met\n"
     "- campaign_mode: 'new' (launching a new campaign) or 'optimize' (improving existing)\n"
     "- campaign_goal: description of the merchant's product and goal\n\n"
-    "Once both parties have explicitly agreed on all terms, call finalize_contract. "
-    "Do not finalize until the merchant has confirmed the terms."
+    "IMPORTANT — Before accepting or proposing final terms, you MUST call "
+    "evaluate_contract_terms with the proposed numbers. The tool runs an ML model "
+    "that returns success_probability, risk_level, and a recommendation "
+    "(accept / counteroffer / reject). Use that result to ground your response:\n"
+    "- recommendation=accept (≥65% probability): you may accept the terms\n"
+    "- recommendation=counteroffer (35–64%): propose revised terms to reduce risk\n"
+    "- recommendation=reject (<35%): decline and explain why the target is not achievable\n\n"
+    "Call evaluate_contract_terms whenever the merchant proposes specific numeric terms, "
+    "or whenever you are about to make an accept/counteroffer/reject decision. "
+    "Once both parties have explicitly agreed on all terms based on the evaluation, "
+    "call finalize_contract. Do not finalize until the merchant has confirmed the terms."
 )
+
+_EVALUATE_TOOL = {
+    "name": "evaluate_contract_terms",
+    "description": (
+        "Run the ML underwriting model against proposed contract terms. "
+        "Call this whenever the merchant proposes specific numeric terms, or before "
+        "making any accept/counteroffer/reject decision. Returns success probability, "
+        "risk level, expected ROAS range, recommendation, and a suggested fee."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "target_roas": {"type": "number", "description": "Proposed ROAS threshold"},
+            "min_spend_usd": {"type": "number", "description": "Proposed minimum spend in USD"},
+            "time_window_days": {"type": "integer", "description": "Proposed performance window in days"},
+            "success_fee_usdc": {"type": "number", "description": "Proposed success fee in USDC"},
+            "campaign_mode": {"type": "string", "enum": ["new", "optimize"]},
+        },
+        "required": ["target_roas", "min_spend_usd", "time_window_days", "success_fee_usdc", "campaign_mode"],
+    },
+}
 
 _FINALIZE_TOOL = {
     "name": "finalize_contract",
     "description": (
-        "Call this once both parties have agreed on all contract terms. "
-        "Creates the contract record and sends the merchant to their workspace."
+        "Call this once both parties have agreed on all contract terms AND you have "
+        "evaluated them with evaluate_contract_terms and received a recommendation of "
+        "accept. Creates the contract record and sends the merchant to their workspace."
     ),
     "input_schema": {
         "type": "object",
@@ -76,6 +138,54 @@ _FINALIZE_TOOL = {
     },
 }
 
+_TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
+
+
+# ── Streaming helpers ─────────────────────────────────────────────────────────
+
+async def _stream_turn(request, messages, *, max_tokens=1024):
+    """Stream one Claude turn with retries. Yields (text_chunks..., final_message)."""
+    _RETRYABLE = {429, 500, 503, 529}
+    _MAX_RETRIES = 3
+    accumulated = ""
+    final_msg = None
+    aborted = False
+
+    for _attempt in range(_MAX_RETRIES + 1):
+        accumulated = ""
+        aborted = False
+        try:
+            with _anthropic.messages.stream(
+                model="claude-sonnet-4-6",
+                max_tokens=max_tokens,
+                system=_SYSTEM_PROMPT,
+                tools=_TOOLS,
+                messages=messages,
+            ) as stream:
+                for text in stream.text_stream:
+                    if await request.is_disconnected():
+                        aborted = True
+                        stream.close()
+                        break
+                    accumulated += text
+                    yield ("text", text)
+                if not aborted:
+                    final_msg = stream.get_final_message()
+            break
+        except APIStatusError as exc:
+            retryable = exc.status_code in _RETRYABLE or "overloaded" in str(exc).lower()
+            if retryable and not accumulated and _attempt < _MAX_RETRIES:
+                delay = (2 ** _attempt) * 0.5 + random.uniform(0, 0.5)
+                log.warning("API transient error (attempt %d/%d), retrying in %.1fs: %s",
+                            _attempt + 1, _MAX_RETRIES + 1, delay, exc)
+                await asyncio.sleep(delay)
+                continue
+            raise
+
+    yield ("done", accumulated, aborted, final_msg)
+
+
+# ── Route ─────────────────────────────────────────────────────────────────────
 
 @router.post("/negotiation/stream")
 @limiter.limit("20/minute")
@@ -107,6 +217,23 @@ async def stream_negotiation(
             extra={"status": "Negotiating"},
         )
 
+    # On the first turn, fetch historical Meta Ads context and store it on the contract
+    # so the ML underwriting model has real account data for the entire negotiation.
+    if is_first_turn and current_user.meta_ads_account_id:
+        try:
+            account_ctx = agent_client.get_account_context(current_user.meta_ads_account_id)
+            db.query(PerformanceContract).filter_by(id=contract_id).update(
+                {"account_context": account_ctx}
+            )
+            db.commit()
+            log.info(
+                "account_context fetched contract=%s account=%s roas_7d=%s",
+                contract_id, current_user.meta_ads_account_id,
+                account_ctx.get("historical_roas_7d"),
+            )
+        except Exception:
+            log.warning("Failed to fetch account_context contract=%s — proceeding with defaults", contract_id)
+
     # Save user message before streaming — never lost regardless of what follows
     messages_repo.append(db, contract_id, "merchant", "message", content=clean_message)
 
@@ -117,7 +244,7 @@ async def stream_negotiation(
 
     # Build history from DB — server-authoritative, never relies on frontend state.
     # Consecutive same-role messages are merged (Claude requires strict alternation).
-    messages: list[dict] = []
+    current_messages: list[dict] = []
     for m in messages_repo.get_all(db, contract_id):
         if m.role == "merchant":
             role = "user"
@@ -125,81 +252,117 @@ async def stream_negotiation(
             role = "assistant"
         else:
             continue  # skip system events
-        if messages and messages[-1]["role"] == role:
-            messages[-1]["content"] += "\n" + m.content
+        if current_messages and current_messages[-1]["role"] == role:
+            current_messages[-1]["content"] += "\n" + m.content
         else:
-            messages.append({"role": role, "content": m.content})
+            current_messages.append({"role": role, "content": m.content})
 
     async def generate():
+        nonlocal current_messages
         try:
-            aborted = False
-            accumulated = ""
-            final_msg = None
             title_task = None
+            title_emitted = False
 
             if is_first_turn:
                 yield f"event: session_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
                 title_task = asyncio.create_task(_generate_title(clean_message))
 
-            _RETRYABLE = {429, 500, 503, 529}
-            _MAX_RETRIES = 3
-            for _attempt in range(_MAX_RETRIES + 1):
-                try:
-                    with _anthropic.messages.stream(
-                        model="claude-sonnet-4-6",
-                        max_tokens=1024,
-                        system=_SYSTEM_PROMPT,
-                        tools=[_FINALIZE_TOOL],
-                        messages=messages,
-                    ) as stream:
-                        for text in stream.text_stream:
-                            if await request.is_disconnected():
-                                aborted = True
-                                stream.close()
-                                break
-                            accumulated += text
-                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+            # Tool-call loop — Claude may call evaluate_contract_terms multiple times
+            # before finalizing. Each iteration is one complete Claude turn.
+            while True:
+                accumulated = ""
+                aborted = False
+                final_msg = None
 
-                        if not aborted:
-                            final_msg = stream.get_final_message()
-                    break  # success — exit retry loop
-                except APIStatusError as exc:
-                    retryable = exc.status_code in _RETRYABLE or "overloaded" in str(exc).lower()
-                    if retryable and not accumulated and _attempt < _MAX_RETRIES:
-                        delay = (2 ** _attempt) * 0.5 + random.uniform(0, 0.5)
-                        log.warning(
-                            "API transient error (attempt %d/%d), retrying in %.1fs: %s",
-                            _attempt + 1, _MAX_RETRIES + 1, delay, exc,
+                async for item in _stream_turn(request, current_messages):
+                    if item[0] == "text":
+                        _, text = item
+                        accumulated += text
+                        yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+                    else:
+                        _, accumulated, aborted, final_msg = item
+
+                # Persist whatever Claude said in this turn
+                if accumulated:
+                    sanitized = bleach.clean(accumulated, tags=[], strip=True)
+                    messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+
+                # Emit title after the first turn (first turn only, even if aborted)
+                if not title_emitted and title_task is not None:
+                    try:
+                        title = await title_task
+                    except Exception:
+                        title = clean_message[:60]
+                    repo.update_contract_title(db, contract_id, title)
+                    yield f"event: title_generated\ndata: {json.dumps({'title': title})}\n\n"
+                    title_emitted = True
+
+                if aborted or final_msg is None:
+                    return
+
+                # Natural end of turn — Claude finished speaking, no tool call
+                if final_msg.stop_reason != "tool_use":
+                    return
+
+                # ── Tool dispatch ─────────────────────────────────────────────
+                tool_block = next(
+                    (b for b in final_msg.content if b.type == "tool_use"), None
+                )
+                if tool_block is None:
+                    return
+
+                assistant_content = [b.model_dump() for b in final_msg.content]
+
+                # ── evaluate_contract_terms ───────────────────────────────────
+                if tool_block.name == "evaluate_contract_terms":
+                    inp = tool_block.input
+                    log.info(
+                        "evaluate_contract_terms called contract=%s terms=%s",
+                        contract_id, inp,
+                    )
+
+                    # Write proposed terms to the negotiating contract so the
+                    # agent's ML model can read them via the standard DB path.
+                    db.query(PerformanceContract).filter_by(id=contract_id).update({
+                        "threshold": inp["target_roas"],
+                        "minimum_spend": inp["min_spend_usd"],
+                        "time_window_days": inp["time_window_days"],
+                        "success_fee_usdc": inp["success_fee_usdc"],
+                        "campaign_mode": inp["campaign_mode"],
+                    })
+                    db.commit()
+
+                    try:
+                        ml_result = await asyncio.to_thread(agent_client.run_underwriting, contract_id)
+                        tool_result = json.dumps(ml_result)
+                        log.info(
+                            "ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
+                            contract_id,
+                            ml_result.get("success_probability", 0),
+                            ml_result.get("recommendation"),
                         )
-                        await asyncio.sleep(delay)
-                        continue
-                    raise
+                    except Exception as exc:
+                        log.warning("evaluate_contract_terms: underwriting failed contract=%s: %s", contract_id, exc)
+                        tool_result = json.dumps({"error": str(exc), "recommendation": "counteroffer"})
 
-            # Flush whatever accumulated — covers both normal completion and Stop button
-            if accumulated:
-                sanitized = bleach.clean(accumulated, tags=[], strip=True)
-                messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+                    # Append assistant turn + tool result and continue the loop
+                    current_messages = current_messages + [
+                        {"role": "assistant", "content": assistant_content},
+                        {
+                            "role": "user",
+                            "content": [{
+                                "type": "tool_result",
+                                "tool_use_id": tool_block.id,
+                                "content": tool_result,
+                            }],
+                        },
+                    ]
+                    continue  # next iteration: Claude responds with accept/counter/reject
 
-            # Emit workspace title (first turn only, even if stream was aborted)
-            if title_task is not None:
-                try:
-                    title = await title_task
-                except Exception:
-                    title = clean_message[:60]
-                repo.update_contract_title(db, contract_id, title)
-                yield f"event: title_generated\ndata: {json.dumps({'title': title})}\n\n"
+                # ── finalize_contract ─────────────────────────────────────────
+                if tool_block.name == "finalize_contract":
+                    inp = tool_block.input
 
-            if aborted or final_msg is None:
-                return
-
-            if final_msg.stop_reason == "tool_use":
-                for block in final_msg.content:
-                    if block.type != "tool_use" or block.name != "finalize_contract":
-                        continue
-
-                    inp = block.input
-
-                    # Update the existing Negotiating row instead of creating a new contract
                     repo.finalize_negotiating_contract(
                         db,
                         contract_id=contract_id,
@@ -210,7 +373,6 @@ async def stream_negotiation(
                         campaign_mode=inp["campaign_mode"],
                         campaign_goal=inp.get("campaign_goal", ""),
                     )
-
                     repo.log_audit_event(
                         db,
                         contract_id=contract_id,
@@ -218,7 +380,6 @@ async def stream_negotiation(
                         event_type="result",
                         payload={"action": "contract_finalized_via_negotiation", "terms": inp},
                     )
-
                     messages_repo.append(
                         db, contract_id, "system", "system_event",
                         content="Contract created",
@@ -228,15 +389,17 @@ async def stream_negotiation(
                     log.info("contract finalized via negotiation contract=%s user=%s", contract_id, current_user.id)
                     yield f"event: contract_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
 
-                    # Stream Claude's closing summary after the tool call
-                    assistant_content = [b.model_dump() for b in final_msg.content]
-                    follow_messages = messages + [
+                    # Auto-advance: underwriting + agent offer run in background
+                    asyncio.create_task(asyncio.to_thread(_post_contract_background, contract_id))
+
+                    # Stream Claude's closing summary
+                    follow_messages = current_messages + [
                         {"role": "assistant", "content": assistant_content},
                         {
                             "role": "user",
                             "content": [{
                                 "type": "tool_result",
-                                "tool_use_id": block.id,
+                                "tool_use_id": tool_block.id,
                                 "content": json.dumps({"success": True, "contract_id": contract_id}),
                             }],
                         },
@@ -246,7 +409,7 @@ async def stream_negotiation(
                         model="claude-sonnet-4-6",
                         max_tokens=512,
                         system=_SYSTEM_PROMPT,
-                        tools=[_FINALIZE_TOOL],
+                        tools=_TOOLS,
                         messages=follow_messages,
                     ) as follow_stream:
                         follow_text = ""
@@ -261,7 +424,11 @@ async def stream_negotiation(
                             sanitized = bleach.clean(follow_text, tags=[], strip=True)
                             messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
-                    break
+                    return  # conversation complete
+
+                # Unknown tool — log and stop
+                log.warning("Unknown tool called during negotiation: %s", tool_block.name)
+                return
 
         except Exception as e:
             log.exception("negotiation stream error user=%s contract=%s", current_user.id, contract_id)

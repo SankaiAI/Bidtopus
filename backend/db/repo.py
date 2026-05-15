@@ -35,6 +35,15 @@ def update_wallet_address(db: Session, user_id: str, wallet_address: str) -> Use
     return user
 
 
+def update_user_settings(db: Session, user_id: str, **kwargs) -> User:
+    user = db.query(User).filter(User.id == user_id).first()
+    for k, v in kwargs.items():
+        setattr(user, k, v)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 # ── Contracts ─────────────────────────────────────────────────────────────────
 
 def create_contract(db: Session, merchant_id: str, **kwargs) -> PerformanceContract:

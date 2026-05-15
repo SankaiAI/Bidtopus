@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 import db.repo as repo
 from auth.clerk import get_current_user
 from db.session import get_db
-from models.schemas import UserResponse, WalletConnectRequest
+from models.schemas import UserResponse, UserSettingsRequest, WalletConnectRequest
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
@@ -14,6 +14,18 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user=Depends(get_current_user)):
     return current_user
+
+
+@router.patch("/me/settings", response_model=UserResponse)
+def update_settings(
+    body: UserSettingsRequest,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    updates = body.model_dump(exclude_none=True)
+    if not updates:
+        return current_user
+    return repo.update_user_settings(db, current_user.id, **updates)
 
 
 @router.post("/me/wallet", response_model=UserResponse)

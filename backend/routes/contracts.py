@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
+
+log = logging.getLogger(__name__)
 
 from limiter import limiter
 
@@ -229,11 +233,27 @@ def approve_action(
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    contract, _ = _resolve_action_message(db, contract_id, action_id, current_user)
+    from db.models import ContractMessage
+    contract, msg = _resolve_action_message(db, contract_id, action_id, current_user)
     messages_repo.update_status(db, action_id, "approved")
     repo.log_audit_event(db, contract_id, "meta_ads", "intent", {
         "action": "action_approved", "action_id": action_id,
     })
+
+    # In manual mode, execute once every per-action card for this plan is approved
+    plan_id = (msg.extra or {}).get("plan_id")
+    if plan_id:
+        pending = (
+            db.query(ContractMessage)
+            .filter_by(contract_id=contract_id, type="approval_request", status="pending")
+            .filter(ContractMessage.extra["plan_id"].as_string() == plan_id)
+            .count()
+        )
+        if pending == 0:
+            log.info("All per-action cards approved — triggering execution contract=%s plan=%s", contract_id, plan_id)
+            from services.contract_service import _bg, _execute_ads_bg
+            _bg(_execute_ads_bg, contract_id)
+
     return {"action_id": action_id, "status": "approved"}
 
 

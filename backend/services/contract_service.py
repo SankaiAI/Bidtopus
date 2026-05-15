@@ -1,4 +1,5 @@
 import logging
+import threading
 from datetime import datetime, timezone
 
 import bleach
@@ -9,8 +10,47 @@ import db.repo as repo
 import db.messages_repo as messages_repo
 import agent_client
 from db.models import PerformanceContract, User
+from db.session import SessionLocal
 
 log = logging.getLogger(__name__)
+
+
+def _bg(fn, *args):
+    """Fire-and-forget: run fn(*args) in a daemon thread with its own DB session."""
+    t = threading.Thread(target=fn, args=args, daemon=True)
+    t.start()
+
+
+def _generate_strategy_bg(contract_id: str) -> None:
+    db = SessionLocal()
+    try:
+        contract = repo.get_contract(db, contract_id)
+        if contract is None or contract.status != "Funded":
+            log.warning("generate_strategy_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
+            return
+        log.info("generate_strategy_bg: starting contract=%s", contract_id)
+        generate_strategy(db, contract)
+        log.info("generate_strategy_bg: complete contract=%s", contract_id)
+    except Exception:
+        log.exception("generate_strategy_bg: failed contract=%s", contract_id)
+    finally:
+        db.close()
+
+
+def _execute_ads_bg(contract_id: str) -> None:
+    db = SessionLocal()
+    try:
+        contract = repo.get_contract(db, contract_id)
+        if contract is None or contract.status != "Active":
+            log.warning("execute_ads_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
+            return
+        log.info("execute_ads_bg: starting contract=%s", contract_id)
+        execute_ads_actions(db, contract)
+        log.info("execute_ads_bg: complete contract=%s", contract_id)
+    except Exception:
+        log.exception("execute_ads_bg: failed contract=%s", contract_id)
+    finally:
+        db.close()
 
 
 def _sanitize(text: str) -> str:
@@ -189,6 +229,10 @@ def fund_escrow(
         content=f"Escrow funded — {amount_usdc} USDC locked on-chain",
         extra={"tx_hash": tx_hash, "chain_contract_id": chain_contract_id},
     )
+
+    # Auto-advance: generate strategy in background now that escrow is confirmed
+    _bg(_generate_strategy_bg, contract.id)
+
     return {"escrow_id": record.id, "status": "funded", "tx_hash": tx_hash}
 
 
@@ -234,12 +278,43 @@ def approve_execution(db: Session, contract: PerformanceContract, plan_id: str, 
         repo.update_contract_status(db, contract.id, "Active")
         log.info("Strategy approved contract=%s plan=%s → Active", contract.id, plan_id)
         repo.log_audit_event(db, contract.id, "contract", "result", {"action": "strategy_approved", "plan_id": plan_id})
-        messages_repo.append(
-            db, contract.id, "system", "system_event",
-            content="Strategy approved — agent is now executing",
-            extra={"plan_id": plan_id},
-        )
-        return {"status": "Active", "plan_id": plan_id, "approval_status": "approved"}
+
+        # Read merchant's approval_mode to decide execution path
+        merchant = repo.get_user_by_id(db, contract.merchant_id)
+        approval_mode = getattr(merchant, "approval_mode", "manual") if merchant else "manual"
+
+        # Register 24h monitoring job in the agent's APScheduler — always, regardless of mode
+        try:
+            agent_client.activate_contract(contract.id)
+            log.info("Monitoring job registered contract=%s", contract.id)
+        except Exception:
+            log.exception("Failed to register monitoring job contract=%s — scheduler will pick it up on next restart", contract.id)
+
+        if approval_mode == "auto":
+            # Auto-approve: execute all actions immediately in background
+            messages_repo.append(
+                db, contract.id, "system", "system_event",
+                content="Strategy approved — agent is executing your campaign",
+                extra={"plan_id": plan_id},
+            )
+            _bg(_execute_ads_bg, contract.id)
+        else:
+            # Manual: post one approval_request card per planned action
+            messages_repo.append(
+                db, contract.id, "system", "system_event",
+                content="Strategy approved — confirm each step below before the agent acts",
+                extra={"plan_id": plan_id},
+            )
+            for idx, action in enumerate(plan.planned_actions or []):
+                messages_repo.append(
+                    db, contract.id, "agent", "approval_request",
+                    content=f"Action {idx + 1}: {action.get('type', 'ad action')} — {action.get('description', '')}".strip(" —"),
+                    extra={"plan_id": plan_id, "action_index": idx, "action": action},
+                    status="pending",
+                )
+            log.info("Manual mode: posted %d per-action approval cards contract=%s", len(plan.planned_actions or []), contract.id)
+
+        return {"status": "Active", "plan_id": plan_id, "approval_status": "approved", "approval_mode": approval_mode}
     else:
         repo.decline_strategy_plan(db, plan.id)
         log.info("Strategy declined contract=%s plan=%s", contract.id, plan_id)

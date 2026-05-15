@@ -9,6 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from config import settings
 from logging_config import setup_logging
 from limiter import limiter
+from sqlalchemy import text
 from db.session import Base, engine
 from routes import contracts, messages, negotiation, stream, users
 
@@ -18,6 +19,23 @@ log = logging.getLogger(__name__)
 # Create all tables on startup (use Alembic migrations in production)
 Base.metadata.create_all(bind=engine)
 log.info("Database tables verified/created")
+
+# Inline migrations for columns added after initial table creation
+def _run_migrations():
+    _new_cols = [
+        ("users", "approval_mode", "VARCHAR NOT NULL DEFAULT 'manual'"),
+        ("users", "meta_ads_account_id", "VARCHAR"),
+    ]
+    with engine.connect() as conn:
+        for table, col, definition in _new_cols:
+            try:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {definition}"))
+                conn.commit()
+                log.info("Migration: added %s.%s", table, col)
+            except Exception:
+                pass  # column already exists
+
+_run_migrations()
 
 app = FastAPI(
     title="OutcomeX API",
