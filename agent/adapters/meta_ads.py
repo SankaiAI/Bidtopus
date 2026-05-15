@@ -87,6 +87,16 @@ class MockMetaAdsAdapter(MetaAdsAdapterBase):
         )
         return {"status": "success", "mock": True, "action_type": action.type}
 
+    def get_account_context(self, account_id: str) -> dict[str, Any]:
+        rng = random.Random(_seed_for(account_id))
+        return {
+            "meta_ads_account_id": account_id,
+            "historical_roas_7d": round(1.2 + rng.uniform(0.3, 1.3), 2),
+            "historical_roas_30d": round(1.1 + rng.uniform(0.3, 1.2), 2),
+            "avg_daily_spend": round(50.0 + rng.uniform(0, 200), 2),
+            "aov": round(30.0 + rng.uniform(10, 120), 2),
+        }
+
 
 # ── Real adapter — Meta Ads MCP at https://mcp.facebook.com/ads ───────────────
 
@@ -171,6 +181,30 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
             mcp_tool=tool,
         )
         return {"status": "success", "action_type": action.type, "result": raw}
+
+    def get_account_context(self, account_id: str) -> dict[str, Any]:
+        return _run_sync(self._get_account_context_async(account_id))
+
+    async def _get_account_context_async(self, account_id: str) -> dict[str, Any]:
+        async with streamablehttp_client(self._MCP_URL, headers=self._headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool(
+                    "get_account_context",
+                    {"account_id": account_id},
+                )
+                if result.isError:
+                    raise MetaAdsError(f"MCP get_account_context error: {_extract_text(result)}")
+                raw = _extract_text(result)
+        data = json.loads(raw)
+        logger.info("mcp_account_context_fetched", account_id=account_id)
+        return {
+            "meta_ads_account_id": account_id,
+            "historical_roas_7d": data.get("historical_roas_7d"),
+            "historical_roas_30d": data.get("historical_roas_30d"),
+            "avg_daily_spend": data.get("avg_daily_spend"),
+            "aov": data.get("aov"),
+        }
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────

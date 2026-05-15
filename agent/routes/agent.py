@@ -84,6 +84,14 @@ class ActivateResponse(BaseModel):
     monitoring_scheduled: bool
 
 
+class AccountContextResponse(BaseModel):
+    meta_ads_account_id: str
+    historical_roas_7d: float | None
+    historical_roas_30d: float | None
+    avg_daily_spend: float | None
+    aov: float | None
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_contract_or_404(contract_id: str, db: Session) -> PerformanceContractORM:
@@ -283,6 +291,32 @@ def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
         actions_executed=results,
         summary=f"Executed {len(results)} action(s) for contract {body.contract_id}",
     )
+
+
+@router.get("/account-context", response_model=AccountContextResponse)
+def get_account_context(meta_ads_account_id: str):
+    """Return historical Meta Ads context for an account.
+
+    Called by the backend at negotiation start to populate account_context before
+    underwriting runs. Always returns 200 — null fields when data is unavailable.
+    """
+    from adapters.meta_ads import get_meta_ads_adapter
+
+    logger.info("request_received", action="get_account_context", account_id=meta_ads_account_id)
+    try:
+        adapter = get_meta_ads_adapter()
+        data = adapter.get_account_context(meta_ads_account_id)
+    except Exception as exc:
+        logger.error("account_context_fetch_failed", account_id=meta_ads_account_id, error=str(exc))
+        data = {
+            "meta_ads_account_id": meta_ads_account_id,
+            "historical_roas_7d": None,
+            "historical_roas_30d": None,
+            "avg_daily_spend": None,
+            "aov": None,
+        }
+    logger.info("request_complete", action="get_account_context", account_id=meta_ads_account_id)
+    return AccountContextResponse(**data)
 
 
 @router.post("/activate", response_model=ActivateResponse)
