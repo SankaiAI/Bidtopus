@@ -553,7 +553,8 @@ export default function ContractChatPage() {
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              last.thinking = { ...last.thinking, steps: [...last.thinking.steps, { id: data.step_id, label: data.label, detail: '', isComplete: false }] }
+              const prevThinking = last.thinking || { steps: [], isComplete: false, isOpen: true }
+              last.thinking = { ...prevThinking, steps: [...prevThinking.steps, { id: data.step_id, label: data.label, detail: '', isComplete: false }] }
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -570,7 +571,8 @@ export default function ContractChatPage() {
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              last.thinking = { ...last.thinking, steps: last.thinking.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s) }
+              const prevThinking = last.thinking || { steps: [], isComplete: false, isOpen: true }
+              last.thinking = { ...prevThinking, steps: prevThinking.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s) }
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -579,7 +581,8 @@ export default function ContractChatPage() {
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              last.thinking = { ...last.thinking, isComplete: true, isOpen: false }
+              const prevThinking = last.thinking || { steps: [], isComplete: false, isOpen: true }
+              last.thinking = { ...prevThinking, isComplete: true, isOpen: false }
               msgs[msgs.length - 1] = last
               return msgs
             })
