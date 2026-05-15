@@ -661,9 +661,8 @@ export default function WorkspacePage() {
   const [approvalMode, setApprovalMode]       = React.useState('manual')
   const [isMobile, setIsMobile]               = React.useState(false)
   const [showPanel, setShowPanel]             = React.useState(false)
-  const cachedContract = ALL[id] ? null : (typeof window !== 'undefined' ? readContractCache(id) : null)
-  const [contract, setContract]               = React.useState(ALL[id] || cachedContract || null)
-  const [loadingContract, setLoadingContract] = React.useState(!ALL[id] && !cachedContract)
+  const [contract, setContract]               = React.useState(ALL[id] || null)
+  const [loadingContract, setLoadingContract] = React.useState(!ALL[id])
 
   const scrollRef       = React.useRef(null)
   const desktopInputRef = React.useRef(null)
@@ -676,6 +675,13 @@ export default function WorkspacePage() {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // Fast paint from localStorage cache (client-only — must be useEffect, not useState, for SSR)
+  React.useEffect(() => {
+    if (ALL[id] || contract) return
+    const cached = readContractCache(id)
+    if (cached) { setContract(cached); setLoadingContract(false) }
+  }, [id])
 
   React.useEffect(() => {
     if (ALL[id]) return

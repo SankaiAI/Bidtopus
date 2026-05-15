@@ -638,7 +638,13 @@ function Workspace() {
   const wsMatch = pathname.match(/^\/contracts\/([^/]+)\/workspace/)
   const activeContractId = wsMatch ? wsMatch[1] : null
 
-  // Server-authoritative Negotiating contracts, with localStorage title as fallback
+  // Server-authoritative Negotiating contracts, with localStorage title as fallback.
+  // 'New conversation' / 'New Campaign' are stale placeholders — ignore them in favour of the API title.
+  const PLACEHOLDER_TITLES = new Set(['New conversation', 'New Campaign', 'New negotiation', ''])
+  const userTitle = (local) => {
+    const t = local?.title
+    return t && !PLACEHOLDER_TITLES.has(t) ? t : null
+  }
   const sessionMap = new Map(sessions.map(s => [s.id, s]))
   const serverNegotiating = contracts
     .filter(c => c.status?.toLowerCase() === 'negotiating')
@@ -646,7 +652,7 @@ function Workspace() {
       const local = sessionMap.get(c.id)
       return {
         id: c.id,
-        title: local?.title || c.title || c.campaign_goal || 'New negotiation',
+        title: userTitle(local) || c.title || c.campaign_goal || 'New negotiation',
         status: 'negotiating',
         sub: relativeTime(c.created_at),
         href: `/contracts/new?session=${c.id}`,
@@ -662,7 +668,7 @@ function Workspace() {
       const local = sessionMap.get(c.id)
       return {
         id: c.id,
-        title: local?.title || c.title || c.campaign_goal || 'New Campaign',
+        title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign',
         status: c.status?.toLowerCase(),
         sub: 'Ready to fund',
         href: `/contracts/${c.id}/workspace`,
