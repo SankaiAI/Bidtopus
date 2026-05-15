@@ -79,6 +79,11 @@ class ResolveResponse(BaseModel):
     target_met: bool
 
 
+class ActivateResponse(BaseModel):
+    contract_id: str
+    monitoring_scheduled: bool
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_contract_or_404(contract_id: str, db: Session) -> PerformanceContractORM:
@@ -278,6 +283,31 @@ def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
         actions_executed=results,
         summary=f"Executed {len(results)} action(s) for contract {body.contract_id}",
     )
+
+
+@router.post("/activate", response_model=ActivateResponse)
+def activate(body: ContractRequest, db: Session = Depends(get_db)):
+    """Register 24h monitoring job for a contract that just transitioned to Active.
+
+    Called by the backend immediately after a contract status moves to Active.
+    Idempotent — safe to call multiple times for the same contract.
+    """
+    from scheduler import register_monitoring_job
+
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info("request_received", contract_id=body.contract_id, action="activate", state=contract.status)
+
+    if contract.status != "Active":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Contract is not Active (current status: {contract.status}). Monitoring only runs for Active contracts.",
+        )
+
+    register_monitoring_job(body.contract_id)
+
+    logger.info("request_complete", contract_id=body.contract_id, action="activate")
+    return ActivateResponse(contract_id=body.contract_id, monitoring_scheduled=True)
 
 
 @router.post("/resolve", response_model=ResolveResponse)

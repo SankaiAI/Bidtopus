@@ -23,14 +23,42 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Warm up the ML models at startup so the first request is not slow.
-    # Models are cached as module-level singletons in orchestrator.py.
-    logger.info("agent_startup", model=settings.CLAUDE_MODEL)
     import orchestrator
+    from scheduler import get_scheduler, register_monitoring_job
+    from db.base import get_db
+    from db.backend_models import PerformanceContractORM
+
+    logger.info("agent_startup", model=settings.CLAUDE_MODEL)
+
+    # Warm up ML models so the first request is not slow.
     orchestrator._get_underwriting_model()
     orchestrator._get_forecast_model()
-    logger.info("agent_ready")
+
+    # Start the 24h monitoring scheduler.
+    scheduler = get_scheduler()
+    scheduler.start()
+    logger.info("scheduler_started")
+
+    # Register monitoring jobs for all currently Active contracts.
+    active_count = 0
+    try:
+        with get_db() as db:
+            active_contracts = (
+                db.query(PerformanceContractORM)
+                .filter(PerformanceContractORM.status == "Active")
+                .all()
+            )
+            for contract in active_contracts:
+                register_monitoring_job(str(contract.id))
+            active_count = len(active_contracts)
+    except Exception as exc:
+        # DB may not be reachable in local dev without a real connection string.
+        logger.error("scheduler_startup_db_error", error=str(exc))
+
+    logger.info("agent_ready", active_contracts_scheduled=active_count)
     yield
+
+    scheduler.shutdown(wait=False)
     logger.info("agent_shutdown")
 
 
