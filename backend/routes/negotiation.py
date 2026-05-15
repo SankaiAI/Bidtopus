@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import random
+import uuid
 
 import bleach
 from anthropic import Anthropic, APIStatusError
@@ -32,6 +33,7 @@ log = logging.getLogger(__name__)
 def _post_contract_background(contract_id: str) -> None:
     """Run underwriting + agent offer after negotiation finalizes (own DB session)."""
     db = SessionLocal()
+    sequence_id = str(uuid.uuid4())
     try:
         contract = repo.get_contract(db, contract_id)
         if contract is None or contract.status != "Created":
@@ -39,11 +41,14 @@ def _post_contract_background(contract_id: str) -> None:
             return
 
         # ── Underwriting ──────────────────────────────────────────────────────
+        uw_label = "Running final ML underwriting assessment..."
         event_bus.publish(contract_id, "thinking_step_start", {
             "step_id": "post_underwrite",
-            "label": "Running final ML underwriting assessment...",
+            "label": uw_label,
+            "thinking_sequence_id": sequence_id,
         })
         log.info("post_contract_bg: starting underwriting contract=%s", contract_id)
+        uw_detail_parts: list[str] = []
         try:
             uw = contract_service.run_underwriting(db, contract)
             prob = uw.get("success_probability", 0)
@@ -57,34 +62,54 @@ def _post_contract_background(contract_id: str) -> None:
             ]
             if len(roas_range) >= 2:
                 lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "\n".join(lines)})
+            detail = "\n".join(lines)
+            uw_detail_parts.append(detail)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
         except Exception:
             log.exception("post_contract_bg: underwriting failed contract=%s", contract_id)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "Underwriting completed with defaults."})
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "post_underwrite"})
+            fallback = "Underwriting completed with defaults."
+            uw_detail_parts.append(fallback)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
+        messages_repo.append(
+            db, contract_id, "agent", "thinking_step",
+            content="\n".join(uw_detail_parts),
+            extra={"step_id": "post_underwrite", "label": uw_label, "thinking_sequence_id": sequence_id, "is_complete": True},
+        )
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "post_underwrite", "thinking_sequence_id": sequence_id})
 
         # ── Agent offer ───────────────────────────────────────────────────────
         contract = repo.get_contract(db, contract_id)
+        offer_label = "Generating negotiated offer..."
         event_bus.publish(contract_id, "thinking_step_start", {
             "step_id": "agent_offer",
-            "label": "Generating negotiated offer...",
+            "label": offer_label,
+            "thinking_sequence_id": sequence_id,
         })
         log.info("post_contract_bg: generating agent offer contract=%s", contract_id)
+        offer_detail_parts: list[str] = []
         try:
             def on_offer_reasoning(text: str):
+                offer_detail_parts.append(text)
                 event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
 
             contract_service.generate_agent_offer(db, contract, on_reasoning=on_offer_reasoning)
         except Exception:
             log.exception("post_contract_bg: agent offer failed contract=%s", contract_id)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": "Offer generated with default terms."})
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "agent_offer"})
+            fallback = "Offer generated with default terms."
+            offer_detail_parts.append(fallback)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
+        messages_repo.append(
+            db, contract_id, "agent", "thinking_step",
+            content="".join(offer_detail_parts),
+            extra={"step_id": "agent_offer", "label": offer_label, "thinking_sequence_id": sequence_id, "is_complete": True},
+        )
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "agent_offer", "thinking_sequence_id": sequence_id})
 
-        event_bus.publish(contract_id, "thinking_end", {})
+        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
         log.info("post_contract_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("post_contract_bg: failed contract=%s", contract_id)
-        event_bus.publish(contract_id, "thinking_end", {})
+        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
     finally:
         db.close()
 
@@ -373,8 +398,11 @@ async def stream_negotiation(
                     })
                     db.commit()
 
-                    yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'ml_underwrite', 'label': 'Running ML underwriting model...'})}\n\n"
+                    uw_label = "Running ML underwriting model..."
+                    step_sequence_id = str(uuid.uuid4())
+                    yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'ml_underwrite', 'label': uw_label, 'thinking_sequence_id': step_sequence_id})}\n\n"
 
+                    uw_detail_parts: list[str] = []
                     try:
                         ml_result = await asyncio.to_thread(agent_client.run_underwriting, contract_id)
                         prob = ml_result.get("success_probability", 0)
@@ -391,7 +419,9 @@ async def stream_negotiation(
                             lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
                         if fee is not None:
                             lines.append(f"Recommended fee: {fee} USDC")
-                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chr(10).join(lines)})}\n\n"
+                        detail = chr(10).join(lines)
+                        uw_detail_parts.append(detail)
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': detail})}\n\n"
                         tool_result = json.dumps(ml_result)
                         log.info(
                             "ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
@@ -401,11 +431,18 @@ async def stream_negotiation(
                         )
                     except Exception as exc:
                         log.warning("evaluate_contract_terms: underwriting failed contract=%s: %s", contract_id, exc)
-                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': f'ML model unavailable — using conservative estimate.'})}\n\n"
+                        fallback = "ML model unavailable — using conservative estimate."
+                        uw_detail_parts.append(fallback)
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': fallback})}\n\n"
                         tool_result = json.dumps({"error": str(exc), "recommendation": "counteroffer"})
 
-                    yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'ml_underwrite'})}\n\n"
-                    yield f"event: thinking_end\ndata: {json.dumps({})}\n\n"
+                    messages_repo.append(
+                        db, contract_id, "agent", "thinking_step",
+                        content="\n".join(uw_detail_parts),
+                        extra={"step_id": "ml_underwrite", "label": uw_label, "thinking_sequence_id": step_sequence_id, "is_complete": True},
+                    )
+                    yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'ml_underwrite', 'thinking_sequence_id': step_sequence_id})}\n\n"
+                    yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': step_sequence_id})}\n\n"
 
                     # Append assistant turn + tool result and continue the loop
                     current_messages = current_messages + [

@@ -1,5 +1,6 @@
 import logging
 import threading
+import uuid
 from datetime import datetime, timezone
 
 import bleach
@@ -24,9 +25,13 @@ def _bg(fn, *args):
 
 def _generate_strategy_bg(contract_id: str) -> None:
     db = SessionLocal()
+    sequence_id = str(uuid.uuid4())
+    strategy_label = "Generating Meta Ads campaign strategy..."
+    detail_parts: list[str] = []
     event_bus.publish(contract_id, "thinking_step_start", {
         "step_id": "strategy",
-        "label": "Generating Meta Ads campaign strategy...",
+        "label": strategy_label,
+        "thinking_sequence_id": sequence_id,
     })
     try:
         contract = repo.get_contract(db, contract_id)
@@ -36,31 +41,41 @@ def _generate_strategy_bg(contract_id: str) -> None:
         log.info("generate_strategy_bg: starting contract=%s", contract_id)
 
         def on_reasoning(text: str):
+            detail_parts.append(text)
             event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
 
         result = generate_strategy(db, contract, on_reasoning=on_reasoning)
         actions = result.get("planned_actions") or []
         if actions:
-            event_bus.publish(contract_id, "thinking_step_detail", {
-                "delta": f"\n\n{len(actions)} action(s) queued for your review."
-            })
+            action_text = f"\n\n{len(actions)} action(s) queued for your review."
+            detail_parts.append(action_text)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": action_text})
         log.info("generate_strategy_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("generate_strategy_bg: failed contract=%s", contract_id)
-        event_bus.publish(contract_id, "thinking_step_detail", {
-            "delta": "Strategy generation encountered an error. Will retry automatically."
-        })
+        fallback = "Strategy generation encountered an error. Will retry automatically."
+        detail_parts.append(fallback)
+        event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
     finally:
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "strategy"})
-        event_bus.publish(contract_id, "thinking_end", {})
+        messages_repo.append(
+            db, contract_id, "agent", "thinking_step",
+            content="".join(detail_parts),
+            extra={"step_id": "strategy", "label": strategy_label, "thinking_sequence_id": sequence_id, "is_complete": True},
+        )
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "strategy", "thinking_sequence_id": sequence_id})
+        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
         db.close()
 
 
 def _execute_ads_bg(contract_id: str) -> None:
     db = SessionLocal()
+    sequence_id = str(uuid.uuid4())
+    execute_label = "Executing Meta Ads campaign actions..."
+    detail_parts: list[str] = []
     event_bus.publish(contract_id, "thinking_step_start", {
         "step_id": "execute",
-        "label": "Executing Meta Ads campaign actions...",
+        "label": execute_label,
+        "thinking_sequence_id": sequence_id,
     })
     try:
         contract = repo.get_contract(db, contract_id)
@@ -74,16 +89,22 @@ def _execute_ads_bg(contract_id: str) -> None:
         detail = summary
         if executed:
             detail += f"\n\n{len(executed)} action(s) completed successfully."
+        detail_parts.append(detail)
         event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
         log.info("execute_ads_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("execute_ads_bg: failed contract=%s", contract_id)
-        event_bus.publish(contract_id, "thinking_step_detail", {
-            "delta": "Execution encountered an error. The monitoring scheduler will retry."
-        })
+        fallback = "Execution encountered an error. The monitoring scheduler will retry."
+        detail_parts.append(fallback)
+        event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
     finally:
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "execute"})
-        event_bus.publish(contract_id, "thinking_end", {})
+        messages_repo.append(
+            db, contract_id, "agent", "thinking_step",
+            content="".join(detail_parts),
+            extra={"step_id": "execute", "label": execute_label, "thinking_sequence_id": sequence_id, "is_complete": True},
+        )
+        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "execute", "thinking_sequence_id": sequence_id})
+        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
         db.close()
 
 
