@@ -688,8 +688,9 @@ export default function ContractChatPage() {
     const cacheKey = contractId || sessionId
     if (!cacheKey || messages.length === 0 || isStreaming) return
     const firstUserMsg = messages.find(m => m.role === 'user')
-    const title = firstUserMsg?.content?.slice(0, 60) || 'New conversation'
-    upsertSession(cacheKey, { title, messages })
+    const fallbackTitle = firstUserMsg?.content?.slice(0, 60) || 'New conversation'
+    const existing = getSession(cacheKey)
+    upsertSession(cacheKey, { title: existing?.title || fallbackTitle, messages })
   }, [messages, isStreaming, sessionId, contractId])
 
   const chatReady = true

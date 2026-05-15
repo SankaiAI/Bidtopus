@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -19,6 +20,23 @@ from config import settings
 router = APIRouter(prefix="/api", tags=["negotiation"])
 _anthropic = Anthropic(api_key=settings.anthropic_api_key)
 log = logging.getLogger(__name__)
+
+_TITLE_PROMPT = (
+    "Generate a 4-6 word title for a marketing campaign workspace based on this "
+    "user message: {message}. Return only the title, no punctuation, no quotes."
+)
+
+
+async def _generate_title(user_message: str) -> str:
+    def _call():
+        resp = _anthropic.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=20,
+            messages=[{"role": "user", "content": _TITLE_PROMPT.format(message=user_message[:300])}],
+        )
+        return resp.content[0].text.strip()
+
+    return await asyncio.wait_for(asyncio.to_thread(_call), timeout=8.0)
 
 _SYSTEM_PROMPT = (
     "You are the OutcomeX performance-marketing agent. Help the merchant negotiate "
@@ -107,9 +125,11 @@ async def stream_negotiation(
             aborted = False
             accumulated = ""
             final_msg = None
+            title_task = None
 
             if is_first_turn:
                 yield f"event: session_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
+                title_task = asyncio.create_task(_generate_title(clean_message))
 
             with _anthropic.messages.stream(
                 model="claude-sonnet-4-6",
@@ -133,6 +153,15 @@ async def stream_negotiation(
             if accumulated:
                 sanitized = bleach.clean(accumulated, tags=[], strip=True)
                 messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+
+            # Emit workspace title (first turn only, even if stream was aborted)
+            if title_task is not None:
+                try:
+                    title = await title_task
+                except Exception:
+                    title = clean_message[:60]
+                repo.update_contract_title(db, contract_id, title)
+                yield f"event: title_generated\ndata: {json.dumps({'title': title})}\n\n"
 
             if aborted or final_msg is None:
                 return
