@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import uuid as _uuid_mod
 
 from sqlalchemy.orm import Session
 
@@ -55,6 +56,10 @@ def create_contract(db: Session, merchant_id: str, **kwargs) -> PerformanceContr
 
 
 def get_contract(db: Session, contract_id: str) -> Optional[PerformanceContract]:
+    try:
+        _uuid_mod.UUID(contract_id)
+    except (ValueError, AttributeError):
+        return None
     return db.query(PerformanceContract).filter(PerformanceContract.id == contract_id).first()
 
 
