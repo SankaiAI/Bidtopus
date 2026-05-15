@@ -7,7 +7,7 @@ import remarkGfm from 'remark-gfm'
 import { useAuth, useClerk } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
-import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
+import { getSession, upsertSession, deleteSession, generateSessionId } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -519,6 +519,8 @@ export default function ContractChatPage() {
 
           } else if (eventType === 'session_created') {
             const cid = data.contract_id
+            // Remove the ephemeral ws_xxx session now that the server has assigned a real ID
+            if (sessionId && sessionId !== cid) deleteSession(sessionId)
             setContractId(cid)
             contractIdRef.current = cid
             // Prevent the session-change effect from treating this URL update as a new session
