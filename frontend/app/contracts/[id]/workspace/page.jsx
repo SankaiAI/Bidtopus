@@ -683,6 +683,38 @@ export default function WorkspacePage() {
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage,
           thinking, activeStepId, liveDetail, toggleThinking } = useMessages(id)
 
+  // Group consecutive thinking-step rows by thinkingSequenceId into inline thinking-block entries
+  const processedMessages = React.useMemo(() => {
+    const result = []
+    let i = 0
+    while (i < messages.length) {
+      const msg = messages[i]
+      if (msg.role === 'thinking-step') {
+        const seqId = msg.thinkingSequenceId || msg.id
+        const steps = []
+        while (i < messages.length && messages[i].role === 'thinking-step' && (messages[i].thinkingSequenceId || messages[i].id) === seqId) {
+          steps.push({ id: messages[i].stepId, label: messages[i].label, detail: messages[i].text, isComplete: true })
+          i++
+        }
+        result.push({ _type: 'thinking-block', seqId, steps })
+      } else {
+        result.push(msg)
+        i++
+      }
+    }
+    return result
+  }, [messages])
+
+  const [openSeqs, setOpenSeqs] = React.useState(new Set())
+  const toggleSeq = React.useCallback((seqId) => {
+    setOpenSeqs(prev => {
+      const next = new Set(prev)
+      if (next.has(seqId)) next.delete(seqId)
+      else next.add(seqId)
+      return next
+    })
+  }, [])
+
   const { getStatus, getError, approve } = useActionApprovals(id, {
     onApproved: () => {
       setTimeout(() => {
@@ -779,8 +811,16 @@ export default function WorkspacePage() {
             className="agent-msgs-area"
             style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none', paddingTop: '24px', paddingBottom: `${inputAreaHeight + 16}px` }}
           >
-            {messages.map((msg, i) => (
+            {processedMessages.map((msg, i) => (
               <div key={i} style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 14px' }}>
+                {msg._type === 'thinking-block' && (
+                  <ThinkingBlock
+                    thinking={{ steps: msg.steps, isComplete: true, isOpen: openSeqs.has(msg.seqId) }}
+                    activeStepId={null}
+                    liveDetail=""
+                    onToggle={() => toggleSeq(msg.seqId)}
+                  />
+                )}
                 {msg.role === 'user'         && <UserBubble msg={msg} />}
                 {msg.role === 'agent'        && <AgentBubble msg={msg} />}
                 {msg.role === 'agent-update' && <AgentUpdate msg={msg} />}

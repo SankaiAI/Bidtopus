@@ -18,7 +18,7 @@ function formatTime(isoString) {
 // Backend: { id, role, type, content, extra, status, created_at }
 // UI:      { id, role, text, time, status, metric?, title?, detail?, actionType?, approvedAt?, plan_id? }
 function mapMessage(msg) {
-  const extra = msg.extra || {}
+  const extra = msg.extra || msg.metadata || {}
   let role = msg.role === 'merchant' ? 'user' : msg.role
   if (msg.type === 'daily_update')     role = 'agent-update'
   if (msg.type === 'approval_request') role = 'agent-action'
@@ -87,26 +87,8 @@ export function useMessages(contractId) {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         if (res.ok && !cancelled) {
-          const allMapped = (await res.json()).map(mapMessage)
-          if (cancelled) return
-
-          const regularMsgs  = allMapped.filter(m => m.role !== 'thinking-step')
-          const thinkingMsgs = allMapped.filter(m => m.role === 'thinking-step')
-          setMessages(regularMsgs)
-
-          if (thinkingMsgs.length > 0) {
-            // Group by sequence ID, reconstruct the last sequence as a collapsed ThinkingBlock
-            const seqMap = {}
-            for (const m of thinkingMsgs) {
-              const sid = m.thinkingSequenceId || '_'
-              if (!seqMap[sid]) seqMap[sid] = []
-              seqMap[sid].push(m)
-            }
-            const seqIds  = Object.keys(seqMap)
-            const lastSeq = seqMap[seqIds[seqIds.length - 1]]
-            const steps   = lastSeq.map(m => ({ id: m.stepId, label: m.label, detail: m.text, isComplete: true }))
-            setThinking({ steps, isComplete: true, isOpen: false })
-          }
+          const data = await res.json()
+          if (!cancelled) setMessages(data.map(mapMessage))
         }
       } catch (err) {
         console.warn('[OutcomeX] failed to load message history', err)
@@ -158,7 +140,10 @@ export function useMessages(contractId) {
 
             if (cancelled) break
 
-            if (eventType === 'thinking_step_start') {
+            if (eventType === 'thinking_step') {
+              // Historical replay — step already complete, render inline in message stream
+              setMessages(prev => [...prev, mapMessage(data)])
+            } else if (eventType === 'thinking_step_start') {
               streamingDetailRef.current = ''
               setLiveDetail('')
               setActiveStepId(data.step_id)
