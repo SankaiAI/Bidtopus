@@ -835,8 +835,7 @@ export default function ContractChatPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <AgentAvatar size={24} />
+        <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
           <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conversationTitle}</span>
         </div>
 
