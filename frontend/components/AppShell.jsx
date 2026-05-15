@@ -19,7 +19,7 @@ function activeItemFromPath(pathname) {
   return ''
 }
 
-const APP_PATHS = ['/dashboard', '/contracts', '/settings']
+const APP_PATHS = ['/dashboard', '/contracts', '/workspace', '/settings']
 
 export default function AppShell({ children }) {
   const pathname = usePathname()
