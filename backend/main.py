@@ -29,12 +29,9 @@ def _run_migrations():
     ]
     with engine.connect() as conn:
         for table, col, definition in _new_cols:
-            try:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {definition}"))
-                conn.commit()
-                log.info("Migration: added %s.%s", table, col)
-            except Exception:
-                pass  # column already exists
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {definition}"))
+            conn.commit()
+            log.info("Migration: ensured %s.%s", table, col)
 
 _run_migrations()
 
