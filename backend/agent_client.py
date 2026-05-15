@@ -18,7 +18,7 @@ _TIMEOUT = 120.0  # agent calls can be slow (LLM + Meta Ads API)
 
 def _post(path: str, contract_id: str) -> dict[str, Any]:
     url = f"{settings.agent_base_url}{path}"
-    resp = httpx.post(url, json={"contract_id": contract_id}, timeout=_TIMEOUT)
+    resp = httpx.post(url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()
 
@@ -35,7 +35,7 @@ def _stream_sse(path: str, contract_id: str, on_reasoning: Callable[[str], None]
     url = f"{settings.agent_base_url}{path}"
     result: dict[str, Any] = {}
     current_event: str | None = None
-    with httpx.stream("POST", url, json={"contract_id": contract_id}, timeout=_TIMEOUT) as resp:
+    with httpx.stream("POST", url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
             if line.startswith("event: "):
