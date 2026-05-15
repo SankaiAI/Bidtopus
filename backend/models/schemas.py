@@ -72,7 +72,7 @@ class ContractResponse(BaseModel):
             id=str(c.id),
             merchant_id=str(c.merchant_id),
             status=c.status,
-            title=c.title,
+            title=c.title or (c.campaign_goal[:80] if c.campaign_goal else None),
             target_roas=c.threshold,
             min_spend_usd=c.minimum_spend,
             time_window_days=c.time_window_days,

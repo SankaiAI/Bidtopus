@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import json as _json
 import uuid as _uuid_mod
 
 from sqlalchemy.orm import Session
@@ -260,11 +261,12 @@ def log_audit_event(
     event_type: str,
     payload: dict,
 ) -> AuditEvent:
+    safe_payload = _json.loads(_json.dumps(payload, default=str))
     event = AuditEvent(
-        contract_id=contract_id,
+        contract_id=str(contract_id),
         component=component,
         event_type=event_type,
-        payload=payload,
+        payload=safe_payload,
     )
     db.add(event)
     db.commit()
