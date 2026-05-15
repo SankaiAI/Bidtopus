@@ -676,8 +676,8 @@ export default function WorkspacePage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  // Fast paint from localStorage cache (client-only — must be useEffect, not useState, for SSR)
-  React.useEffect(() => {
+  // Fast paint from localStorage cache — useLayoutEffect fires before browser paint so no ThinkingDots flash
+  React.useLayoutEffect(() => {
     if (ALL[id] || contract) return
     const cached = readContractCache(id)
     if (cached) { setContract(cached); setLoadingContract(false) }

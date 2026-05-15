@@ -430,7 +430,7 @@ function TermsCard({ c }) {
       <div style={{ padding: '8px 14px 14px', borderTop: `1px solid #f0eef8`, display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {showWorkspace && (
           <Link
-            href={`/contracts/${c.id}/workspace`}
+            href={`/workspace/${c.id}`}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
               width: '100%', padding: '10px', borderRadius: '8px', textDecoration: 'none',

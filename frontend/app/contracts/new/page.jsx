@@ -366,7 +366,7 @@ function ContractPanel({ contract }) {
               {label}
             </span>
           </div>
-          <a href={`/contracts/${contract.id}/workspace`} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--c-muted)', border: '1px solid var(--c-border)', borderRadius: '6px', padding: '4px 10px', textDecoration: 'none', fontFamily: font, whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <a href={`/workspace/${contract.id}`} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--c-muted)', border: '1px solid var(--c-border)', borderRadius: '6px', padding: '4px 10px', textDecoration: 'none', fontFamily: font, whiteSpace: 'nowrap', flexShrink: 0 }}>
             Full detail →
           </a>
         </div>
@@ -381,7 +381,7 @@ function ContractPanel({ contract }) {
                 Your contract is confirmed. Fund the escrow to launch your campaign.
               </p>
               <a
-                href={`/contracts/${contract.id}/workspace`}
+                href={`/workspace/${contract.id}`}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', width: '100%', padding: '12px', borderRadius: '9px', background: 'var(--c-indigo)', color: '#fff', fontSize: '13px', fontWeight: 700, fontFamily: font, textDecoration: 'none', boxSizing: 'border-box' }}
               >
                 Lock {contract.success_fee_usdc} USDC in Escrow
@@ -645,7 +645,7 @@ export default function ContractChatPage() {
             if (cid) {
               createApiClient(getToken).getContract(cid)
                 .then(c => { setFinalContract(c); setShowContractPanel(true) })
-                .catch(() => { router.push(`/contracts/${cid}/workspace`) })
+                .catch(() => { router.push(`/workspace/${cid}`) })
             }
 
           } else if (eventType === 'error') {

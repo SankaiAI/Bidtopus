@@ -564,7 +564,7 @@ function UserProfile({ collapsed, connected, onDisconnect }) {
 
 // ─── WORKSPACE ───────────────────────────────────────────────────────────────
 const MOCK_CONTRACTS = [
-  { id: 'c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/contracts/c1/workspace', hasContract: true },
+  { id: 'c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/workspace/c1', hasContract: true },
 ]
 
 const WS_FILTERS = [
@@ -635,7 +635,7 @@ function Workspace() {
   const activeSessionId = (pathname === '/contracts/new' && typeof window !== 'undefined')
     ? new URLSearchParams(window.location.search).get('session')
     : null
-  const wsMatch = pathname.match(/^\/contracts\/([^/]+)\/workspace/)
+  const wsMatch = pathname.match(/^\/workspace\/([^/]+)/)
   const activeContractId = wsMatch ? wsMatch[1] : null
 
   // Server-authoritative Negotiating contracts, with localStorage title as fallback.
@@ -671,7 +671,7 @@ function Workspace() {
         title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign',
         status: c.status?.toLowerCase(),
         sub: 'Ready to fund',
-        href: `/contracts/${c.id}/workspace`,
+        href: `/workspace/${c.id}`,
         hasContract: true,
         _ts: c.created_at,
       }
