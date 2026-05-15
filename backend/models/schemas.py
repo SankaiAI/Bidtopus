@@ -50,6 +50,7 @@ class ContractResponse(BaseModel):
     id: str
     merchant_id: str
     status: str
+    title: Optional[str] = None
     target_roas: Optional[float] = None
     min_spend_usd: Optional[float] = None
     time_window_days: Optional[int] = None
@@ -71,6 +72,7 @@ class ContractResponse(BaseModel):
             id=str(c.id),
             merchant_id=str(c.merchant_id),
             status=c.status,
+            title=c.title,
             target_roas=c.threshold,
             min_spend_usd=c.minimum_spend,
             time_window_days=c.time_window_days,

@@ -60,7 +60,7 @@ def get_contract(db: Session, contract_id: str) -> Optional[PerformanceContract]
 
 def update_contract_title(db: Session, contract_id: str, title: str) -> None:
     db.query(PerformanceContract).filter(PerformanceContract.id == contract_id).update(
-        {"campaign_goal": title}
+        {"title": title}
     )
     db.commit()
 

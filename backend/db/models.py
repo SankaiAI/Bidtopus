@@ -37,6 +37,7 @@ class PerformanceContract(Base):
 
     id = Column(String(36), primary_key=True, default=_uuid)
     merchant_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String, nullable=True)
     target_metric = Column(String, nullable=False, default="ROAS")
     threshold = Column(Float, nullable=True)
     minimum_spend = Column(Float, nullable=True)

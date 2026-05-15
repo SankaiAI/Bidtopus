@@ -25,6 +25,7 @@ def _run_migrations():
     _new_cols = [
         ("users", "approval_mode", "VARCHAR NOT NULL DEFAULT 'manual'"),
         ("users", "meta_ads_account_id", "VARCHAR"),
+        ("performance_contracts", "title", "VARCHAR"),
     ]
     with engine.connect() as conn:
         for table, col, definition in _new_cols:
