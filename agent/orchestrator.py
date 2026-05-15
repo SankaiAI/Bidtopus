@@ -53,6 +53,7 @@ logger = get_logger(__name__)
 # Maps each contract state to the set of actions that are valid in that state.
 VALID_ACTIONS: dict[str, list[str]] = {
     "Created":       ["run_underwriting"],
+    "Negotiating":   ["run_underwriting", "generate_offer"],  # backend loops underwrite→offer each turn
     "Underwriting":  ["generate_offer"],
     "Offered":       ["await_merchant_response"],
     "FundedPending": ["confirm_escrow_funded"],
