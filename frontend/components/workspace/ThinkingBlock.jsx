@@ -37,7 +37,7 @@ const ThinkingStep = React.memo(
 export default function ThinkingBlock({ thinking, activeStepId, liveDetail, onToggle }) {
   if (!thinking || thinking.steps.length === 0) return null
   return (
-    <div style={{ margin: '8px 0', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
+    <div style={{ margin: '8px 0', borderRadius: '8px', overflow: 'hidden', fontSize: '12px', border: `1px solid ${C.indigoBorder}`, background: C.indigoGlow }}>
       <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', cursor: 'pointer', userSelect: 'none' }}>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transform: thinking.isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
           <path d="M3 2l4 3-4 3" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -51,7 +51,7 @@ export default function ThinkingBlock({ thinking, activeStepId, liveDetail, onTo
         {!thinking.isComplete && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.indigo, animation: 'agentThinkPulse 1s infinite', marginLeft: 'auto', flexShrink: 0 }} />}
       </div>
       {thinking.isOpen && (
-        <div style={{ padding: '8px 12px' }}>
+        <div style={{ padding: '8px 12px 8px 30px', borderTop: `1px solid ${C.indigoBorder}` }}>
           {thinking.steps.map(step => (
             <ThinkingStep
               key={step.id}
