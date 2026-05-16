@@ -17,12 +17,14 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   const [isStreaming,  setIsStreaming]  = useState(false)
   const [liveDetail,   setLiveDetail]   = useState('')
   const [activeStepId, setActiveStepId] = useState(null)
+  const [activeSeqId,  setActiveSeqId]  = useState(null)
   const [title,        setTitle]        = useState('New Conversation')
   const [contractId,   setContractId]   = useState(null)
   const [chatStep,     setChatStep]     = useState('choose')
 
   const contractIdRef      = useRef(null)
   const streamingDetailRef = useRef('')
+  const currentSeqIdRef    = useRef(null)
   const abortControllerRef = useRef(null)
   const shouldHydrateRef   = useRef(false)
   const prevSessionIdRef   = useRef(undefined)
@@ -37,7 +39,9 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     setLoading(false)
     setLiveDetail('')
     setActiveStepId(null)
+    setActiveSeqId(null)
     streamingDetailRef.current = ''
+    currentSeqIdRef.current = null
     setTitle('New Conversation')
 
     if (sessionId && isUUID(sessionId)) {
@@ -73,7 +77,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
           .map(m => {
             const isAgent = m.role === 'agent' || m.role === 'assistant'
             return isAgent
-              ? { role: 'assistant', content: m.content, acknowledgment: '', ackDone: true, thinking: null }
+              ? { role: 'assistant', content: m.content, acknowledgment: '', ackDone: true, thinkingBlocks: [] }
               : { role: 'user', content: m.content }
           })
         if (uiMsgs.length > 0) { setMessages(uiMsgs); setChatStep('ready') }
@@ -119,7 +123,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
       const msgs = [...prev]
       const last = msgs[msgs.length - 1]
       if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
-      else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinking: null })
+      else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinkingBlocks: [] })
       return msgs
     })
 
@@ -158,18 +162,29 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
           try { data = JSON.parse(eventData) } catch { continue }
 
           if (eventType === 'acknowledgment') {
-            setMessages(prev => [...prev, { role: 'assistant', acknowledgment: data.sentence || '', ackDone: true, content: '', thinking: { isOpen: true, isComplete: false, steps: [] } }])
+            setMessages(prev => [...prev, { role: 'assistant', acknowledgment: data.sentence || '', ackDone: true, content: '', thinkingBlocks: [] }])
             setLoading(false)
 
           } else if (eventType === 'thinking_step_start') {
+            const seqId = data.thinking_sequence_id || data.step_id
+            const isNewSeq = seqId !== currentSeqIdRef.current
+            currentSeqIdRef.current = seqId
             streamingDetailRef.current = ''
             setLiveDetail('')
             setActiveStepId(data.step_id)
+            setActiveSeqId(seqId)
+            const newStep = { id: data.step_id, label: data.label, detail: '', isComplete: false }
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              const t = last.thinking || { steps: [], isComplete: false, isOpen: true }
-              last.thinking = { ...t, steps: [...t.steps, { id: data.step_id, label: data.label, detail: '', isComplete: false }] }
+              const blocks = [...(last.thinkingBlocks || [])]
+              if (isNewSeq) {
+                blocks.push({ seqId, steps: [newStep], isComplete: false, isOpen: true })
+              } else {
+                const bi = blocks.length - 1
+                if (bi >= 0) blocks[bi] = { ...blocks[bi], steps: [...blocks[bi].steps, newStep] }
+              }
+              last.thinkingBlocks = blocks
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -183,21 +198,28 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             streamingDetailRef.current = ''
             setLiveDetail('')
             setActiveStepId(null)
+            const seqId = data.thinking_sequence_id || currentSeqIdRef.current
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              const t = last.thinking || { steps: [], isComplete: false, isOpen: true }
-              last.thinking = { ...t, steps: t.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s) }
+              last.thinkingBlocks = (last.thinkingBlocks || []).map(b =>
+                b.seqId === seqId
+                  ? { ...b, steps: b.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s) }
+                  : b
+              )
               msgs[msgs.length - 1] = last
               return msgs
             })
 
           } else if (eventType === 'thinking_end') {
+            const seqId = data.thinking_sequence_id || currentSeqIdRef.current
+            setActiveSeqId(null)
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              const t = last.thinking || { steps: [], isComplete: false, isOpen: true }
-              last.thinking = { ...t, isComplete: true, isOpen: false }
+              last.thinkingBlocks = (last.thinkingBlocks || []).map(b =>
+                b.seqId === seqId ? { ...b, isComplete: true, isOpen: false } : b
+              )
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -243,13 +265,15 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
 
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', acknowledgment: '', ackDone: true, thinking: null, content: err.message || 'Something went wrong. Please try again.' }])
+        setMessages(prev => [...prev, { role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: err.message || 'Something went wrong. Please try again.' }])
       }
     } finally {
       setIsStreaming(false)
       setLoading(false)
       setLiveDetail('')
       setActiveStepId(null)
+      setActiveSeqId(null)
+      currentSeqIdRef.current = null
       streamingDetailRef.current = ''
     }
   }, [sessionId, messages, loading, chatStep, getToken])
@@ -266,7 +290,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   }, [getToken])
 
   return {
-    messages, setMessages, loading, isStreaming, liveDetail, activeStepId,
+    messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
     isSignedIn, isLoaded,

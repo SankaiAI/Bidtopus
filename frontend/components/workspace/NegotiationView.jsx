@@ -103,7 +103,7 @@ const MD_COMPONENTS = {
   td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
 }
 
-const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgIndex, activeStepId, liveDetail, onThinkingToggle }) {
+const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgIndex, isLastMsg, activeStepId, activeSeqId, liveDetail, onThinkingToggle }) {
   if (msg.role === 'user') {
     return (
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -120,9 +120,15 @@ const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgInde
       </div>
       <div style={{ flex: 1, color: C.text, fontSize: '13px', lineHeight: 1.65 }}>
         {msg.acknowledgment && <p style={{ margin: '0 0 8px' }}>{msg.acknowledgment}</p>}
-        {msg.thinking && msg.ackDone !== false && (
-          <ThinkingBlock thinking={msg.thinking} activeStepId={activeStepId} liveDetail={liveDetail} onToggle={() => onThinkingToggle(msgIndex)} />
-        )}
+        {msg.ackDone !== false && msg.thinkingBlocks && msg.thinkingBlocks.map((block, bi) => (
+          <ThinkingBlock
+            key={block.seqId || bi}
+            thinking={block}
+            activeStepId={isLastMsg && block.seqId === activeSeqId ? activeStepId : null}
+            liveDetail={isLastMsg && block.seqId === activeSeqId ? liveDetail : ''}
+            onToggle={() => onThinkingToggle(msgIndex, bi)}
+          />
+        ))}
         {msg.content && <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>}
       </div>
     </div>
@@ -135,7 +141,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
   const { openSignIn } = useClerk()
 
   const {
-    messages, setMessages, loading, isStreaming, liveDetail, activeStepId,
+    messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
     isSignedIn, isLoaded,
@@ -176,12 +182,14 @@ export default function NegotiationView({ sessionId, onFinalized }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
-  const handleThinkingToggle = React.useCallback((msgIndex) => {
+  const handleThinkingToggle = React.useCallback((msgIndex, blockIndex) => {
     suppressScrollRef.current = true
     setMessages(prev => {
       const msgs = [...prev]
       const msg = { ...msgs[msgIndex] }
-      msg.thinking = { ...msg.thinking, isOpen: !msg.thinking.isOpen }
+      const blocks = [...(msg.thinkingBlocks || [])]
+      blocks[blockIndex] = { ...blocks[blockIndex], isOpen: !blocks[blockIndex].isOpen }
+      msg.thinkingBlocks = blocks
       msgs[msgIndex] = msg
       return msgs
     })
@@ -194,13 +202,13 @@ export default function NegotiationView({ sessionId, onFinalized }) {
   }, [loading, isLoaded, isSignedIn, openSignIn, sendMessage])
 
   const handleQuickAction = (message) => {
-    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinking: null, content: "Got it — let's work on this. I'll evaluate the terms and give you my underwriting decision." }])
+    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: "Got it — let's work on this. I'll evaluate the terms and give you my underwriting decision." }])
     setChatStep('ready')
     setTimeout(() => handleSend(message), 100)
   }
 
   const handleStart = () => {
-    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinking: null, content: "Great! Let's set up your performance contract.\n\nTell me:\n1. **Target ROAS** (e.g. ≥ 2.0×)\n2. **Minimum ad spend** before resolution is valid (e.g. $500)\n3. **Time window** in days (e.g. 7 days)\n4. **Success fee** in USDC (e.g. 100 USDC)\n\nYou can also just describe your campaign and I'll suggest terms." }])
+    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: "Great! Let's set up your performance contract.\n\nTell me:\n1. **Target ROAS** (e.g. ≥ 2.0×)\n2. **Minimum ad spend** before resolution is valid (e.g. $500)\n3. **Time window** in days (e.g. 7 days)\n4. **Success fee** in USDC (e.g. 100 USDC)\n\nYou can also just describe your campaign and I'll suggest terms." }])
     setChatStep('ready')
   }
 
@@ -236,7 +244,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
           <div ref={scrollRef} className="agent-msgs-area" style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none', paddingBottom: `${inputAreaHeight + 16}px` }}>
             {messages.map((msg, i) => (
               <div key={i} style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
-                <NegotiationMessage msg={msg} msgIndex={i} activeStepId={i === lastMsgIdx ? activeStepId : null} liveDetail={i === lastMsgIdx ? liveDetail : ''} onThinkingToggle={handleThinkingToggle} />
+                <NegotiationMessage msg={msg} msgIndex={i} isLastMsg={i === lastMsgIdx} activeStepId={i === lastMsgIdx ? activeStepId : null} activeSeqId={i === lastMsgIdx ? activeSeqId : null} liveDetail={i === lastMsgIdx ? liveDetail : ''} onThinkingToggle={handleThinkingToggle} />
               </div>
             ))}
 
