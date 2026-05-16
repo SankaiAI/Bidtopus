@@ -266,7 +266,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   }, [getToken])
 
   return {
-    messages, loading, isStreaming, liveDetail, activeStepId,
+    messages, setMessages, loading, isStreaming, liveDetail, activeStepId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
     isSignedIn, isLoaded,
