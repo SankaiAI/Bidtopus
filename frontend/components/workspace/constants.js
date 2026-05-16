@@ -22,4 +22,4 @@ export const C = {
   userBg:       'var(--c-user-bg)',
 }
 
-export const font = 'Plus Jakarta Sans, sans-serif'
+export const font = "Plus Jakarta Sans, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji'"

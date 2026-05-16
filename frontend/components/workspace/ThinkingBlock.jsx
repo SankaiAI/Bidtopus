@@ -16,9 +16,8 @@ const ThinkingStep = React.memo(
         </div>
         {displayDetail && (
           <div style={{
-            marginTop: '6px', paddingLeft: '10px', borderLeft: `2px solid ${C.indigoBorder}`,
+            marginTop: '4px', paddingLeft: '10px', borderLeft: `2px solid ${C.indigoBorder}`,
             fontSize: '11px', color: C.sub, lineHeight: 1.6, whiteSpace: 'pre-wrap', fontFamily: font,
-            ...(!isActive ? { maxHeight: '88px', overflowY: 'auto' } : {}),
           }}>
             {displayDetail}
             {isActive && <span style={{ opacity: 0.4 }}>▌</span>}
@@ -37,21 +36,22 @@ const ThinkingStep = React.memo(
 export default function ThinkingBlock({ thinking, activeStepId, liveDetail, onToggle }) {
   if (!thinking || thinking.steps.length === 0) return null
   return (
-    <div style={{ margin: '8px 0', borderRadius: '8px', overflow: 'hidden', fontSize: '12px', border: `1px solid ${C.indigoBorder}`, background: C.indigoGlow }}>
-      <div onClick={onToggle} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', cursor: 'pointer', userSelect: 'none' }}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transform: thinking.isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-          <path d="M3 2l4 3-4 3" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        <span style={{ color: C.sub, fontWeight: 500, fontFamily: font }}>
+    <div style={{ margin: '6px 0', fontSize: '12px' }}>
+      <div onClick={onToggle} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none' }}>
+        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.muted, flexShrink: 0,
+          ...(thinking.isComplete ? {} : { background: C.indigo, animation: 'agentThinkPulse 1s infinite' }) }} />
+        <span style={{ color: C.muted, fontFamily: font }}>
           {thinking.isComplete
-            ? `Evaluated in ${thinking.steps.length} step${thinking.steps.length !== 1 ? 's' : ''}`
-            : 'Evaluating...'
+            ? `Thought for ${thinking.steps.length} step${thinking.steps.length !== 1 ? 's' : ''}`
+            : 'Thinking...'
           }
         </span>
-        {!thinking.isComplete && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.indigo, animation: 'agentThinkPulse 1s infinite', marginLeft: 'auto', flexShrink: 0 }} />}
+        <svg width="8" height="8" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, transform: thinking.isOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+          <path d="M3 2l4 3-4 3" stroke={C.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </div>
       {thinking.isOpen && (
-        <div style={{ padding: '8px 12px 8px 30px', borderTop: `1px solid ${C.indigoBorder}` }}>
+        <div style={{ marginTop: '6px', paddingLeft: '12px', borderLeft: `2px solid ${C.border}` }}>
           {thinking.steps.map(step => (
             <ThinkingStep
               key={step.id}

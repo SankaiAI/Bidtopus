@@ -176,6 +176,9 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             const newStep = { id: data.step_id, label: data.label, detail: '', isComplete: false }
             setMessages(prev => {
               const msgs = [...prev]
+              if (msgs.length === 0 || msgs[msgs.length - 1].role !== 'assistant') {
+                msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: '', thinkingBlocks: [] })
+              }
               const last = { ...msgs[msgs.length - 1] }
               const blocks = [...(last.thinkingBlocks || [])]
               if (isNewSeq) {
@@ -218,7 +221,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
               last.thinkingBlocks = (last.thinkingBlocks || []).map(b =>
-                b.seqId === seqId ? { ...b, isComplete: true, isOpen: false } : b
+                b.seqId === seqId ? { ...b, isComplete: true } : b
               )
               msgs[msgs.length - 1] = last
               return msgs
