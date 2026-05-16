@@ -137,6 +137,7 @@ async def stream_chat(
 
             if not aborted:
                 log.debug("LLM output [chat] contract=%s:\n%s", contract_id, full_response)
+                log.debug("LLM output [chat] repr: %s", repr(full_response))
                 sanitized = bleach.clean(full_response, tags=[], strip=True)
                 write_db = SessionLocal()
                 try:

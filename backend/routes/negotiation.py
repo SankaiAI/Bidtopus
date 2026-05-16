@@ -354,6 +354,7 @@ async def stream_negotiation(
 
                 # Persist whatever Claude said in this turn
                 if accumulated:
+                    log.debug("LLM output [negotiation] repr: %s", repr(accumulated))
                     sanitized = bleach.clean(accumulated, tags=[], strip=True)
                     messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
@@ -520,6 +521,7 @@ async def stream_negotiation(
                             yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
                         if follow_text:
+                            log.debug("LLM output [follow] repr: %s", repr(follow_text))
                             sanitized = bleach.clean(follow_text, tags=[], strip=True)
                             messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
