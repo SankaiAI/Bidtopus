@@ -1,5 +1,6 @@
 import logging
 import logging.config
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -8,6 +9,8 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def setup_logging(level: str = "INFO") -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     now = datetime.now()
     date_dir = LOG_DIR / now.strftime("%Y-%m-%d")
     date_dir.mkdir(parents=True, exist_ok=True)
