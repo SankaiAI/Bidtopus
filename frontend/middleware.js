@@ -3,7 +3,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 const isPublic = createRouteMatcher([
   '/',                    // landing page
   '/dashboard',           // browsable without login
-  '/contracts/new',       // contract builder UI visible, but chat action gates itself
+  '/workspace/new',       // workspace builder UI visible, but chat action gates itself
   '/api/agent',           // SSE route (frontend won't call it unauthenticated)
 ])
 

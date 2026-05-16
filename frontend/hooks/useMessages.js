@@ -203,6 +203,11 @@ export function useMessages(contractId) {
   const sendMessage = useCallback(async (text) => {
     appendMessage({ role: 'user', text, time: 'Just now' })
     setIsThinking(true)
+    // Reset live thinking state so the new response starts clean
+    setThinking(BLANK_THINKING)
+    setActiveStepId(null)
+    setLiveDetail('')
+    streamingDetailRef.current = ''
 
     const controller = new AbortController()
     abortRef.current = controller
@@ -221,12 +226,9 @@ export function useMessages(contractId) {
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
-      // Append an empty agent bubble that fills in as chunks arrive
-      setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
-      setIsThinking(false)
-      setIsStreaming(true)
-
+      // Agent bubble is added lazily — only once we receive the first text chunk.
       let agentText = ''
+      let agentBubbleAdded = false
       const reader  = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''
@@ -235,7 +237,9 @@ export function useMessages(contractId) {
       const flushAgentText = () => {
         setMessages(prev => {
           const next = [...prev]
-          next[next.length - 1] = { ...next[next.length - 1], text: agentText }
+          if (next.length > 0 && next[next.length - 1].role === 'agent') {
+            next[next.length - 1] = { ...next[next.length - 1], text: agentText }
+          }
           return next
         })
       }
@@ -244,26 +248,104 @@ export function useMessages(contractId) {
         const { done, value } = await reader.read()
         if (done) break
         buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const raw = line.slice(6).trim()
-            if (raw === '[DONE]') continue
-            try {
-              const { text: chunk } = JSON.parse(raw)
-              if (chunk) {
-                agentText += chunk
-                // Throttle to 150ms so markdown-heavy messages don't re-parse on every token
-                const now = Date.now()
-                if (now - lastFlushTime >= 150) { lastFlushTime = now; flushAgentText() }
+
+        // Parse SSE event blocks (separated by double newlines) so that
+        // event: + data: pairs are handled correctly.
+        const blocks = buffer.split('\n\n')
+        buffer = blocks.pop() ?? ''
+
+        for (const block of blocks) {
+          if (!block.trim()) continue
+          let eventType = 'message'
+          let eventData = ''
+          for (const line of block.split('\n')) {
+            const l = line.replace(/\r$/, '')
+            if (l.startsWith('event: ')) eventType = l.slice(7).trim()
+            else if (l.startsWith('data: ')) eventData = l.slice(6).trim()
+          }
+          if (!eventData || eventData === '[DONE]') continue
+          let data
+          try { data = JSON.parse(eventData) } catch { continue }
+
+          if (eventType === 'acknowledgment') {
+            setIsThinking(false)
+            setThinking({ steps: [], isComplete: false, isOpen: true })
+
+          } else if (eventType === 'thinking_step_start') {
+            streamingDetailRef.current = ''
+            setLiveDetail('')
+            setActiveStepId(data.step_id)
+            setThinking(prev => {
+              const isNewSeq = prev.isComplete
+              return {
+                steps: [...(isNewSeq ? [] : prev.steps), { id: data.step_id, label: data.label, detail: '', isComplete: false }],
+                isComplete: false,
+                isOpen: true,
               }
-            } catch (_) {}
+            })
+
+          } else if (eventType === 'thinking_step_detail') {
+            streamingDetailRef.current += data.delta || ''
+            setLiveDetail(streamingDetailRef.current)
+
+          } else if (eventType === 'thinking_step_end') {
+            const committed = streamingDetailRef.current
+            streamingDetailRef.current = ''
+            setLiveDetail('')
+            setActiveStepId(null)
+            setThinking(prev => ({
+              ...prev,
+              steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s),
+            }))
+
+          } else if (eventType === 'thinking_end') {
+            streamingDetailRef.current = ''
+            setLiveDetail('')
+            setActiveStepId(null)
+            setThinking(prev => ({ ...prev, isComplete: true, isOpen: false }))
+
+          } else if (eventType === 'text') {
+            const chunk = data.delta || data.text || ''
+            if (chunk) {
+              if (!agentBubbleAdded) {
+                setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
+                agentBubbleAdded = true
+                setIsThinking(false)
+                setIsStreaming(true)
+              }
+              agentText += chunk
+              const now = Date.now()
+              if (now - lastFlushTime >= 150) { lastFlushTime = now; flushAgentText() }
+            }
+
+          } else if (eventType === 'title_generated') {
+            if (data.title) setGeneratedTitle(data.title)
+
+          } else if (eventType === 'error') {
+            throw new Error(data.message || 'Agent error')
+
+          } else {
+            // Fallback: unknown or no event type — try to extract text from data
+            const chunk = data.text || data.delta || ''
+            if (chunk) {
+              if (!agentBubbleAdded) {
+                setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
+                agentBubbleAdded = true
+                setIsThinking(false)
+                setIsStreaming(true)
+              }
+              agentText += chunk
+              const now = Date.now()
+              if (now - lastFlushTime >= 150) { lastFlushTime = now; flushAgentText() }
+            }
           }
         }
       }
+
       // Final flush — ensure last tokens are visible after the throttle window
-      if (agentText) flushAgentText()
+      if (agentBubbleAdded && agentText) flushAgentText()
+      else if (!agentBubbleAdded) setIsThinking(false)
+
     } catch (err) {
       if (err.name === 'AbortError') {
         // User stopped — leave partial content, clean up state silently
@@ -281,6 +363,9 @@ export function useMessages(contractId) {
     } finally {
       setIsStreaming(false)
       setIsThinking(false)
+      streamingDetailRef.current = ''
+      setLiveDetail('')
+      setActiveStepId(null)
     }
   }, [contractId, getToken, appendMessage])
 

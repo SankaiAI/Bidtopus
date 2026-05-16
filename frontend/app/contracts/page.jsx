@@ -274,7 +274,7 @@ export default function ContractsPage() {
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, letterSpacing: '-0.03em', margin: '0 0 3px', fontFamily: font }}>My Contracts</h1>
               <p style={{ fontSize: '13px', color: C.muted, margin: 0, fontFamily: font }}>Performance contracts with the AI agent.</p>
             </div>
-            <Link href="/contracts/new" style={{
+            <Link href="/workspace/new" style={{
               display: 'inline-flex', alignItems: 'center', gap: '7px',
               background: C.indigo, color: '#fff', fontSize: '13px', fontWeight: 700,
               padding: '9px 18px', borderRadius: '8px', textDecoration: 'none',
@@ -320,7 +320,7 @@ export default function ContractsPage() {
           {filtered.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <p style={{ fontSize: '14px', color: C.faint, fontFamily: font }}>No contracts here yet.</p>
-              <Link href="/contracts/new" style={{ fontSize: '13px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: font }}>Create your first contract →</Link>
+              <Link href="/workspace/new" style={{ fontSize: '13px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: font }}>Create your first contract →</Link>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

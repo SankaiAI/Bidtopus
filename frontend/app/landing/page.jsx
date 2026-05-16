@@ -31,7 +31,7 @@ function Navbar() {
         </div>
         <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <Link href="/dashboard" style={{ fontSize: '13px', fontWeight: 600, color: C.muted, textDecoration: 'none' }}>Sign in</Link>
-          <Link href="/contracts/new" style={{
+          <Link href="/workspace/new" style={{
             fontSize: '13px', fontWeight: 700, color: '#fff', background: C.indigo,
             padding: '8px 18px', borderRadius: '8px', textDecoration: 'none', transition: 'opacity 0.15s',
           }}
@@ -50,7 +50,7 @@ function Navbar() {
         <div style={{ background: C.surface, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <a href="#features" className="nav-link" onClick={() => setMenuOpen(false)}>How it works</a>
           <a href="#comparison" className="nav-link" onClick={() => setMenuOpen(false)}>Why OutcomeX</a>
-          <Link href="/contracts/new" onClick={() => setMenuOpen(false)}
+          <Link href="/workspace/new" onClick={() => setMenuOpen(false)}
             style={{ fontSize: '14px', fontWeight: 700, color: '#fff', background: C.indigo, padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', textAlign: 'center' }}>
             Create a contract
           </Link>
@@ -111,7 +111,7 @@ function Hero() {
             Miss the target → full refund. No invoices. No "good effort."
           </p>
           <div className="hero-ctas" style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <Link href="/contracts/new" style={{
+            <Link href="/workspace/new" style={{
               display: 'inline-flex', alignItems: 'center', gap: '8px',
               background: C.indigo, color: '#fff', fontSize: '14px', fontWeight: 700,
               padding: '13px 24px', borderRadius: '9px', textDecoration: 'none', transition: 'opacity 0.15s',
@@ -388,7 +388,7 @@ function CTA() {
         <p style={{ fontSize: '16px', color: C.muted, lineHeight: 1.7, margin: '0 auto 32px', maxWidth: '380px' }}>
           Define your ROAS goal, agree on the fee, and let the agent prove it can deliver — or get every cent back.
         </p>
-        <Link href="/contracts/new" style={{
+        <Link href="/workspace/new" style={{
           display: 'inline-flex', alignItems: 'center', gap: '10px',
           background: C.indigo, color: '#fff', fontSize: '15px', fontWeight: 700,
           padding: '14px 28px', borderRadius: '10px', textDecoration: 'none', transition: 'opacity 0.15s',
@@ -468,7 +468,7 @@ export default function LandingPage() {
           'Fix the success fee upfront. No scope creep, no hidden charges',
           'No monthly seat. You pay nothing until the outcome is verified',
         ]}
-        cta={{ href: '/contracts/new', label: 'Create your first contract' }}
+        cta={{ href: '/workspace/new', label: 'Create your first contract' }}
         visual={<MockContractForm />}
         bg={C.surface}
       />
@@ -482,7 +482,7 @@ export default function LandingPage() {
           'Agent proposes Meta Ads strategy — you approve before spend',
           'If the target is unrealistic, the agent says so rather than accepting and failing',
         ]}
-        cta={{ href: '/contracts/new', label: 'See a live evaluation' }}
+        cta={{ href: '/workspace/new', label: 'See a live evaluation' }}
         visual={<MockEvaluation />}
         reverse
         bg={C.bg}
@@ -497,7 +497,7 @@ export default function LandingPage() {
           'Every settlement is recorded on Arc chain with a transaction proof',
           'The refund is guaranteed by code, not by a company promise',
         ]}
-        cta={{ href: '/contracts/new', label: 'Start with zero risk' }}
+        cta={{ href: '/workspace/new', label: 'Start with zero risk' }}
         visual={<MockSettlement />}
         bg={C.surface}
       />

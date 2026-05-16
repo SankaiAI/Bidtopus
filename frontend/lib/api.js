@@ -51,6 +51,7 @@ async function requestRaw(getToken, method, path, body) {
 export function createApiClient(getToken) {
   const get     = (path)       => request(getToken, 'GET',    path)
   const post    = (path, body) => request(getToken, 'POST',   path, body)
+  const patch   = (path, body) => request(getToken, 'PATCH',  path, body)
   const del     = (path)       => request(getToken, 'DELETE', path)
   const postRaw = (path, body) => requestRaw(getToken, 'POST', path, body)
 
@@ -105,7 +106,7 @@ export function createApiClient(getToken) {
       postRaw(`/api/contracts/${id}/chat/stream`, { message }),
 
     // ── Contract title (ticket #40) ────────────────────────────────────
-    updateTitle: (id, title) => post(`/api/contracts/${id}/title`, { title }),
+    updateTitle: (id, title) => patch(`/api/contracts/${id}/title`, { title }),
 
     // ── Users ──────────────────────────────────────────────────────────
     getMe: () => get('/api/users/me'),

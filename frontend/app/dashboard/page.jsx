@@ -104,7 +104,7 @@ function AgentCard() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: '12px', marginBottom: '12px' }}>
       {/* Underwriting Agent */}
-      <Link href="/contracts/new" style={{
+      <Link href="/workspace/new" style={{
         display: 'flex', flexDirection: 'column', textDecoration: 'none',
         background: 'linear-gradient(135deg, #2e2a7a 0%, #1e1a5e 50%, #0f0d2e 100%)',
         border: '1px solid #3730a3',
@@ -282,8 +282,8 @@ function RecentContracts() {
 // ─── QUICK LINKS ─────────────────────────────────────────────────────────────
 const QUICK_LINKS = [
   {
-    href: '/contracts/new',
-    label: 'New Contract',
+    href: '/workspace/new',
+    label: 'New Workspace',
     sub: 'Define ROAS target, fee, and time window',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,
   },
@@ -335,7 +335,7 @@ export default function DashboardPage() {
               </h1>
               <p style={{ fontSize: '12px', color: C.muted, margin: 0 }}>Here's the status of your performance contracts.</p>
             </div>
-            <Link href="/contracts/new" style={{
+            <Link href="/workspace/new" style={{
               display: 'inline-flex', alignItems: 'center', gap: '7px',
               background: C.indigo, color: '#fff', fontSize: '12px', fontWeight: 700,
               padding: '9px 18px', borderRadius: '8px', textDecoration: 'none',

@@ -1,0 +1,25 @@
+export const C = {
+  bg:           'var(--c-bg)',
+  surface:      'var(--c-surface)',
+  surfaceAlt:   'var(--c-surface-alt)',
+  border:       'var(--c-border)',
+  borderS:      'var(--c-border-s)',
+  text:         'var(--c-text)',
+  sub:          'var(--c-sub)',
+  muted:        'var(--c-muted)',
+  faint:        'var(--c-faint)',
+  indigo:       'var(--c-indigo)',
+  indigoBg:     'var(--c-indigo-bg)',
+  indigoBorder: 'var(--c-indigo-border)',
+  indigoGlow:   'var(--c-indigo-glow)',
+  green:        'var(--c-green)',
+  greenBg:      'var(--c-green-bg)',
+  greenLight:   'var(--c-green-light)',
+  greenBorder:  'var(--c-green-border)',
+  amber:        'var(--c-amber)',
+  amberBg:      'var(--c-amber-bg)',
+  red:          'var(--c-red)',
+  userBg:       'var(--c-user-bg)',
+}
+
+export const font = 'Plus Jakarta Sans, sans-serif'
