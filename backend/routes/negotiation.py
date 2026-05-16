@@ -209,8 +209,11 @@ _TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
 
 # ── Streaming helpers ─────────────────────────────────────────────────────────
 
+_THINKING_BUDGET = 512
+
+
 async def _stream_turn(request, messages, *, max_tokens=1024):
-    """Stream one Claude turn with retries. Yields (text_chunks..., final_message)."""
+    """Stream one Claude turn with retries. Yields thinking chunks, text chunks, final_message."""
     _RETRYABLE = {429, 500, 503, 529}
     _MAX_RETRIES = 3
     accumulated = ""
@@ -225,22 +228,27 @@ async def _stream_turn(request, messages, *, max_tokens=1024):
                       _attempt, len(messages), json.dumps(messages, indent=2, default=str))
             with _anthropic.messages.stream(
                 model="claude-sonnet-4-6",
-                max_tokens=max_tokens,
+                max_tokens=max_tokens + _THINKING_BUDGET,
+                thinking={"type": "enabled", "budget_tokens": _THINKING_BUDGET},
                 system=_SYSTEM_PROMPT,
                 tools=_TOOLS,
                 messages=messages,
             ) as stream:
-                for text in stream.text_stream:
+                for event in stream:
                     if await request.is_disconnected():
                         aborted = True
                         stream.close()
                         break
-                    accumulated += text
-                    yield ("text", text)
+                    if event.type == "content_block_delta":
+                        if event.delta.type == "thinking_delta":
+                            yield ("thinking", event.delta.thinking)
+                        elif event.delta.type == "text_delta":
+                            accumulated += event.delta.text
+                            yield ("text", event.delta.text)
                 if not aborted:
                     final_msg = stream.get_final_message()
-            log.debug("LLM output [negotiation] stop_reason=%s text_len=%d:\n%s",
-                      getattr(final_msg, "stop_reason", None), len(accumulated), accumulated)
+            log.debug("LLM output [negotiation] stop_reason=%s text_len=%d repr=%s",
+                      getattr(final_msg, "stop_reason", None), len(accumulated), repr(accumulated))
             break
         except APIStatusError as exc:
             retryable = exc.status_code in _RETRYABLE or "overloaded" in str(exc).lower()
@@ -318,10 +326,10 @@ async def stream_negotiation(
     for m in messages_repo.get_all(db, contract_id):
         if m.role == "merchant":
             role = "user"
-        elif m.role == "agent":
+        elif m.role == "agent" and m.type == "message":
             role = "assistant"
         else:
-            continue  # skip system events
+            continue  # skip system events, thinking_step rows, approval_requests
         if current_messages and current_messages[-1]["role"] == role:
             current_messages[-1]["content"] += "\n" + m.content
         else:
@@ -343,18 +351,38 @@ async def stream_negotiation(
                 accumulated = ""
                 aborted = False
                 final_msg = None
+                thinking_parts: list[str] = []
+                thinking_seq_id = str(uuid.uuid4())
+                thinking_started = False
 
                 async for item in _stream_turn(request, current_messages):
-                    if item[0] == "text":
+                    if item[0] == "thinking":
+                        _, thinking_text = item
+                        if not thinking_started:
+                            thinking_started = True
+                            yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'negotiation_think', 'label': 'Agent reasoning...', 'thinking_sequence_id': thinking_seq_id})}\n\n"
+                        thinking_parts.append(thinking_text)
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': thinking_text})}\n\n"
+                    elif item[0] == "text":
                         _, text = item
                         accumulated += text
                         yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
                     else:
                         _, accumulated, aborted, final_msg = item
 
+                # Close and persist thinking block for this turn
+                if thinking_started:
+                    yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'negotiation_think', 'thinking_sequence_id': thinking_seq_id})}\n\n"
+                    yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': thinking_seq_id})}\n\n"
+                    messages_repo.append(
+                        db, contract_id, "agent", "thinking_step",
+                        content="".join(thinking_parts),
+                        extra={"step_id": "negotiation_think", "label": "Agent reasoning...", "thinking_sequence_id": thinking_seq_id, "is_complete": True},
+                    )
+                    log.debug("agent thinking [negotiation] contract=%s:\n%s", contract_id, "".join(thinking_parts))
+
                 # Persist whatever Claude said in this turn
                 if accumulated:
-                    log.debug("LLM output [negotiation] repr: %s", repr(accumulated))
                     sanitized = bleach.clean(accumulated, tags=[], strip=True)
                     messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
