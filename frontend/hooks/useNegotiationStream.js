@@ -187,7 +187,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
               const t = last.thinking || { steps: [], isComplete: false, isOpen: true }
-              last.thinking = { ...t, steps: t.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s) }
+              last.thinking = { ...t, steps: t.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s) }
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -204,7 +204,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
 
           } else if (eventType === 'text') {
             if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
-            fullText += data.delta || ''
+            fullText += (data.delta || '').replace(/�/g, '')
             const now = Date.now()
             if (now - lastFlushTime >= 50) { lastFlushTime = now; flushText() }
 

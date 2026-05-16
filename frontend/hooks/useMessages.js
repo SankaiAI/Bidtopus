@@ -28,7 +28,7 @@ function mapMessage(msg) {
   return {
     id: msg.id,
     role,
-    text: msg.content || '',
+    text: (msg.content || '').replace(/�/g, ''),
     time: formatTime(msg.created_at),
     status: msg.status ?? null,
     metric:             extra.metric               ?? undefined,
@@ -146,7 +146,7 @@ export function useMessages(contractId) {
               if (data.title) setGeneratedTitle(data.title)
             } else if (eventType === 'thinking_step') {
               // Historical replay — step already complete, render inline in message stream
-              setMessages(prev => [...prev, mapMessage(data)])
+              setMessages(prev => [...prev, mapMessage({ type: 'thinking_step', ...data })])
             } else if (eventType === 'thinking_step_start') {
               streamingDetailRef.current = ''
               setLiveDetail('')
@@ -169,7 +169,7 @@ export function useMessages(contractId) {
               setActiveStepId(null)
               setThinking(prev => ({
                 ...prev,
-                steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s),
+                steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s),
               }))
             } else if (eventType === 'thinking_end') {
               streamingDetailRef.current = ''
@@ -295,7 +295,7 @@ export function useMessages(contractId) {
             setActiveStepId(null)
             setThinking(prev => ({
               ...prev,
-              steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed, isComplete: true } : s),
+              steps: prev.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s),
             }))
 
           } else if (eventType === 'thinking_end') {
@@ -305,7 +305,7 @@ export function useMessages(contractId) {
             setThinking(prev => ({ ...prev, isComplete: true, isOpen: false }))
 
           } else if (eventType === 'text') {
-            const chunk = data.delta || data.text || ''
+            const chunk = (data.delta || data.text || '').replace(/�/g, '')
             if (chunk) {
               if (!agentBubbleAdded) {
                 setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
@@ -326,7 +326,7 @@ export function useMessages(contractId) {
 
           } else {
             // Fallback: unknown or no event type — try to extract text from data
-            const chunk = data.text || data.delta || ''
+            const chunk = (data.text || data.delta || '').replace(/�/g, '')
             if (chunk) {
               if (!agentBubbleAdded) {
                 setMessages(prev => [...prev, { role: 'agent', text: '', time: 'Just now' }])
