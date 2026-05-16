@@ -221,6 +221,8 @@ async def _stream_turn(request, messages, *, max_tokens=1024):
         accumulated = ""
         aborted = False
         try:
+            log.debug("LLM input [negotiation] attempt=%d messages=%d:\n%s",
+                      _attempt, len(messages), json.dumps(messages, indent=2, default=str))
             with _anthropic.messages.stream(
                 model="claude-sonnet-4-6",
                 max_tokens=max_tokens,
@@ -237,6 +239,8 @@ async def _stream_turn(request, messages, *, max_tokens=1024):
                     yield ("text", text)
                 if not aborted:
                     final_msg = stream.get_final_message()
+            log.debug("LLM output [negotiation] stop_reason=%s text_len=%d:\n%s",
+                      getattr(final_msg, "stop_reason", None), len(accumulated), accumulated)
             break
         except APIStatusError as exc:
             retryable = exc.status_code in _RETRYABLE or "overloaded" in str(exc).lower()
@@ -382,10 +386,8 @@ async def stream_negotiation(
                 # ── evaluate_contract_terms ───────────────────────────────────
                 if tool_block.name == "evaluate_contract_terms":
                     inp = tool_block.input
-                    log.info(
-                        "evaluate_contract_terms called contract=%s terms=%s",
-                        contract_id, inp,
-                    )
+                    log.info("evaluate_contract_terms called contract=%s terms=%s", contract_id, inp)
+                    log.debug("tool input [evaluate_contract_terms]:\n%s", json.dumps(inp, indent=2))
 
                     # Write proposed terms to the negotiating contract so the
                     # agent's ML model can read them via the standard DB path.
@@ -423,12 +425,9 @@ async def stream_negotiation(
                         uw_detail_parts.append(detail)
                         yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': detail})}\n\n"
                         tool_result = json.dumps(ml_result)
-                        log.info(
-                            "ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
-                            contract_id,
-                            ml_result.get("success_probability", 0),
-                            ml_result.get("recommendation"),
-                        )
+                        log.info("ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
+                                 contract_id, ml_result.get("success_probability", 0), ml_result.get("recommendation"))
+                        log.debug("tool result [evaluate_contract_terms]:\n%s", json.dumps(ml_result, indent=2))
                     except Exception as exc:
                         log.warning("evaluate_contract_terms: underwriting failed contract=%s: %s", contract_id, exc)
                         fallback = "ML model unavailable — using conservative estimate."
@@ -461,6 +460,7 @@ async def stream_negotiation(
                 # ── finalize_contract ─────────────────────────────────────────
                 if tool_block.name == "finalize_contract":
                     inp = tool_block.input
+                    log.debug("tool input [finalize_contract]:\n%s", json.dumps(inp, indent=2))
 
                     repo.finalize_negotiating_contract(
                         db,

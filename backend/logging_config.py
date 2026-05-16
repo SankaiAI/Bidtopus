@@ -49,8 +49,12 @@ def setup_logging(level: str = "INFO") -> None:
         },
         # Quieten noisy third-party loggers
         "loggers": {
-            "uvicorn.access": {"level": "INFO", "propagate": True},
-            "uvicorn.error": {"level": "INFO", "propagate": True},
-            "sqlalchemy.engine": {"level": "WARNING", "propagate": True},
+            "uvicorn.access":          {"level": "WARNING", "propagate": True},  # duplicated by middleware
+            "uvicorn.error":           {"level": "INFO",    "propagate": True},
+            "sqlalchemy.engine":       {"level": "WARNING", "propagate": True},
+            "httpcore":                {"level": "WARNING", "propagate": True},  # TCP/TLS lifecycle noise
+            "httpx":                   {"level": "WARNING", "propagate": True},  # redundant HTTP logs
+            "anthropic._base_client":  {"level": "WARNING", "propagate": True},  # dumps full payloads
+            "sse_starlette.sse":       {"level": "WARNING", "propagate": True},  # per-ping/chunk DEBUG
         },
     })

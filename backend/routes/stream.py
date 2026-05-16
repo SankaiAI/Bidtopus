@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 import bleach
 from anthropic import Anthropic
@@ -20,6 +21,7 @@ from services.contract_service import require_contract_owner
 from config import settings
 
 router = APIRouter(prefix="/api/contracts", tags=["stream"])
+log = logging.getLogger(__name__)
 _anthropic = Anthropic(api_key=settings.anthropic_api_key)
 
 
@@ -112,6 +114,8 @@ async def stream_chat(
         try:
             full_response = ""
             aborted = False
+            log.debug("LLM input [chat] contract=%s messages=%d:\n%s",
+                      contract_id, len(llm_messages), json.dumps(llm_messages, indent=2, default=str))
             with _anthropic.messages.stream(
                 model="claude-sonnet-4-6",
                 max_tokens=1024,
@@ -132,6 +136,7 @@ async def stream_chat(
                     yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
 
             if not aborted:
+                log.debug("LLM output [chat] contract=%s:\n%s", contract_id, full_response)
                 sanitized = bleach.clean(full_response, tags=[], strip=True)
                 write_db = SessionLocal()
                 try:

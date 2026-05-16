@@ -57,9 +57,11 @@ def _generate_strategy_bg(contract_id: str) -> None:
         detail_parts.append(fallback)
         event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
     finally:
+        reasoning_text = "".join(detail_parts)
+        log.debug("agent reasoning [strategy] contract=%s:\n%s", contract_id, reasoning_text)
         messages_repo.append(
             db, contract_id, "agent", "thinking_step",
-            content="".join(detail_parts),
+            content=reasoning_text,
             extra={"step_id": "strategy", "label": strategy_label, "thinking_sequence_id": sequence_id, "is_complete": True},
         )
         event_bus.publish(contract_id, "thinking_step_end", {"step_id": "strategy", "thinking_sequence_id": sequence_id})
@@ -98,9 +100,11 @@ def _execute_ads_bg(contract_id: str) -> None:
         detail_parts.append(fallback)
         event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
     finally:
+        reasoning_text = "".join(detail_parts)
+        log.debug("agent reasoning [execute] contract=%s:\n%s", contract_id, reasoning_text)
         messages_repo.append(
             db, contract_id, "agent", "thinking_step",
-            content="".join(detail_parts),
+            content=reasoning_text,
             extra={"step_id": "execute", "label": execute_label, "thinking_sequence_id": sequence_id, "is_complete": True},
         )
         event_bus.publish(contract_id, "thinking_step_end", {"step_id": "execute", "thinking_sequence_id": sequence_id})
