@@ -6,6 +6,7 @@ Returns plain dicts; the service layer owns persistence.
 """
 
 import json
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -14,13 +15,17 @@ import httpx
 from config import settings
 
 _TIMEOUT = 120.0  # agent calls can be slow (LLM + Meta Ads API)
+log = logging.getLogger(__name__)
 
 
 def _post(path: str, contract_id: str) -> dict[str, Any]:
     url = f"{settings.agent_base_url}{path}"
+    log.debug("agent call → %s contract=%s", path, contract_id)
     resp = httpx.post(url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT)
     resp.raise_for_status()
-    return resp.json()
+    result = resp.json()
+    log.debug("agent result ← %s:\n%s", path, json.dumps(result, indent=2, default=str))
+    return result
 
 
 def _get(path: str, **params) -> dict[str, Any]:
@@ -35,6 +40,7 @@ def _stream_sse(path: str, contract_id: str, on_reasoning: Callable[[str], None]
     url = f"{settings.agent_base_url}{path}"
     result: dict[str, Any] = {}
     current_event: str | None = None
+    log.debug("agent stream → %s contract=%s", path, contract_id)
     with httpx.stream("POST", url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
@@ -46,9 +52,12 @@ def _stream_sse(path: str, contract_id: str, on_reasoning: Callable[[str], None]
                 except Exception:
                     data = {}
                 if current_event == "reasoning_delta":
-                    on_reasoning(data.get("text", ""))
+                    text = data.get("text", "")
+                    log.debug("agent thinking [%s]: %s", path, text)
+                    on_reasoning(text)
                 elif current_event == "result":
                     result = data
+                    log.debug("agent result ← %s:\n%s", path, json.dumps(result, indent=2, default=str))
                 elif current_event == "error":
                     raise RuntimeError(data.get("detail", "agent stream error"))
                 current_event = None
