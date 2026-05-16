@@ -94,12 +94,18 @@ async def stream_chat(
     messages_repo.append(db, contract_id, "merchant", "message", content=clean_message)
 
     contract = repo.get_contract(db, contract_id)
-    audit_context = repo.get_audit_events_since(db, contract_id, days_ago=3)
-    context_snippets = [
-        f"[{e.component}/{e.event_type}] {json.dumps(e.payload)[:300]}"
-        for e in audit_context[-20:]
-    ]
     contract_status = contract.status
+
+    # Build full conversation history (negotiation + workspace) for LLM context
+    all_msgs = messages_repo.get_all(db, contract_id)
+    llm_messages = [
+        {
+            "role": "user" if m.role == "merchant" else "assistant",
+            "content": m.content,
+        }
+        for m in all_msgs
+        if m.type == "message" and m.content
+    ]
     db.close()  # release pool connection before streaming from Anthropic
 
     async def generate():
@@ -111,17 +117,11 @@ async def stream_chat(
                 max_tokens=1024,
                 system=(
                     "You are the OutcomeX performance-marketing agent. "
-                    "Answer the merchant's question about their contract. "
+                    f"The contract is currently in status: {contract_status}. "
+                    "Answer the merchant's questions based on your shared conversation history. "
                     "Do not execute any actions — this is a read-only Q&A."
                 ),
-                messages=[{
-                    "role": "user",
-                    "content": (
-                        f"Contract status: {contract_status}\n"
-                        f"Recent activity:\n" + "\n".join(context_snippets) +
-                        f"\n\nMerchant question: {clean_message}"
-                    ),
-                }],
+                messages=llm_messages,
             ) as stream:
                 for text in stream.text_stream:
                     if await request.is_disconnected():
