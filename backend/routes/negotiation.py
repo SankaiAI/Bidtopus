@@ -209,7 +209,19 @@ _TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
 
 # ── Streaming helpers ─────────────────────────────────────────────────────────
 
-_THINKING_BUDGET = 512
+def _serialize_block(b) -> dict:
+    """Serialize a content block to only the fields the API accepts in multi-turn messages.
+    Newer SDK versions add extra fields (parsed_output, citations, caller) that cause 400s."""
+    if b.type == "thinking":
+        return {"type": "thinking", "thinking": b.thinking, "signature": b.signature}
+    if b.type == "text":
+        return {"type": "text", "text": b.text}
+    if b.type == "tool_use":
+        return {"type": "tool_use", "id": b.id, "name": b.name, "input": b.input}
+    return b.model_dump(exclude_none=True)
+
+
+_THINKING_BUDGET = 15000
 
 
 async def _stream_turn(request, messages, *, max_tokens=1024):
@@ -354,37 +366,52 @@ async def stream_negotiation(
                 thinking_parts: list[str] = []
                 thinking_seq_id = str(uuid.uuid4())
                 thinking_started = False
+                text_started = False  # tracks whether agent message bubble exists yet
 
                 async for item in _stream_turn(request, current_messages):
                     if item[0] == "thinking":
                         _, thinking_text = item
-                        if not thinking_started:
-                            thinking_started = True
-                            yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'negotiation_think', 'label': 'Agent reasoning...', 'thinking_sequence_id': thinking_seq_id})}\n\n"
                         thinking_parts.append(thinking_text)
-                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': thinking_text})}\n\n"
+                        # Don't emit yet — wait until after the first text delta so the
+                        # frontend's agent message bubble exists before the thinking block
+                        # tries to attach to it.
                     elif item[0] == "text":
                         _, text = item
                         accumulated += text
-                        yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+                        if not text_started:
+                            text_started = True
+                            # Emit the first text delta first — this creates the agent
+                            # message bubble in the frontend. Only then flush buffered
+                            # thinking so it attaches to the existing bubble.
+                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+                            if thinking_parts:
+                                thinking_started = True
+                                yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'negotiation_think', 'label': 'Agent reasoning...', 'thinking_sequence_id': thinking_seq_id})}\n\n"
+                                for chunk in thinking_parts:
+                                    yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chunk})}\n\n"
+                        else:
+                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
                     else:
                         _, accumulated, aborted, final_msg = item
 
-                # Close and persist thinking block for this turn
+                # Close thinking block SSE events for this turn
                 if thinking_started:
                     yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'negotiation_think', 'thinking_sequence_id': thinking_seq_id})}\n\n"
                     yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': thinking_seq_id})}\n\n"
+
+                # Persist text first so restore shows: text → Agent reasoning → ML evaluation
+                if accumulated:
+                    sanitized = bleach.clean(accumulated, tags=[], strip=True)
+                    messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
+
+                # Persist thinking after text
+                if thinking_started:
                     messages_repo.append(
                         db, contract_id, "agent", "thinking_step",
                         content="".join(thinking_parts),
                         extra={"step_id": "negotiation_think", "label": "Agent reasoning...", "thinking_sequence_id": thinking_seq_id, "is_complete": True},
                     )
                     log.debug("agent thinking [negotiation] contract=%s:\n%s", contract_id, "".join(thinking_parts))
-
-                # Persist whatever Claude said in this turn
-                if accumulated:
-                    sanitized = bleach.clean(accumulated, tags=[], strip=True)
-                    messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
                 # Emit title after the first turn (first turn only, even if aborted)
                 if not title_emitted and title_task is not None:
@@ -410,7 +437,7 @@ async def stream_negotiation(
                 if tool_block is None:
                     return
 
-                assistant_content = [b.model_dump() for b in final_msg.content]
+                assistant_content = [_serialize_block(b) for b in final_msg.content]
 
                 # ── evaluate_contract_terms ───────────────────────────────────
                 if tool_block.name == "evaluate_contract_terms":

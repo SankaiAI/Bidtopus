@@ -81,7 +81,7 @@ These are the five points where OutcomeX *decides*, not just *executes*:
 flowchart TD
     D1["**Decision 1 — ML Underwrites**\nEvaluates 9 features across merchant history\n→ 68% probability of success\n→ accept / counteroffer / reject"]
 
-    D2["**Decision 2 — LLM Negotiates**\nClaude reasons about fee vs. risk vs. window\n→ 'Accept at 2.0x ROAS. Here's why...'\n→ accept / counteroffer / reject"]
+    D2["**Decision 2 — LLM Negotiates**\nClaude with extended thinking reasons about fee vs. risk vs. window\n→ 'Accept at 2.0x ROAS. Here's why...'\n→ reasoning streamed live to merchant\n→ accept / counteroffer / reject"]
 
     D3["**Decision 3 — LLM Strategizes**\nBuilds Meta Ads plan with extended thinking\n→ 'Retargeting, $75/day, warm audiences'\n→ merchant approves before any action"]
 
