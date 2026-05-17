@@ -25,6 +25,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   const [termsReady,   setTermsReady]   = useState(false)
 
   const contractIdRef      = useRef(null)
+  const isNegotiatingRef   = useRef(false)
   const streamingDetailRef = useRef('')
   const currentSeqIdRef    = useRef(null)
   const abortControllerRef = useRef(null)
@@ -46,6 +47,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     currentSeqIdRef.current = null
     setTitle('New Conversation')
     setIsNegotiating(false)
+    isNegotiatingRef.current = false
     setTermsReady(false)
 
     if (sessionId && isUUID(sessionId)) {
@@ -89,7 +91,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
       if (contractResult.status === 'fulfilled' && contractResult.value) {
         const ct = contractResult.value
         if (ct.title) { setTitle(ct.title); upsertSession(cid, { title: ct.title }) }
-        if (ct.status === 'negotiating') setIsNegotiating(true)
+        if (ct.status === 'negotiating') { setIsNegotiating(true); isNegotiatingRef.current = true }
         else if (ct.status) onContractCreated?.(ct)
       }
     })
@@ -148,16 +150,32 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     }
 
     try {
-      const res = await fetch('/api/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: text.trim(),
-          history: [],
-          ...(contractIdRef.current ? { contract_id: contractIdRef.current } : {}),
-        }),
-        signal: controller.signal,
-      })
+      // Post-finalization: route to the grounded workspace chat endpoint instead of negotiation
+      const workspaceMode = !isNegotiatingRef.current && !!contractIdRef.current
+      let res
+      if (workspaceMode) {
+        const token = await getToken()
+        res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contracts/${contractIdRef.current}/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ message: text.trim() }),
+          signal: controller.signal,
+        })
+      } else {
+        res = await fetch('/api/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text.trim(),
+            history: [],
+            ...(contractIdRef.current ? { contract_id: contractIdRef.current } : {}),
+          }),
+          signal: controller.signal,
+        })
+      }
       if (!res.ok) throw new Error('Agent unavailable')
 
       const reader = res.body.getReader()
@@ -277,6 +295,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             contractIdRef.current = cid
             prevSessionIdRef.current = cid
             setIsNegotiating(true)
+            isNegotiatingRef.current = true
             // Silent URL update — no re-mount, component state is preserved
             window.history.replaceState(null, '', `/workspace/${cid}`)
             upsertSession(cid, { title: '', messages: updatedHistory, createdAt: new Date().toISOString() })
@@ -290,6 +309,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
 
           } else if (eventType === 'contract_created') {
             setIsNegotiating(false)
+            isNegotiatingRef.current = false
             setTermsReady(false)
             const cid = data.contract_id
             if (cid) {

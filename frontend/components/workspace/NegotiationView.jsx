@@ -191,7 +191,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
     if (desktopInputRef.current) ro.observe(desktopInputRef.current)
     update()
     return () => ro.disconnect()
-  }, [chatStep, finalized])
+  }, [chatStep])
 
   React.useEffect(() => {
     if (suppressScrollRef.current) { suppressScrollRef.current = false; return }
@@ -299,35 +299,21 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
             )}
           </div>
 
-          {finalized ? (
-            <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 14px', background: C.surface, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Contract confirmed — continue in the workspace →</span>
-            </div>
-          ) : (
-            <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '32px 14px 20px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
-              <AgentInputBar key={inputKey} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="16px" paddingLeft="16px" />
-            </div>
-          )}
+          <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '32px 14px 20px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
+            <AgentInputBar key={inputKey} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder={finalized ? 'Ask about your contract or campaign…' : 'Describe your ROAS target, budget, and time window…'} fontSize="16px" paddingLeft="16px" />
+          </div>
 
-          {finalized ? (
-            <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 40px', background: C.surface, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Contract confirmed — continue in the workspace →</span>
+          <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '40px 40px 16px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
+            <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+              <AgentInputBar key={`d-${inputKey}`} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder={finalized ? 'Ask about your contract or campaign…' : 'Describe your ROAS target, budget, and time window…'} fontSize="13px" paddingLeft="18px" />
             </div>
-          ) : (
-            <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '40px 40px 16px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
-              <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-                <AgentInputBar key={`d-${inputKey}`} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="13px" paddingLeft="18px" />
-              </div>
-              <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center', fontFamily: font }}>
-                {isLoaded && !isSignedIn
-                  ? <><button onClick={() => openSignIn({ afterSignInUrl: window.location.href })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.indigo, fontWeight: 600, fontSize: '11px', padding: 0, fontFamily: font }}>Sign in</button>{' to start chatting with the agent'}</>
-                  : 'Enter to send · Shift+Enter for new line'
-                }
-              </div>
+            <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center', fontFamily: font }}>
+              {isLoaded && !isSignedIn
+                ? <><button onClick={() => openSignIn({ afterSignInUrl: window.location.href })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.indigo, fontWeight: 600, fontSize: '11px', padding: 0, fontFamily: font }}>Sign in</button>{' to start chatting with the agent'}</>
+                : 'Enter to send · Shift+Enter for new line'
+              }
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
