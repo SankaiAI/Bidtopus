@@ -5,7 +5,7 @@ import { useAuth } from '@clerk/nextjs'
 import { createApiClient } from '@/lib/api'
 import { isUUID } from '@/hooks/useNegotiationStream'
 import NegotiationView from '@/components/workspace/NegotiationView'
-import WorkspaceView from '@/components/workspace/WorkspaceView'
+import WorkspaceView, { WorkspaceRightPanel } from '@/components/workspace/WorkspaceView'
 import { C } from '@/components/workspace/constants'
 
 function LoadingDots() {
@@ -24,33 +24,42 @@ export default function WorkspacePage() {
   const { id } = useParams()
   const { getToken, isLoaded, isSignedIn } = useAuth()
 
-  // Local ws_xxx sessions go straight to negotiation — no API call needed
-  const [mode, setMode] = React.useState(() => isUUID(id) ? 'loading' : 'negotiation')
   const [contract, setContract] = React.useState(null)
+  // true while we wait for the API to tell us whether this UUID is still negotiating
+  const [isCheckingStatus, setIsCheckingStatus] = React.useState(() => isUUID(id))
+  // true when a UUID deep-link points to an already-finalized contract
+  const [startInWorkspace, setStartInWorkspace] = React.useState(false)
 
   React.useEffect(() => {
     if (!isUUID(id)) return
     if (!isLoaded) return
-    if (!isSignedIn) { setMode('negotiation'); return }
+    if (!isSignedIn) { setIsCheckingStatus(false); return }
 
     createApiClient(getToken).getContract(id)
       .then(c => {
         setContract(c)
-        setMode(c.status === 'negotiating' ? 'negotiation' : 'workspace')
+        if (c.status !== 'negotiating') setStartInWorkspace(true)
+        setIsCheckingStatus(false)
       })
-      .catch(() => setMode('negotiation'))
+      .catch(() => setIsCheckingStatus(false))
   }, [id, isLoaded, isSignedIn])
 
-  if (mode === 'loading') return <LoadingDots />
+  if (isCheckingStatus) return <LoadingDots />
 
-  if (mode === 'negotiation') {
-    return (
+  // UUID deep-link to an already-finalized contract: go straight to WorkspaceView.
+  if (startInWorkspace) return <WorkspaceView id={id} contract={contract} />
+
+  // NegotiationView stays mounted for the life of the page; WorkspaceRightPanel
+  // slides in alongside it when onFinalized fires. This avoids a component swap
+  // that would trigger useMessages → fresh DB fetch → negotiation-era timestamps
+  // and historical ThinkingBlocks bleeding into the workspace chat.
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' }}>
       <NegotiationView
         sessionId={id}
-        onFinalized={c => { setContract(c); setMode('workspace') }}
+        onFinalized={c => setContract(c)}
       />
-    )
-  }
-
-  return <WorkspaceView id={id} contract={contract} />
+      {contract && <WorkspaceRightPanel contract={contract} id={id} />}
+    </div>
+  )
 }

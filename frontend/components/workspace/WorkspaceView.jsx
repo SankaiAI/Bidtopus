@@ -331,6 +331,81 @@ function PanelContent({ c }) {
   )
 }
 
+// ─── WORKSPACE RIGHT PANEL ────────────────────────────────────────────────────
+// Standalone panel used by WorkspacePage when NegotiationView stays mounted.
+// Accepts the raw contract object returned by onFinalized / getContract.
+export function WorkspaceRightPanel({ contract, id }) {
+  const [isMobile, setIsMobile] = React.useState(false)
+  const [showPanel, setShowPanel] = React.useState(false)
+
+  React.useLayoutEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const c = React.useMemo(() => {
+    if (!contract) return null
+    return {
+      id:          contract.id,
+      name:        contract.campaign_goal || contract.name || 'Campaign',
+      title:       contract.title || null,
+      status:      (contract.status || '').toLowerCase(),
+      targetRoas:  contract.target_roas  ?? contract.targetRoas,
+      minSpend:    contract.min_spend_usd ?? contract.minSpend,
+      windowDays:  contract.time_window_days ?? contract.windowDays,
+      fee:         contract.success_fee_usdc ?? contract.fee,
+      createdAt:   contract.created_at ? new Date(contract.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : contract.createdAt,
+      prob: contract.prob ?? null, risk: contract.risk ?? null,
+      expectedRange: contract.expectedRange ?? null,
+      agentDecision: contract.agentDecision ?? null,
+      currentRoas: contract.currentRoas ?? null, spend: contract.spend ?? null,
+      daysLeft: contract.daysLeft ?? null, roasHistory: contract.roasHistory ?? null,
+      fundedAt: contract.fundedAt ?? null, strategy: contract.strategy ?? null,
+      finalRoas: contract.finalRoas ?? null, settledAt: contract.settledAt ?? null,
+      settleTxHash: contract.settleTxHash ?? null, refundTxHash: contract.refundTxHash ?? null,
+    }
+  }, [contract])
+
+  if (!c) return null
+
+  const badge      = STATUS_COLORS[c.status] || STATUS_COLORS.failure
+  const badgeLabel = STATUS_LABEL[c.status]  || c.status
+
+  return (
+    <>
+      {/* Mobile floating trigger */}
+      {isMobile && !showPanel && (
+        <button onClick={() => setShowPanel(true)} style={{ position: 'fixed', bottom: '100px', right: '16px', zIndex: 40, background: C.indigo, color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, fontFamily: font, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+          Details
+        </button>
+      )}
+      <div style={isMobile
+        ? { position: 'fixed', inset: 0, zIndex: 50, display: showPanel ? 'flex' : 'none', flexDirection: 'column', background: C.surface }
+        : { width: '420px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.surface, padding: '8px 8px 8px 0', animation: 'panel-slide-in 0.32s cubic-bezier(0.4, 0, 0.2, 1)' }
+      }>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: isMobile ? '0' : '12px', background: 'var(--c-panel-bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', flexShrink: 0, gap: '8px', borderBottom: '1px solid var(--c-inner-border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              {isMobile && <button onClick={() => setShowPanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: '2px', display: 'flex', marginRight: '2px', flexShrink: 0 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>}
+              <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || c.name}</span>
+              <span style={{ fontSize: '10px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>{badgeLabel}</span>
+            </div>
+            <Link href={`/contracts/${c.id}`} style={{ fontSize: '11px', fontWeight: 600, color: C.muted, border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0, transition: 'color 0.15s, border-color 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.color = C.indigo; e.currentTarget.style.borderColor = C.indigo }}
+              onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
+            <PanelContent c={c} />
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ─── WORKSPACE VIEW ───────────────────────────────────────────────────────────
 export default function WorkspaceView({ id, contract }) {
   const router = useRouter()
@@ -345,18 +420,31 @@ export default function WorkspaceView({ id, contract }) {
   const mobileInputRef  = React.useRef(null)
   const inputKey        = React.useRef(0)
 
+  // contract.id is the server-assigned UUID; id from useParams may still be the original
+  // local session key (ws_xxx) if window.history.replaceState was used during negotiation
+  // without triggering a Next.js router navigation. Always prefer the UUID from the contract.
+  const effectiveId = contract?.id ?? id
+
   const { messages, isThinking, isStreaming, stopGeneration, appendMessage, sendMessage,
-          thinking, activeStepId, liveDetail, generatedTitle, toggleThinking } = useMessages(id)
+          thinking, activeStepId, liveDetail, generatedTitle, toggleThinking } = useMessages(effectiveId)
 
   // Seed from localStorage session cache so the chat isn't blank while useMessages fetches.
-  // useNegotiationStream writes messages there during negotiation; once the API fetch completes
-  // messages.length > 0 and we switch to the live data automatically.
+  // useNegotiationStream writes messages under the contract UUID; extract text from segments.
   const [seedMessages] = React.useState(() => {
     if (typeof window === 'undefined') return []
     try {
-      return (getSession(id)?.messages || [])
+      return (getSession(effectiveId)?.messages || [])
         .filter(m => m.role === 'user' || m.role === 'assistant')
-        .map(m => ({ role: m.role === 'assistant' ? 'agent' : 'user', text: m.content || m.text || '', time: '' }))
+        .map(m => {
+          if (m.role === 'assistant') {
+            const text = m.segments
+              ? m.segments.filter(s => s.type === 'text').map(s => s.content).join('')
+              : (m.content || m.text || '')
+            return { role: 'agent', text, time: '' }
+          }
+          return { role: 'user', text: m.content || m.text || '', time: '' }
+        })
+        .filter(m => m.text)
     } catch { return [] }
   })
   const displayMessages = messages.length > 0 ? messages : seedMessages
@@ -368,7 +456,7 @@ export default function WorkspaceView({ id, contract }) {
       id:          contract.id,
       name:        contract.campaign_goal || contract.name || 'Campaign',
       title:       contract.title || generatedTitle || null,
-      status:      contract.status,
+      status:      (contract.status || '').toLowerCase(),
       targetRoas:  contract.target_roas  ?? contract.targetRoas,
       minSpend:    contract.min_spend_usd ?? contract.minSpend,
       windowDays:  contract.time_window_days ?? contract.windowDays,
@@ -419,14 +507,23 @@ export default function WorkspaceView({ id, contract }) {
     while (i < displayMessages.length) {
       const msg = displayMessages[i]
       if (msg.role === 'thinking-step') {
+        // Skip all consecutive thinking-step messages in this sequence.
+        // Historical thinking from negotiation/background tasks must not leak
+        // into the workspace view — internal work is not user-facing content.
+        // Live thinking during workspace chat is handled separately via the
+        // `thinking` state from useMessages.
         const seqId = msg.thinkingSequenceId || msg.id
-        const steps = []
         while (i < displayMessages.length && displayMessages[i].role === 'thinking-step' && (displayMessages[i].thinkingSequenceId || displayMessages[i].id) === seqId) {
-          steps.push({ id: displayMessages[i].stepId, label: displayMessages[i].label, detail: displayMessages[i].text, isComplete: true })
           i++
         }
-        result.push({ _type: 'thinking-block', seqId, steps })
-      } else { result.push(msg); i++ }
+      } else if (msg.role === 'agent' && !msg.text?.trim()) {
+        // Skip empty agent bubbles produced by tool_call/tool_result DB rows
+        // or follow-up streams that produced no visible content.
+        i++
+      } else {
+        result.push(msg)
+        i++
+      }
     }
     return result
   }, [displayMessages])
@@ -436,20 +533,20 @@ export default function WorkspaceView({ id, contract }) {
     setOpenSeqs(prev => { const next = new Set(prev); if (next.has(seqId)) next.delete(seqId); else next.add(seqId); return next })
   }, [])
 
-  const { getStatus, getError, approve } = useActionApprovals(id, {
+  const { getStatus, getError, approve } = useActionApprovals(effectiveId, {
     onApproved: () => setTimeout(() => appendMessage({ role: 'agent', text: "Action confirmed. Executing now — I'll report back with results.", time: 'Just now' }), 350),
   })
 
   const [localTitle, setLocalTitle] = React.useState(() => {
     if (typeof window === 'undefined') return null
-    try { return getSession(id)?.title || null } catch { return null }
+    try { return getSession(effectiveId)?.title || null } catch { return null }
   })
 
   const saveTitle = React.useCallback((newTitle) => {
     setLocalTitle(newTitle)
-    upsertSession(id, { title: newTitle })
-    createApiClient(getToken).updateTitle(id, newTitle).catch(() => {})
-  }, [id, getToken])
+    upsertSession(effectiveId, { title: newTitle })
+    createApiClient(getToken).updateTitle(effectiveId, newTitle).catch(() => {})
+  }, [effectiveId, getToken])
 
   const isResolved = c?.status === 'success' || c?.status === 'failure'
   const badge      = STATUS_COLORS[c?.status] || STATUS_COLORS.failure
