@@ -514,6 +514,11 @@ async def stream_negotiation(
                     yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'ml_underwrite', 'thinking_sequence_id': step_sequence_id})}\n\n"
                     yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': step_sequence_id})}\n\n"
 
+                    # Signal frontend to show Confirm Terms button only when ML says accept
+                    ml_rec = json.loads(tool_result).get("recommendation", "")
+                    if ml_rec == "accept":
+                        yield f"event: terms_ready\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
+
                     # Persist tool exchange so history reconstruction replays it on future turns
                     messages_repo.append(
                         db, contract_id, "agent", "tool_call",
