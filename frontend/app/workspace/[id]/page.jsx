@@ -37,8 +37,10 @@ export default function WorkspacePage() {
 
     createApiClient(getToken).getContract(id)
       .then(c => {
-        setContract(c)
-        if (c.status !== 'negotiating') setStartInWorkspace(true)
+        if (c.status !== 'negotiating') {
+          setContract(c)
+          setStartInWorkspace(true)
+        }
         setIsCheckingStatus(false)
       })
       .catch(() => setIsCheckingStatus(false))
@@ -58,6 +60,7 @@ export default function WorkspacePage() {
       <NegotiationView
         sessionId={id}
         onFinalized={c => setContract(c)}
+        finalized={!!contract}
       />
       {contract && <WorkspaceRightPanel contract={contract} id={id} />}
     </div>

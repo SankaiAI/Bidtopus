@@ -124,32 +124,35 @@ const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgInde
       </div>
       <div style={{ flex: 1, color: C.text, fontSize: '13px', lineHeight: 1.65 }}>
         {msg.acknowledgment && <p style={{ margin: '0 0 8px' }}>{msg.acknowledgment}</p>}
-        {msg.ackDone !== false && (msg.segments ?? (msg.content ? [{ type: 'text', content: msg.content }] : [])).map((seg, si) => {
-          if (seg.type === 'text') {
-            return seg.content
-              ? <ReactMarkdown key={si} remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{seg.content}</ReactMarkdown>
-              : null
-          }
-          if (seg.type === 'thinking') {
-            return (
-              <ThinkingBlock
-                key={seg.seqId || si}
-                thinking={seg}
-                activeStepId={isLastMsg && seg.seqId === activeSeqId ? activeStepId : null}
-                liveDetail={isLastMsg && seg.seqId === activeSeqId ? liveDetail : ''}
-                onToggle={() => onThinkingToggle(msgIndex, si)}
-              />
-            )
-          }
-          return null
-        })}
+        {msg.ackDone !== false && (() => {
+          const segs = msg.segments ?? (msg.content ? [{ type: 'text', content: msg.content }] : [])
+          const thinkingSegs = segs.filter(s => s.type === 'thinking')
+          const textContent = segs.filter(s => s.type === 'text').map(s => s.content).join('')
+          const origIdx = (seg) => segs.indexOf(seg)
+          return (
+            <>
+              {thinkingSegs.map(seg => (
+                <ThinkingBlock
+                  key={seg.seqId || origIdx(seg)}
+                  thinking={seg}
+                  activeStepId={isLastMsg && seg.seqId === activeSeqId ? activeStepId : null}
+                  liveDetail={isLastMsg && seg.seqId === activeSeqId ? liveDetail : ''}
+                  onToggle={() => onThinkingToggle(msgIndex, origIdx(seg))}
+                />
+              ))}
+              {textContent && (
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{textContent}</ReactMarkdown>
+              )}
+            </>
+          )
+        })()}
       </div>
     </div>
   )
 })
 
 // ─── NEGOTIATION VIEW ─────────────────────────────────────────────────────────
-export default function NegotiationView({ sessionId, onFinalized }) {
+export default function NegotiationView({ sessionId, onFinalized, finalized = false }) {
   const router = useRouter()
   const { openSignIn } = useClerk()
 
@@ -188,7 +191,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
     if (desktopInputRef.current) ro.observe(desktopInputRef.current)
     update()
     return () => ro.disconnect()
-  }, [chatStep])
+  }, [chatStep, finalized])
 
   React.useEffect(() => {
     if (suppressScrollRef.current) { suppressScrollRef.current = false; return }
@@ -296,21 +299,35 @@ export default function NegotiationView({ sessionId, onFinalized }) {
             )}
           </div>
 
-          <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '32px 14px 20px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
-            <AgentInputBar key={inputKey} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="16px" paddingLeft="16px" />
-          </div>
+          {finalized ? (
+            <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 14px', background: C.surface, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Contract confirmed — continue in the workspace →</span>
+            </div>
+          ) : (
+            <div ref={mobileInputRef} className="agent-input-mobile" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '32px 14px 20px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
+              <AgentInputBar key={inputKey} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="16px" paddingLeft="16px" />
+            </div>
+          )}
 
-          <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '40px 40px 16px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
-            <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-              <AgentInputBar key={`d-${inputKey}`} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="13px" paddingLeft="18px" />
+          {finalized ? (
+            <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '16px 40px', background: C.surface, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Contract confirmed — continue in the workspace →</span>
             </div>
-            <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center', fontFamily: font }}>
-              {isLoaded && !isSignedIn
-                ? <><button onClick={() => openSignIn({ afterSignInUrl: window.location.href })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.indigo, fontWeight: 600, fontSize: '11px', padding: 0, fontFamily: font }}>Sign in</button>{' to start chatting with the agent'}</>
-                : 'Enter to send · Shift+Enter for new line'
-              }
+          ) : (
+            <div ref={desktopInputRef} className="agent-input-desktop" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '40px 40px 16px', background: `linear-gradient(to bottom, transparent, ${C.surface} 35%)` }}>
+              <div style={{ maxWidth: '720px', margin: '0 auto' }}>
+                <AgentInputBar key={`d-${inputKey}`} onSend={stableSend} onStop={stopStream} isGenerating={loading || isStreaming} chatReady loading={loading} placeholder="Describe your ROAS target, budget, and time window…" fontSize="13px" paddingLeft="18px" />
+              </div>
+              <div style={{ fontSize: '11px', color: C.muted, marginTop: '8px', textAlign: 'center', fontFamily: font }}>
+                {isLoaded && !isSignedIn
+                  ? <><button onClick={() => openSignIn({ afterSignInUrl: window.location.href })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.indigo, fontWeight: 600, fontSize: '11px', padding: 0, fontFamily: font }}>Sign in</button>{' to start chatting with the agent'}</>
+                  : 'Enter to send · Shift+Enter for new line'
+                }
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

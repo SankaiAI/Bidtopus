@@ -111,6 +111,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   const sendMessage = useCallback(async (text) => {
     if (!text?.trim() || loading) return
     if (chatStep === 'choose') setChatStep('ready')
+    setTermsReady(false)
 
     const userMsg = { role: 'user', content: text.trim() }
     const updatedHistory = [...messages, userMsg]
