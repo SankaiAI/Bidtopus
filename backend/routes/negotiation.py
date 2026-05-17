@@ -155,8 +155,10 @@ _SYSTEM_PROMPT = (
     "- recommendation=reject (<35%): decline and explain why the target is not achievable\n\n"
     "Call evaluate_contract_terms whenever the merchant proposes specific numeric terms, "
     "or whenever you are about to make an accept/counteroffer/reject decision. "
-    "Once both parties have explicitly agreed on all terms based on the evaluation, "
-    "call finalize_contract. Do not finalize until the merchant has confirmed the terms."
+    "Once the ML model returns recommendation=accept, present the terms clearly and ask the merchant "
+    "to confirm with an explicit YES. Do NOT call finalize_contract until the merchant responds with "
+    "an unambiguous confirmation such as 'yes', 'confirm', 'agreed', 'lock it in', or similar. "
+    "A question, silence, or vague reply is NOT confirmation — keep asking until you get a clear yes."
 )
 
 _EVALUATE_TOOL = {
@@ -337,15 +339,28 @@ async def stream_negotiation(
     current_messages: list[dict] = []
     for m in messages_repo.get_all(db, contract_id):
         if m.role == "merchant":
-            role = "user"
+            if current_messages and current_messages[-1]["role"] == "user":
+                current_messages[-1]["content"] += "\n" + m.content
+            else:
+                current_messages.append({"role": "user", "content": m.content})
         elif m.role == "agent" and m.type == "message":
-            role = "assistant"
+            if current_messages and current_messages[-1]["role"] == "assistant":
+                current_messages[-1]["content"] += "\n" + m.content
+            else:
+                current_messages.append({"role": "assistant", "content": m.content})
+        elif m.role == "agent" and m.type == "tool_call":
+            # Replay assistant turn with tool_use block so Claude sees its previous tool calls
+            current_messages.append({"role": "assistant", "content": (m.extra or {}).get("assistant_content", [])})
+        elif m.role == "system" and m.type == "tool_result":
+            # Replay tool result so Claude knows what the tool returned
+            extra = m.extra or {}
+            current_messages.append({"role": "user", "content": [{
+                "type": "tool_result",
+                "tool_use_id": extra.get("tool_use_id", ""),
+                "content": extra.get("content", ""),
+            }]})
         else:
-            continue  # skip system events, thinking_step rows, approval_requests
-        if current_messages and current_messages[-1]["role"] == role:
-            current_messages[-1]["content"] += "\n" + m.content
-        else:
-            current_messages.append({"role": role, "content": m.content})
+            continue  # skip thinking_step rows, other system events
 
     async def generate():
         nonlocal current_messages
@@ -499,6 +514,18 @@ async def stream_negotiation(
                     yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'ml_underwrite', 'thinking_sequence_id': step_sequence_id})}\n\n"
                     yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': step_sequence_id})}\n\n"
 
+                    # Persist tool exchange so history reconstruction replays it on future turns
+                    messages_repo.append(
+                        db, contract_id, "agent", "tool_call",
+                        content="",
+                        extra={"assistant_content": assistant_content, "tool_use_id": tool_block.id},
+                    )
+                    messages_repo.append(
+                        db, contract_id, "system", "tool_result",
+                        content="",
+                        extra={"tool_use_id": tool_block.id, "content": tool_result},
+                    )
+
                     # Append assistant turn + tool result and continue the loop
                     current_messages = current_messages + [
                         {"role": "assistant", "content": assistant_content},
@@ -540,6 +567,17 @@ async def stream_negotiation(
                         content="Contract created",
                         extra={"status": "Created"},
                     )
+                    finalize_tool_result = json.dumps({"success": True, "contract_id": contract_id})
+                    messages_repo.append(
+                        db, contract_id, "agent", "tool_call",
+                        content="",
+                        extra={"assistant_content": assistant_content, "tool_use_id": tool_block.id},
+                    )
+                    messages_repo.append(
+                        db, contract_id, "system", "tool_result",
+                        content="",
+                        extra={"tool_use_id": tool_block.id, "content": finalize_tool_result},
+                    )
 
                     log.info("contract finalized via negotiation contract=%s user=%s", contract_id, current_user.id)
                     yield f"event: contract_created\ndata: {json.dumps({'contract_id': contract_id})}\n\n"
@@ -555,7 +593,7 @@ async def stream_negotiation(
                             "content": [{
                                 "type": "tool_result",
                                 "tool_use_id": tool_block.id,
-                                "content": json.dumps({"success": True, "contract_id": contract_id}),
+                                "content": finalize_tool_result,
                             }],
                         },
                     ]
