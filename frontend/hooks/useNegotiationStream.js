@@ -22,6 +22,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   const [contractId,   setContractId]   = useState(null)
   const [chatStep,     setChatStep]     = useState('choose')
   const [isNegotiating, setIsNegotiating] = useState(false)
+  const [termsReady,   setTermsReady]   = useState(false)
 
   const contractIdRef      = useRef(null)
   const streamingDetailRef = useRef('')
@@ -45,6 +46,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     currentSeqIdRef.current = null
     setTitle('New Conversation')
     setIsNegotiating(false)
+    setTermsReady(false)
 
     if (sessionId && isUUID(sessionId)) {
       setContractId(sessionId)
@@ -243,6 +245,9 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             })
 
           } else if (eventType === 'thinking_end') {
+            // Flush any pending post-thinking text immediately so segment 3
+            // appears below the ThinkingBlock rather than waiting until sendMessage exits
+            if (segText) flushText()
             const seqId = data.thinking_sequence_id || currentSeqIdRef.current
             setActiveSeqId(null)
             setMessages(prev => {
@@ -260,6 +265,9 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             segText += (data.delta || '').replace(/�/g, '')
             const now = Date.now()
             if (now - lastFlushTime >= 50) { lastFlushTime = now; flushText() }
+
+          } else if (eventType === 'terms_ready') {
+            setTermsReady(true)
 
           } else if (eventType === 'session_created') {
             const cid = data.contract_id
@@ -281,6 +289,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
 
           } else if (eventType === 'contract_created') {
             setIsNegotiating(false)
+            setTermsReady(false)
             const cid = data.contract_id
             if (cid) {
               createApiClient(getToken).getContract(cid)
@@ -326,6 +335,6 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
-    isSignedIn, isLoaded, isNegotiating,
+    isSignedIn, isLoaded, isNegotiating, termsReady,
   }
 }

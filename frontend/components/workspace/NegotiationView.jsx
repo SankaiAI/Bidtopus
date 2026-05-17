@@ -157,7 +157,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
     messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
-    isSignedIn, isLoaded, isNegotiating,
+    isSignedIn, isLoaded, isNegotiating, termsReady,
   } = useNegotiationStream(sessionId, {
     onContractCreated: onFinalized,
   })
@@ -282,7 +282,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
               </div>
             )}
 
-            {isNegotiating && !loading && !isStreaming && (
+            {termsReady && !loading && !isStreaming && (
               <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
                 <button
                   onClick={() => handleSend('confirm')}
