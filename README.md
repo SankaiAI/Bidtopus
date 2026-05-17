@@ -388,3 +388,11 @@ For local backend → Arc testnet interaction, point `ARC_RPC_URL` to the Cantee
 | Frontend | `frontend/` |
 | Backend + Agent | `backend/` + `agent/` |
 | Smart Contracts | `contracts/` |
+
+---
+
+## License
+
+Copyright (C) 2026 SankaiAI
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [LICENSE](LICENSE) for details.
