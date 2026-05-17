@@ -21,6 +21,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
   const [title,        setTitle]        = useState('New Conversation')
   const [contractId,   setContractId]   = useState(null)
   const [chatStep,     setChatStep]     = useState('choose')
+  const [isNegotiating, setIsNegotiating] = useState(false)
 
   const contractIdRef      = useRef(null)
   const streamingDetailRef = useRef('')
@@ -43,6 +44,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     streamingDetailRef.current = ''
     currentSeqIdRef.current = null
     setTitle('New Conversation')
+    setIsNegotiating(false)
 
     if (sessionId && isUUID(sessionId)) {
       setContractId(sessionId)
@@ -85,7 +87,8 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
       if (contractResult.status === 'fulfilled' && contractResult.value) {
         const ct = contractResult.value
         if (ct.title) { setTitle(ct.title); upsertSession(cid, { title: ct.title }) }
-        if (ct.status && ct.status !== 'negotiating') onContractCreated?.(ct)
+        if (ct.status === 'negotiating') setIsNegotiating(true)
+        else if (ct.status) onContractCreated?.(ct)
       }
     })
   }, [contractId, isLoaded, isSignedIn])
@@ -239,6 +242,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             setContractId(cid)
             contractIdRef.current = cid
             prevSessionIdRef.current = cid
+            setIsNegotiating(true)
             // Silent URL update — no re-mount, component state is preserved
             window.history.replaceState(null, '', `/workspace/${cid}`)
             upsertSession(cid, { title: '', messages: updatedHistory, createdAt: new Date().toISOString() })
@@ -251,6 +255,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             }
 
           } else if (eventType === 'contract_created') {
+            setIsNegotiating(false)
             const cid = data.contract_id
             if (cid) {
               createApiClient(getToken).getContract(cid)
@@ -296,6 +301,6 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
-    isSignedIn, isLoaded,
+    isSignedIn, isLoaded, isNegotiating,
   }
 }

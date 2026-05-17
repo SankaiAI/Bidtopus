@@ -148,7 +148,7 @@ export default function NegotiationView({ sessionId, onFinalized }) {
     messages, setMessages, loading, isStreaming, liveDetail, activeStepId, activeSeqId,
     title, contractId, chatStep, setChatStep,
     sendMessage, stopStream, saveTitle,
-    isSignedIn, isLoaded,
+    isSignedIn, isLoaded, isNegotiating,
   } = useNegotiationStream(sessionId, {
     onContractCreated: onFinalized,
   })
@@ -270,6 +270,19 @@ export default function NegotiationView({ sessionId, onFinalized }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 0' }}>
                   {[0, 1, 2].map(i => <span key={i} style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: C.indigo, animation: 'agentDotBounce 1.1s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />)}
                 </div>
+              </div>
+            )}
+
+            {isNegotiating && !loading && !isStreaming && (
+              <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
+                <button
+                  onClick={() => handleSend('confirm')}
+                  style={{ background: C.indigo, color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, fontFamily: font, cursor: 'pointer', boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'opacity 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
+                  onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+                >
+                  Confirm Terms
+                </button>
               </div>
             )}
           </div>
