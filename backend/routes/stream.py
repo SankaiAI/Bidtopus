@@ -3,7 +3,7 @@ import json
 import logging
 
 import bleach
-from anthropic import Anthropic
+import httpx
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sse_starlette.sse import EventSourceResponse
@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from limiter import limiter
 
 import db.messages_repo as messages_repo
-import db.repo as repo
 import event_bus
 from auth.clerk import get_current_user
 from db.session import get_db, SessionLocal
@@ -22,7 +21,6 @@ from config import settings
 
 router = APIRouter(prefix="/api/contracts", tags=["stream"])
 log = logging.getLogger(__name__)
-_anthropic = Anthropic(api_key=settings.anthropic_api_key)
 
 
 # ── SSE live event stream ─────────────────────────────────────────────────────
@@ -95,49 +93,58 @@ async def stream_chat(
     clean_message = bleach.clean(body.message, tags=[], strip=True)
     messages_repo.append(db, contract_id, "merchant", "message", content=clean_message)
 
-    contract = repo.get_contract(db, contract_id)
-    contract_status = contract.status
-
-    # Build full conversation history (negotiation + workspace) for LLM context
+    # Build conversation history so the agent has turn-by-turn context
     all_msgs = messages_repo.get_all(db, contract_id)
-    llm_messages = [
-        {
-            "role": "user" if m.role == "merchant" else "assistant",
-            "content": m.content,
-        }
+    prior_messages = [
+        {"role": "user" if m.role == "merchant" else "assistant", "content": m.content}
         for m in all_msgs
         if m.type == "message" and m.content
     ]
-    db.close()  # release pool connection before streaming from Anthropic
+    db.close()
 
     async def generate():
+        full_response = ""
         try:
-            full_response = ""
-            aborted = False
-            log.debug("LLM input [chat] contract=%s messages=%d:\n%s",
-                      contract_id, len(llm_messages), json.dumps(llm_messages, indent=2, default=str))
-            with _anthropic.messages.stream(
-                model="claude-sonnet-4-6",
-                max_tokens=1024,
-                system=(
-                    "You are the OutcomeX performance-marketing agent. "
-                    f"The contract is currently in status: {contract_status}. "
-                    "Answer the merchant's questions based on your shared conversation history. "
-                    "Do not execute any actions — this is a read-only Q&A."
-                ),
-                messages=llm_messages,
-            ) as stream:
-                for text in stream.text_stream:
-                    if await request.is_disconnected():
-                        aborted = True
-                        stream.close()
-                        break
-                    full_response += text
-                    yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{settings.agent_base_url}/agent/chat/stream",
+                    json={
+                        "contract_id": contract_id,
+                        "message": clean_message,
+                        "prior_messages": prior_messages,
+                    },
+                ) as agent_resp:
+                    agent_resp.raise_for_status()
+                    buffer = ""
+                    async for chunk in agent_resp.aiter_text():
+                        if await request.is_disconnected():
+                            break
+                        buffer += chunk
+                        # Parse complete SSE blocks (double-newline separated)
+                        while "\n\n" in buffer:
+                            block, buffer = buffer.split("\n\n", 1)
+                            event_type, event_data = "message", ""
+                            for line in block.split("\n"):
+                                if line.startswith("event: "):
+                                    event_type = line[7:].strip()
+                                elif line.startswith("data: "):
+                                    event_data = line[6:].strip()
+                            if not event_data:
+                                continue
+                            if event_type == "text_delta":
+                                # Agent emits text_delta+{"text":"..."};
+                                # frontend useMessages expects text+{"delta":"..."}
+                                text = json.loads(event_data).get("text", "")
+                                full_response += text
+                                yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+                            elif event_type == "error":
+                                detail = json.loads(event_data).get("detail", event_data)
+                                yield f"event: error\ndata: {json.dumps({'message': detail})}\n\n"
+                            elif event_type in ("tool_call", "done"):
+                                yield f"event: {event_type}\ndata: {event_data}\n\n"
 
-            if not aborted:
-                log.debug("LLM output [chat] contract=%s:\n%s", contract_id, full_response)
-                log.debug("LLM output [chat] repr: %s", repr(full_response))
+            if full_response:
                 sanitized = bleach.clean(full_response, tags=[], strip=True)
                 write_db = SessionLocal()
                 try:
@@ -146,6 +153,7 @@ async def stream_chat(
                     write_db.close()
 
         except Exception as e:
+            log.exception("stream_chat: agent proxy failed contract=%s", contract_id)
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
