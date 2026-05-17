@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from routes import router
+from routes.chat import router as chat_router
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -79,6 +80,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(chat_router)
 
 
 @app.get("/health")
