@@ -124,16 +124,25 @@ const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgInde
       </div>
       <div style={{ flex: 1, color: C.text, fontSize: '13px', lineHeight: 1.65 }}>
         {msg.acknowledgment && <p style={{ margin: '0 0 8px' }}>{msg.acknowledgment}</p>}
-        {msg.content && <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{msg.content}</ReactMarkdown>}
-        {msg.ackDone !== false && msg.thinkingBlocks && msg.thinkingBlocks.map((block, bi) => (
-          <ThinkingBlock
-            key={block.seqId || bi}
-            thinking={block}
-            activeStepId={isLastMsg && block.seqId === activeSeqId ? activeStepId : null}
-            liveDetail={isLastMsg && block.seqId === activeSeqId ? liveDetail : ''}
-            onToggle={() => onThinkingToggle(msgIndex, bi)}
-          />
-        ))}
+        {msg.ackDone !== false && (msg.segments ?? (msg.content ? [{ type: 'text', content: msg.content }] : [])).map((seg, si) => {
+          if (seg.type === 'text') {
+            return seg.content
+              ? <ReactMarkdown key={si} remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{seg.content}</ReactMarkdown>
+              : null
+          }
+          if (seg.type === 'thinking') {
+            return (
+              <ThinkingBlock
+                key={seg.seqId || si}
+                thinking={seg}
+                activeStepId={isLastMsg && seg.seqId === activeSeqId ? activeStepId : null}
+                liveDetail={isLastMsg && seg.seqId === activeSeqId ? liveDetail : ''}
+                onToggle={() => onThinkingToggle(msgIndex, si)}
+              />
+            )
+          }
+          return null
+        })}
       </div>
     </div>
   )
@@ -186,14 +195,14 @@ export default function NegotiationView({ sessionId, onFinalized }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
   }, [messages, loading])
 
-  const handleThinkingToggle = React.useCallback((msgIndex, blockIndex) => {
+  const handleThinkingToggle = React.useCallback((msgIndex, segIdx) => {
     suppressScrollRef.current = true
     setMessages(prev => {
       const msgs = [...prev]
       const msg = { ...msgs[msgIndex] }
-      const blocks = [...(msg.thinkingBlocks || [])]
-      blocks[blockIndex] = { ...blocks[blockIndex], isOpen: !blocks[blockIndex].isOpen }
-      msg.thinkingBlocks = blocks
+      const segs = [...(msg.segments || [])]
+      segs[segIdx] = { ...segs[segIdx], isOpen: !segs[segIdx].isOpen }
+      msg.segments = segs
       msgs[msgIndex] = msg
       return msgs
     })
@@ -206,13 +215,13 @@ export default function NegotiationView({ sessionId, onFinalized }) {
   }, [loading, isLoaded, isSignedIn, openSignIn, sendMessage])
 
   const handleQuickAction = (message) => {
-    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: "Got it — let's work on this. I'll evaluate the terms and give you my underwriting decision." }])
+    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, segments: [{ type: 'text', content: "Got it — let's work on this. I'll evaluate the terms and give you my underwriting decision." }] }])
     setChatStep('ready')
     setTimeout(() => handleSend(message), 100)
   }
 
   const handleStart = () => {
-    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: "Great! Let's set up your performance contract.\n\nTell me:\n1. **Target ROAS** (e.g. ≥ 2.0×)\n2. **Minimum ad spend** before resolution is valid (e.g. $500)\n3. **Time window** in days (e.g. 7 days)\n4. **Success fee** in USDC (e.g. 100 USDC)\n\nYou can also just describe your campaign and I'll suggest terms." }])
+    setMessages([{ role: 'assistant', acknowledgment: '', ackDone: true, segments: [{ type: 'text', content: "Great! Let's set up your performance contract.\n\nTell me:\n1. **Target ROAS** (e.g. ≥ 2.0×)\n2. **Minimum ad spend** before resolution is valid (e.g. $500)\n3. **Time window** in days (e.g. 7 days)\n4. **Success fee** in USDC (e.g. 100 USDC)\n\nYou can also just describe your campaign and I'll suggest terms." }] }])
     setChatStep('ready')
   }
 

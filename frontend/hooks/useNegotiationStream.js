@@ -79,7 +79,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
           .map(m => {
             const isAgent = m.role === 'agent' || m.role === 'assistant'
             return isAgent
-              ? { role: 'assistant', content: m.content, acknowledgment: '', ackDone: true, thinkingBlocks: [] }
+              ? { role: 'assistant', acknowledgment: '', ackDone: true, segments: m.content ? [{ type: 'text', content: m.content }] : [] }
               : { role: 'user', content: m.content }
           })
         if (uiMsgs.length > 0) { setMessages(uiMsgs); setChatStep('ready') }
@@ -118,17 +118,31 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
     const controller = new AbortController()
     abortControllerRef.current = controller
 
-    let fullText = ''
+    let segText = ''
     let streamingStarted = false
     let lastFlushTime = 0
 
-    const flushText = () => setMessages(prev => {
-      const msgs = [...prev]
-      const last = msgs[msgs.length - 1]
-      if (last?.role === 'assistant') msgs[msgs.length - 1] = { ...last, content: fullText }
-      else msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: fullText, thinkingBlocks: [] })
-      return msgs
-    })
+    const flushText = () => {
+      if (!segText) return
+      const snap = segText
+      setMessages(prev => {
+        const msgs = [...prev]
+        const last = msgs[msgs.length - 1]
+        if (!last || last.role !== 'assistant') {
+          return [...msgs, { role: 'assistant', acknowledgment: '', ackDone: true, segments: [{ type: 'text', content: snap }] }]
+        }
+        const msg = { ...last }
+        const segs = [...(msg.segments || [])]
+        if (segs.length > 0 && segs[segs.length - 1].type === 'text') {
+          segs[segs.length - 1] = { ...segs[segs.length - 1], content: snap }
+        } else {
+          segs.push({ type: 'text', content: snap })
+        }
+        msg.segments = segs
+        msgs[msgs.length - 1] = msg
+        return msgs
+      })
+    }
 
     try {
       const res = await fetch('/api/agent', {
@@ -165,7 +179,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
           try { data = JSON.parse(eventData) } catch { continue }
 
           if (eventType === 'acknowledgment') {
-            setMessages(prev => [...prev, { role: 'assistant', acknowledgment: data.sentence || '', ackDone: true, content: '', thinkingBlocks: [] }])
+            setMessages(prev => [...prev, { role: 'assistant', acknowledgment: data.sentence || '', ackDone: true, segments: [] }])
             setLoading(false)
 
           } else if (eventType === 'thinking_step_start') {
@@ -177,20 +191,31 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             setActiveStepId(data.step_id)
             setActiveSeqId(seqId)
             const newStep = { id: data.step_id, label: data.label, detail: '', isComplete: false }
+            const pendingText = isNewSeq ? segText : ''
+            if (isNewSeq) segText = ''
             setMessages(prev => {
               const msgs = [...prev]
               if (msgs.length === 0 || msgs[msgs.length - 1].role !== 'assistant') {
-                msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, content: '', thinkingBlocks: [] })
+                msgs.push({ role: 'assistant', acknowledgment: '', ackDone: true, segments: [] })
               }
               const last = { ...msgs[msgs.length - 1] }
-              const blocks = [...(last.thinkingBlocks || [])]
+              const segs = [...(last.segments || [])]
               if (isNewSeq) {
-                blocks.push({ seqId, steps: [newStep], isComplete: false, isOpen: true })
+                if (pendingText) {
+                  if (segs.length > 0 && segs[segs.length - 1].type === 'text') {
+                    segs[segs.length - 1] = { ...segs[segs.length - 1], content: pendingText }
+                  } else {
+                    segs.push({ type: 'text', content: pendingText })
+                  }
+                }
+                segs.push({ type: 'thinking', seqId, steps: [newStep], isComplete: false, isOpen: true })
               } else {
-                const bi = blocks.length - 1
-                if (bi >= 0) blocks[bi] = { ...blocks[bi], steps: [...blocks[bi].steps, newStep] }
+                const si = segs.length - 1
+                if (si >= 0 && segs[si].type === 'thinking') {
+                  segs[si] = { ...segs[si], steps: [...segs[si].steps, newStep] }
+                }
               }
-              last.thinkingBlocks = blocks
+              last.segments = segs
               msgs[msgs.length - 1] = last
               return msgs
             })
@@ -208,10 +233,10 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              last.thinkingBlocks = (last.thinkingBlocks || []).map(b =>
-                b.seqId === seqId
-                  ? { ...b, steps: b.steps.map(s => s.id === data.step_id ? { ...s, detail: committed || s.detail, isComplete: true } : s) }
-                  : b
+              last.segments = (last.segments || []).map(s =>
+                s.type === 'thinking' && s.seqId === seqId
+                  ? { ...s, steps: s.steps.map(st => st.id === data.step_id ? { ...st, detail: committed || st.detail, isComplete: true } : st) }
+                  : s
               )
               msgs[msgs.length - 1] = last
               return msgs
@@ -223,8 +248,8 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             setMessages(prev => {
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
-              last.thinkingBlocks = (last.thinkingBlocks || []).map(b =>
-                b.seqId === seqId ? { ...b, isComplete: true } : b
+              last.segments = (last.segments || []).map(s =>
+                s.type === 'thinking' && s.seqId === seqId ? { ...s, isComplete: true } : s
               )
               msgs[msgs.length - 1] = last
               return msgs
@@ -232,7 +257,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
 
           } else if (eventType === 'text') {
             if (!streamingStarted) { streamingStarted = true; setLoading(false); setIsStreaming(true) }
-            fullText += (data.delta || '').replace(/�/g, '')
+            segText += (data.delta || '').replace(/�/g, '')
             const now = Date.now()
             if (now - lastFlushTime >= 50) { lastFlushTime = now; flushText() }
 
@@ -269,11 +294,11 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
         }
       }
 
-      if (fullText) flushText()
+      if (segText) flushText()
 
     } catch (err) {
       if (err.name !== 'AbortError') {
-        setMessages(prev => [...prev, { role: 'assistant', acknowledgment: '', ackDone: true, thinkingBlocks: [], content: err.message || 'Something went wrong. Please try again.' }])
+        setMessages(prev => [...prev, { role: 'assistant', acknowledgment: '', ackDone: true, segments: [{ type: 'text', content: err.message || 'Something went wrong. Please try again.' }] }])
       }
     } finally {
       setIsStreaming(false)
