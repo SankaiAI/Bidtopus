@@ -31,85 +31,64 @@ log = logging.getLogger(__name__)
 # ── Background task ───────────────────────────────────────────────────────────
 
 def _post_contract_background(contract_id: str) -> None:
-    """Run underwriting + agent offer after negotiation finalizes (own DB session)."""
+    """Run underwriting + agent offer silently after negotiation finalizes.
+
+    Background work must NOT publish to the event bus — internal processing
+    must never leak into the user-facing workspace stream.  Results are stored
+    in the DB and surfaced as a single summary agent message when complete.
+    """
     db = SessionLocal()
-    sequence_id = str(uuid.uuid4())
     try:
         contract = repo.get_contract(db, contract_id)
         if contract is None or contract.status != "Created":
-            log.warning("post_contract_bg: unexpected state contract=%s status=%s", contract_id, getattr(contract, "status", None))
+            log.warning("post_contract_bg: unexpected state contract=%s status=%s",
+                        contract_id, getattr(contract, "status", None))
             return
 
-        # ── Underwriting ──────────────────────────────────────────────────────
-        uw_label = "Running final ML underwriting assessment..."
-        event_bus.publish(contract_id, "thinking_step_start", {
-            "step_id": "post_underwrite",
-            "label": uw_label,
-            "thinking_sequence_id": sequence_id,
-        })
+        # ── Underwriting (silent) ─────────────────────────────────────────────
         log.info("post_contract_bg: starting underwriting contract=%s", contract_id)
-        uw_detail_parts: list[str] = []
+        prob = risk = rec = None
+        roas_range: list = []
         try:
             uw = contract_service.run_underwriting(db, contract)
-            prob = uw.get("success_probability", 0)
-            risk = uw.get("risk_level", "unknown")
-            rec = uw.get("recommendation", "unknown")
+            prob = uw.get("success_probability")
+            risk = uw.get("risk_level")
+            rec  = uw.get("recommendation")
             roas_range = uw.get("expected_roas_range", [])
-            lines = [
-                f"Success probability: {prob:.0%}",
-                f"Risk level: {risk}",
-                f"Recommendation: {rec}",
-            ]
-            if len(roas_range) >= 2:
-                lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
-            detail = "\n".join(lines)
-            uw_detail_parts.append(detail)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": detail})
+            log.info("post_contract_bg: underwriting done contract=%s prob=%.0f%% risk=%s rec=%s",
+                     contract_id, (prob or 0) * 100, risk, rec)
         except Exception:
             log.exception("post_contract_bg: underwriting failed contract=%s", contract_id)
-            fallback = "Underwriting completed with defaults."
-            uw_detail_parts.append(fallback)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
-        messages_repo.append(
-            db, contract_id, "agent", "thinking_step",
-            content="\n".join(uw_detail_parts),
-            extra={"step_id": "post_underwrite", "label": uw_label, "thinking_sequence_id": sequence_id, "is_complete": True},
-        )
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "post_underwrite", "thinking_sequence_id": sequence_id})
 
-        # ── Agent offer ───────────────────────────────────────────────────────
+        # ── Agent offer (silent) ──────────────────────────────────────────────
         contract = repo.get_contract(db, contract_id)
-        offer_label = "Generating negotiated offer..."
-        event_bus.publish(contract_id, "thinking_step_start", {
-            "step_id": "agent_offer",
-            "label": offer_label,
-            "thinking_sequence_id": sequence_id,
-        })
         log.info("post_contract_bg: generating agent offer contract=%s", contract_id)
-        offer_detail_parts: list[str] = []
         try:
-            def on_offer_reasoning(text: str):
-                offer_detail_parts.append(text)
-                event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
-
-            contract_service.generate_agent_offer(db, contract, on_reasoning=on_offer_reasoning)
+            contract_service.generate_agent_offer(db, contract, on_reasoning=None)
         except Exception:
             log.exception("post_contract_bg: agent offer failed contract=%s", contract_id)
-            fallback = "Offer generated with default terms."
-            offer_detail_parts.append(fallback)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": fallback})
-        messages_repo.append(
-            db, contract_id, "agent", "thinking_step",
-            content="".join(offer_detail_parts),
-            extra={"step_id": "agent_offer", "label": offer_label, "thinking_sequence_id": sequence_id, "is_complete": True},
-        )
-        event_bus.publish(contract_id, "thinking_step_end", {"step_id": "agent_offer", "thinking_sequence_id": sequence_id})
 
-        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
+        # ── Single user-facing summary message ────────────────────────────────
+        lines = ["**Your contract is confirmed and ready to fund!**\n"]
+        if prob is not None:
+            lines.append(f"Our ML model shows **{prob:.0%} success probability** "
+                         f"with **{risk or 'unknown'} risk**.")
+        if len(roas_range) >= 2:
+            lines.append(f"Expected ROAS: **{roas_range[0]:.2f}×–{roas_range[1]:.2f}×** "
+                         f"(your target: {getattr(contract, 'threshold', '?')}×).")
+        lines.append("\nFund the escrow to launch your campaign — "
+                     "I'll start optimizing immediately once it's live.")
+        summary = "\n".join(lines)
+
+        messages_repo.append(db, contract_id, "agent", "message", content=summary)
+        event_bus.publish(contract_id, "message", {
+            "role": "agent",
+            "type": "message",
+            "content": summary,
+        })
         log.info("post_contract_bg: complete contract=%s", contract_id)
     except Exception:
         log.exception("post_contract_bg: failed contract=%s", contract_id)
-        event_bus.publish(contract_id, "thinking_end", {"thinking_sequence_id": sequence_id})
     finally:
         db.close()
 

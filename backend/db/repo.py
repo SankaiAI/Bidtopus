@@ -92,6 +92,8 @@ def finalize_negotiating_contract(
     campaign_goal: str = "",
 ) -> PerformanceContract:
     contract = get_contract(db, contract_id)
+    if contract.status != "Negotiating":
+        raise ValueError(f"Cannot finalize contract in status '{contract.status}' — already finalized or invalid state")
     contract.status = "Created"
     contract.threshold = threshold
     contract.minimum_spend = minimum_spend
