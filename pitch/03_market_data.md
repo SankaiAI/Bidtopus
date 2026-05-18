@@ -73,7 +73,7 @@
 | Average monthly Meta spend (ecommerce) | $7,227/month | Proven SaaS | https://proven-saas.com/benchmarks/facebook-ads-spend | 2026 |
 | AI marketing tool market size | $20.44 billion | Grand View Research | https://www.grandviewresearch.com/industry-analysis/artificial-intelligence-marketing-market-report | 2024 |
 | AI marketing tool CAGR (to $82.23B by 2030) | 25.0% | Grand View Research | https://www.grandviewresearch.com/press-release/global-artificial-intelligence-ai-marketing-market | 2025–2030 |
-| Active Shopify stores globally | 5.54 million | DemandSage | https://www.demandsage.com/shopify-statistics/ | 2025 |
+| Meta Advantage+ shopping run-rate (70% YoY growth) | $20B+ | Meta Q4 2024 earnings | https://investor.atmeta.com/investor-news/press-release-details/2025/Meta-Reports-Fourth-Quarter-and-Full-Year-2024-Results/ | 2024 |
 
 ---
 

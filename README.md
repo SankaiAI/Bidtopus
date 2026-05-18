@@ -1,6 +1,6 @@
 # OutcomeX
 
-**Performance-paid AI agent for Meta Ads. Merchants pay only when the agent delivers the contracted ROAS. Settled in USDC on Arc.**
+**Performance-paid AI agent for Meta Ads. Brands pay only when the agent delivers the contracted ROAS. Settled in USDC on Arc.**
 
 Agora Agents Hackathon · Canteen × Circle · May 11–25, 2026
 

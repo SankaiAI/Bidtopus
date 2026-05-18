@@ -88,7 +88,9 @@ All LLM outputs used in decisions must be structured JSON, validated by the back
 
 ### 4.2 LLM Contract Negotiation Layer
 
-**Primary question:** "How do I explain this underwriting result to the merchant and what do I offer?"
+**Primary question:** "How do I explain this underwriting result to the brand and what do I offer?"
+
+**Required during negotiation:** The agent must collect the brand's **Meta Ads Account ID** (format: `act_XXXXXXXXX`) and optionally their **Business Manager ID** before the contract is finalized. These are required for the MCP data pull in strategy generation (4.3). The agent should ask for them naturally during the negotiation conversation if not already provided in `account_context`.
 
 **Inputs:** The full underwriting output from 4.1 plus the original contract request.
 
@@ -123,7 +125,16 @@ All LLM outputs used in decisions must be structured JSON, validated by the back
 
 **Primary question:** "What Meta Ads strategy should I run to hit the contracted target?"
 
-**Inputs:** Approved contract terms (target ROAS, spend floor, time window, campaign mode) and merchant ad account context.
+**Step 1 — MCP data pull (before LLM is called):** Use the Meta Ads MCP to read the brand's existing account data:
+- Active and recent campaigns (objectives, status, spend, ROAS)
+- Ad set audience performance (reach, CTR, ROAS by audience segment)
+- Pixel events (purchase events, conversion rates)
+- Creative performance (top-performing ads by ROAS)
+- Current spend pacing vs. daily budget
+
+This data is passed as structured context to the LLM. The strategy is built from the brand's actual account, not generic templates. If MCP is unavailable, fall back to the mock adapter.
+
+**Inputs:** Approved contract terms (target ROAS, spend floor, time window, campaign mode) + MCP-pulled account data (campaigns, audiences, pixel events, creative performance).
 
 **Outputs (structured JSON):**
 ```json
@@ -354,9 +365,9 @@ The `account_context` JSON field is merchant-controlled and passed to the Meta A
 ```python
 class AccountContext(BaseModel):
     model_config = ConfigDict(extra="forbid")  # reject unknown keys
-    account_id:  str
-    pixel_id:    str | None = None
-    ad_account:  str | None = None
+    meta_ads_account_id:    str           # required — format: act_XXXXXXXXX
+    business_manager_id:    str | None = None
+    pixel_id:               str | None = None
     # No free-text fields that could carry injected instructions
 ```
 

@@ -32,7 +32,7 @@ sequenceDiagram
     participant Arc/Meta
 
     Note over Merchant,OutcomeX: 1. NEGOTIATE
-    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"
+    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"\n+ Meta Ads Account ID / Business Manager ID
     OutcomeX->>OutcomeX: Claude negotiates & locks terms
     Note right of OutcomeX: Contract created
 
@@ -50,7 +50,9 @@ sequenceDiagram
     Note right of Arc/Meta: fund tx_hash [on-chain ✓]
 
     Note over Merchant,OutcomeX: 5. STRATEGY GENERATION
-    OutcomeX-->>Merchant: Strategy plan<br/>(campaign structure, audiences, budget)
+    OutcomeX->>Arc/Meta: Meta Ads MCP → read existing campaigns,<br/>pixel events, audience performance
+    Arc/Meta-->>OutcomeX: Real account data
+    OutcomeX-->>Merchant: Data-driven strategy plan<br/>(built from your actual account, not generic templates)
     Note over Merchant,OutcomeX: 6. MERCHANT APPROVES
     Merchant->>OutcomeX: Approve strategy
 
@@ -83,7 +85,7 @@ flowchart TD
 
     D2["**Decision 2 — LLM Negotiates**\nClaude with extended thinking reasons about fee vs. risk vs. window\n→ 'Accept at 2.0x ROAS. Here's why...'\n→ reasoning streamed live to merchant\n→ accept / counteroffer / reject"]
 
-    D3["**Decision 3 — LLM Strategizes**\nBuilds Meta Ads plan with extended thinking\n→ 'Retargeting, $75/day, warm audiences'\n→ merchant approves before any action"]
+    D3["**Decision 3 — LLM Strategizes**\nMCP reads existing campaigns + pixel + audience data first\nBuilds data-driven Meta Ads plan with extended thinking\n→ 'Your warm 30d audience has 2.1x ROAS — scale it, cut cold interest'\n→ brand approves before any action"]
 
     D4["**Decision 4 — ML Forecasts Live** *(every 24h)*\nExtrapolates ROAS trajectory from live data\n→ 'Day 4: ROAS 1.9x, on track for 2.2x by day 7'\n→ on_track / at_risk / off_track"]
 
@@ -145,8 +147,12 @@ A $100 USDC success fee contract on Ethereum mainnet loses 5–30% to gas before
 
 ```mermaid
 flowchart LR
-    subgraph Input["Merchant Input"]
-        I["target_roas: 2.0\nmin_spend: $500\ntime_window: 7 days\ncampaign_mode: new\nhist_roas_7d: 1.8\navg_daily_spend: $80"]
+    subgraph Input["Brand Input"]
+        I["target_roas: 2.0\nmin_spend: $500\ntime_window: 7 days\ncampaign_mode: optimize\nmeta_ads_account_id: act_123\nhist_roas_7d: 1.8\navg_daily_spend: $80"]
+    end
+
+    subgraph MCP["Meta Ads MCP (Strategy only)"]
+        MC["Read existing campaigns\nPixel events · Audience ROAS\nCreative performance · Spend pacing"]
     end
 
     subgraph ML["ML Layer"]
@@ -162,12 +168,15 @@ flowchart LR
     end
 
     Input --> ML --> LLM
+    MCP --> LLM
 
-    WHY1["Why ML, not rules:\nGeneralizes across merchant\nhistories to price forward\nrisk on unseen contract configs"]
+    WHY1["Why ML, not rules:\nGeneralizes across brand\nhistories to price forward\nrisk on unseen contract configs"]
     WHY2["Why LLM, not rules:\nExplains tradeoffs in plain\nlanguage and reasons about\nwhat terms make sense"]
+    WHYMC["Why MCP:\nStrategy built on real account\ndata — not generic templates.\n'Your warm 30d audience has\n2.1x ROAS. Scale it.'"]
 
     ML --- WHY1
     LLM --- WHY2
+    MCP --- WHYMC
 
     style WHY1 fill:#f8f9fa,stroke:#adb5bd
     style WHY2 fill:#f8f9fa,stroke:#adb5bd

@@ -35,15 +35,15 @@ The frontend must support this exact demo script end-to-end without any broken s
 
 | Scene | What the screen shows |
 |---|---|
-| 1. Contract creation | Merchant fills in: ROAS >= 2.0, $500 min spend, 7 days, 100 USDC fee |
+| 1. Contract creation | Brand fills in: ROAS >= 2.0, $500 min spend, 7 days, 100 USDC fee + Meta Ads Account ID (act_123) |
 | 2. Underwriting | ML result: 68% success probability. Agent accepts. |
-| 3. Escrow | Merchant funds 100 USDC into Arc escrow. Status → Funded. |
-| 4. Strategy approval | Agent proposes retargeting plan. Merchant approves. Ads execute. |
+| 3. Escrow | Brand funds 100 USDC into Arc escrow. Status → Funded. |
+| 4. Strategy approval | Agent pulls live campaign data via MCP, proposes data-driven plan ("your warm 30d audience has 2.1x ROAS — scaling it"). Brand approves. Ads execute. |
 | 5. Monitoring | Dashboard: $318 spent, ROAS 1.86, 3 days left, 61% success probability |
 | 6. Resolution | Final: $545 spend, $1,226 revenue, ROAS 2.25 → success |
 | 7. Settlement | 100 USDC released to agent. On-chain tx hash shown. |
 
-**Final demo line the UI should support:** "The merchant paid nothing for advice. The agent earned only because it delivered the contracted marketing outcome."
+**Final demo line the UI should support:** "The brand paid nothing for advice. The agent earned only because it delivered the contracted marketing outcome."
 
 ---
 

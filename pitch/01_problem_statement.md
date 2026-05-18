@@ -4,10 +4,10 @@
 
 ## Act 1 — The Broken Status Quo
 
-Start with a number that stops the room: **75.8% of ecommerce merchants lose money on Meta Ads.**
+Start with a number that stops the room: **75.8% of brands running Meta Ads lose money on it.**
 
 The median ROAS in 2024 was **2.04x** — and most industry experts set the minimum profitable
-threshold at 3–4x, meaning the *average* Meta Ads merchant is operating below breakeven.
+threshold at 3–4x, meaning the *average* Meta Ads brand is operating below breakeven.
 CPM climbed **20% year-over-year** in 2025. Cost per lead climbed **21%**. The platform is
 getting more expensive and less reliable every quarter.
 
@@ -21,7 +21,30 @@ not the exception.
 
 ---
 
-## Act 2 — The Fake Fix (AI Tools with the Same Broken Incentive)
+## Act 2 — "But Meta Already Has AI Optimization"
+
+Meta launched **Advantage+** in 2022 — automated campaigns that use Meta's own AI to optimize targeting, placements, creative rotation, and budget allocation in real time. It's genuinely good. It's table stakes now.
+
+So why does the problem still exist?
+
+**Advantage+ optimizes execution. It does not guarantee outcomes.**
+
+A brand can run a perfectly optimized Advantage+ campaign and still get a 0.8x ROAS. Meta earns the same $10,000 in ad spend whether the ROAS is 0.5x or 3x. There is no risk-sharing. There is no refund.
+
+This is structural: Meta's revenue model is ad spend, not merchant outcomes. Tying their earnings to ROAS would destroy their P&L. The gap is permanent.
+
+**OutcomeX doesn't compete with Advantage+. It sits on top of it.**
+
+The agent uses Meta's MCP to read the brand's existing campaigns, pixel events, and audience performance before generating strategy. Advantage+ is the execution engine. OutcomeX adds the one layer Meta will never offer: *a financial guarantee backed by USDC escrow.*
+
+> The pitch is not "we optimize better than Meta." It's "Meta optimizes the ads. OutcomeX guarantees the result or you don't pay."
+
+> Sources: Meta Advantage+ product page; Meta Q4 2024 earnings ($20B+ run-rate for Advantage+ shopping);
+> Meta for Business blog (iOS 14.5 and ATT as the driver for on-platform AI shift, 2021).
+
+---
+
+## Act 4 — The Fake Fix (AI Tools with the Same Broken Incentive)
 
 The market's answer was a wave of AI ad management tools: Madgicx, Revealbot, Ryze AI,
 AdAmigo, Albert. All promise better performance. All charge you whether they deliver it or not.
@@ -44,7 +67,7 @@ charge the same way: upfront, regardless of outcome.
 
 ---
 
-## Act 3 — The Actual Problem: Incentives, Not Technology
+## Act 5 — The Actual Problem: Incentives, Not Technology
 
 Traditional agencies charge **10–20% of your ad spend**. When they recommend spending $100k
 instead of $50k, they earn twice as much — whether or not the extra $50k generated any return.
@@ -75,7 +98,7 @@ incentive problem.
 
 ---
 
-## Act 4 — Why You Can't Fix This with a Better SaaS Tool
+## Act 6 — Why You Can't Fix This with a Better SaaS Tool
 
 Performance-based pricing sounds simple. It creates three hard problems that no existing tool
 has solved together:
@@ -102,7 +125,7 @@ not on any single threshold being crossed.
 
 ---
 
-## Act 5 — Why Each Piece of OutcomeX Is Necessary
+## Act 7 — Why Each Piece of OutcomeX Is Necessary
 
 ### Why USDC Escrow on Arc
 The trust problem cannot be solved with a promise. It requires a third party that neither
@@ -153,8 +176,9 @@ in plain language, with extended thinking to reason about fee vs. risk vs. windo
 ## The One-Sentence Version
 
 > **OutcomeX is the first AI marketing agent that puts its own USDC at risk — it underwrites
-> your Meta Ads contract using ML, executes the campaign autonomously, and only earns its fee
-> when it delivers your target ROAS.**
+> your Meta Ads contract using ML, reads your existing campaigns via MCP to build a
+> data-driven strategy, executes it autonomously, and only earns its fee when it delivers
+> your target ROAS.**
 
 ---
 
@@ -179,15 +203,21 @@ execution + trustless USDC escrow — that intersection does not exist in any pr
 Three forces converging:
 
 1. **Meta Ads is getting harder.** CPMs up 20% YoY. iOS attribution broken post-ATT.
-   Merchants are being squeezed and they know it.
+   Brands are being squeezed and they know it.
 
-2. **The market is already moving to performance models.** 58% of mobile ad budgets globally
+2. **Meta's own AI (Advantage+) is now mature — and that's a tailwind, not a threat.**
+   Post-iOS 14.5, Meta had to shift from cross-app tracking to on-platform AI. That forced
+   them to build Advantage+, which is genuinely good at execution. OutcomeX builds on top of
+   it via MCP — the strategy layer reads real campaign data before making a single decision.
+   Meta did the hard AI work. OutcomeX adds the guarantee layer Meta will never offer.
+
+3. **The market is already moving to performance models.** 58% of mobile ad budgets globally
    shifted to performance contracts in 2024. Performance marketing grew **+49.8% from 2021–2024**
    (2x faster than ecommerce overall) and drove **$113 billion in ecommerce sales.**
 
-3. **The infrastructure just became available.** Sub-second finality on Arc. USDC as
+4. **The infrastructure just became available.** Sub-second finality on Arc. USDC as
    programmable settlement layer. Claude with extended thinking for complex negotiation and
-   strategy. None of this was viable three years ago.
+   strategy. Meta Ads MCP for real-time campaign data. None of this was viable three years ago.
 
 > The key unlock: Arc's ~$0.01 fees make small-contract performance pricing work for the first
 > time. A $100 USDC contract settled on Ethereum mainnet would cost $5–30 in gas — destroying
