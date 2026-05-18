@@ -19,10 +19,15 @@ contract PerformanceEscrow {
         Status status;
     }
 
+    /// @dev Merchant can call merchantEmergencyRefund() after this delay if settler has not acted.
+    uint256 public constant EMERGENCY_REFUND_DELAY = 30 days;
+
     IERC20 public immutable usdc;
     address public immutable settler;
 
     mapping(bytes32 => Escrow) public escrows;
+    /// @dev Tracks when each escrow was funded, used to enforce the emergency refund delay.
+    mapping(bytes32 => uint256) public fundedAt;
 
     event Funded(
         bytes32 indexed contractId,
@@ -38,6 +43,13 @@ contract PerformanceEscrow {
         uint256 timestamp
     );
     event Refunded(
+        bytes32 indexed contractId,
+        address merchant,
+        uint256 amount,
+        uint256 timestamp
+    );
+    /// @dev Emitted when the merchant reclaims funds via the emergency path after the delay.
+    event EmergencyRefunded(
         bytes32 indexed contractId,
         address merchant,
         uint256 amount,
@@ -79,13 +91,14 @@ contract PerformanceEscrow {
             amount: amount,
             status: Status.Funded
         });
+        fundedAt[contractId] = block.timestamp;
 
         emit Funded(contractId, merchant, agent, amount, block.timestamp);
 
         usdc.safeTransferFrom(merchant, address(this), amount);
     }
 
-    /// @notice Release escrowed USDC to the agent (success path).
+    /// @notice Release escrowed USDC to the agent (success path). Settler only.
     function release(bytes32 contractId) external onlySetter {
         Escrow storage e = escrows[contractId];
         require(e.status == Status.Funded, "Not funded or already settled");
@@ -100,7 +113,7 @@ contract PerformanceEscrow {
         usdc.safeTransfer(agent, amount);
     }
 
-    /// @notice Refund escrowed USDC to the merchant (failure path).
+    /// @notice Refund escrowed USDC to the merchant (failure path). Settler only.
     function refund(bytes32 contractId) external onlySetter {
         Escrow storage e = escrows[contractId];
         require(e.status == Status.Funded, "Not funded or already settled");
@@ -111,6 +124,28 @@ contract PerformanceEscrow {
         address merchant = e.merchant;
 
         emit Refunded(contractId, merchant, amount, block.timestamp);
+
+        usdc.safeTransfer(merchant, amount);
+    }
+
+    /// @notice Emergency escape hatch: merchant reclaims USDC if settler has not acted within
+    ///         EMERGENCY_REFUND_DELAY (30 days) of funding. Prevents permanent fund lock if the
+    ///         settler service fails or keys are lost.
+    function merchantEmergencyRefund(bytes32 contractId) external {
+        Escrow storage e = escrows[contractId];
+        require(e.status == Status.Funded, "Not funded or already settled");
+        require(msg.sender == e.merchant, "Only merchant can call emergency refund");
+        require(
+            block.timestamp >= fundedAt[contractId] + EMERGENCY_REFUND_DELAY,
+            "Emergency refund delay not elapsed"
+        );
+
+        // Check-Effects-Interactions
+        e.status = Status.Refunded;
+        uint256 amount = e.amount;
+        address merchant = e.merchant;
+
+        emit EmergencyRefunded(contractId, merchant, amount, block.timestamp);
 
         usdc.safeTransfer(merchant, amount);
     }

@@ -162,25 +162,41 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
         )
 
     def release(self, contract_id: str, amount_usdc: float) -> SettlementResult:
+        # Pre-flight: verify on-chain status before touching Circle API.
+        # Catches DB/chain drift and prevents a confusing Circle error if already settled.
+        current = self.get_status(contract_id)
+        if current.status != "funded":
+            raise ArcError(
+                f"Cannot release: escrow {contract_id} is '{current.status}', expected 'funded'"
+            )
+
         bytes32_id = _contract_id_to_bytes32(contract_id)
         logger.info("arc_escrow_release", contract_id=contract_id, contract_address=self._address)
 
-        tx_hash, recipient = self._execute_contract(
+        tx_hash, _ = self._execute_contract(
             abi_function_signature="release(bytes32)",
             abi_parameters=[bytes32_id],
             action="release",
+            contract_id=contract_id,
+            expected_post_status="released",
         )
 
-        # After release, the recipient is the agent wallet address
         agent_address = self._get_agent_wallet_address()
         return SettlementResult(
             action="release",
             tx_hash=tx_hash,
-            amount_usdc=amount_usdc,
+            amount_usdc=current.amount_usdc or amount_usdc,
             recipient_address=agent_address,
         )
 
     def refund(self, contract_id: str, amount_usdc: float) -> SettlementResult:
+        # Pre-flight: verify on-chain status before touching Circle API.
+        current = self.get_status(contract_id)
+        if current.status != "funded":
+            raise ArcError(
+                f"Cannot refund: escrow {contract_id} is '{current.status}', expected 'funded'"
+            )
+
         bytes32_id = _contract_id_to_bytes32(contract_id)
         logger.info("arc_escrow_refund", contract_id=contract_id, contract_address=self._address)
 
@@ -188,14 +204,14 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
             abi_function_signature="refund(bytes32)",
             abi_parameters=[bytes32_id],
             action="refund",
+            contract_id=contract_id,
+            expected_post_status="refunded",
         )
 
-        # Recipient is the merchant; their address is stored on-chain.
-        # We return a placeholder — the on-chain event has the real address.
         return SettlementResult(
             action="refund",
             tx_hash=tx_hash,
-            amount_usdc=amount_usdc,
+            amount_usdc=current.amount_usdc or amount_usdc,
             recipient_address="on-chain-merchant",
         )
 
@@ -204,11 +220,15 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
         abi_function_signature: str,
         abi_parameters: list,
         action: str,
+        contract_id: str,
+        expected_post_status: str,
     ) -> tuple[str, str]:
         """Submit a contract execution via Circle Wallets API and wait for confirmation.
 
         Returns (tx_hash, state).
         Arc has sub-second finality, so polling converges quickly.
+        Falls back to on-chain status check on Circle poll timeout so we never
+        falsely fail when the tx actually landed.
         """
         idempotency_key = str(uuid.uuid4())
         resp = self._circle.post(
@@ -233,17 +253,30 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
         transaction_id = resp.json()["data"]["id"]
         logger.info("arc_circle_tx_initiated", action=action, transaction_id=transaction_id)
 
-        tx_hash = self._wait_for_confirmation(transaction_id, action)
+        tx_hash = self._wait_for_confirmation(
+            transaction_id, action, contract_id, expected_post_status
+        )
         return tx_hash, "confirmed"
 
-    def _wait_for_confirmation(self, transaction_id: str, action: str) -> str:
-        """Poll Circle until the transaction is confirmed, then return its on-chain tx hash."""
+    def _wait_for_confirmation(
+        self,
+        transaction_id: str,
+        action: str,
+        contract_id: str,
+        expected_post_status: str,
+    ) -> str:
+        """Poll Circle until confirmed. On timeout, falls back to on-chain status check.
+
+        Arc has sub-second finality, so Circle confirmation usually arrives in 1-2 polls.
+        The on-chain fallback handles the rare case where Circle's API is slow but the
+        transaction actually landed — prevents falsely raising ArcError after a real settlement.
+        """
         deadline = time.time() + _CIRCLE_POLL_TIMEOUT_SECS
         while time.time() < deadline:
             resp = self._circle.get(f"{_CIRCLE_TX_PATH}/{transaction_id}")
             if resp.status_code >= 400:
                 raise ArcError(
-                    f"Circle transaction poll failed ({resp.status_code}): {resp.text[:200]}"
+                    f"Circle transaction poll failed ({resp.status_code}): {resp.text[:300]}"
                 )
 
             tx_data = resp.json()["data"]["transaction"]
@@ -261,14 +294,37 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
 
             if state in ("FAILED", "DENIED", "CANCELLED"):
                 raise ArcError(
-                    f"Circle transaction {transaction_id} ended in state {state} for action={action}"
+                    f"Circle transaction {transaction_id} ended in state '{state}' "
+                    f"for action={action}. Full response: {resp.text[:500]}"
                 )
 
             time.sleep(_CIRCLE_POLL_INTERVAL_SECS)
 
+        # Circle timed out — check on-chain directly before giving up.
+        # The tx may have confirmed on Arc while Circle's API was slow.
+        logger.warning(
+            "arc_circle_poll_timeout_fallback",
+            action=action,
+            transaction_id=transaction_id,
+            contract_id=contract_id,
+        )
+        on_chain = self.get_status(contract_id)
+        if on_chain.status == expected_post_status:
+            # Transaction landed on-chain; Circle just hasn't caught up yet.
+            logger.info(
+                "arc_circle_fallback_confirmed_on_chain",
+                action=action,
+                contract_id=contract_id,
+                status=on_chain.status,
+            )
+            # Return Circle transaction ID as a stand-in hash — real tx hash
+            # is in the on-chain event log, but we don't have it here.
+            return f"circle-tx:{transaction_id}"
+
         raise ArcError(
             f"Circle transaction {transaction_id} did not confirm within "
-            f"{_CIRCLE_POLL_TIMEOUT_SECS}s for action={action}"
+            f"{_CIRCLE_POLL_TIMEOUT_SECS}s and on-chain status is '{on_chain.status}' "
+            f"(expected '{expected_post_status}') for action={action}"
         )
 
     def _get_agent_wallet_address(self) -> str:

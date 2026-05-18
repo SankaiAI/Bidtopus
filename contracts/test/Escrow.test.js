@@ -215,6 +215,77 @@ describe("PerformanceEscrow", function () {
     });
   });
 
+  // ── merchantEmergencyRefund() ─────────────────────────────────────────────
+
+  describe("merchantEmergencyRefund()", function () {
+    const THIRTY_DAYS = 30 * 24 * 60 * 60;
+
+    beforeEach(async function () {
+      await escrow.connect(merchant).fund(CONTRACT_ID, AMOUNT, merchant.address, agent.address);
+    });
+
+    it("returns USDC to merchant after 30-day delay", async function () {
+      const merchantBefore = await mockUsdc.balanceOf(merchant.address);
+
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS]);
+      await ethers.provider.send("evm_mine");
+
+      await escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID);
+
+      expect(await mockUsdc.balanceOf(merchant.address)).to.equal(merchantBefore + AMOUNT);
+      expect(await escrow.getStatus(CONTRACT_ID)).to.equal(3); // Refunded
+    });
+
+    it("emits EmergencyRefunded event", async function () {
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID))
+        .to.emit(escrow, "EmergencyRefunded")
+        .withArgs(CONTRACT_ID, merchant.address, AMOUNT, anyValue);
+    });
+
+    it("reverts if delay has not elapsed", async function () {
+      // Advance time to 1 second before the deadline without mining a block.
+      // The transaction itself mines at T + THIRTY_DAYS - 1, which is still < T + THIRTY_DAYS.
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS - 1]);
+
+      await expect(
+        escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID)
+      ).to.be.revertedWith("Emergency refund delay not elapsed");
+    });
+
+    it("reverts if caller is not the merchant", async function () {
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(
+        escrow.connect(other).merchantEmergencyRefund(CONTRACT_ID)
+      ).to.be.revertedWith("Only merchant can call emergency refund");
+    });
+
+    it("reverts if already settled by settler before delay elapses", async function () {
+      await escrow.connect(settler).release(CONTRACT_ID);
+
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS]);
+      await ethers.provider.send("evm_mine");
+
+      await expect(
+        escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID)
+      ).to.be.revertedWith("Not funded or already settled");
+    });
+
+    it("reverts on double emergency refund", async function () {
+      await ethers.provider.send("evm_increaseTime", [THIRTY_DAYS]);
+      await ethers.provider.send("evm_mine");
+
+      await escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID);
+      await expect(
+        escrow.connect(merchant).merchantEmergencyRefund(CONTRACT_ID)
+      ).to.be.revertedWith("Not funded or already settled");
+    });
+  });
+
   // ── multiple escrows ──────────────────────────────────────────────────────
 
   describe("multiple escrows", function () {
