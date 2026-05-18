@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     ARC_RPC_URL: str = ""
     ESCROW_CONTRACT_ADDRESS: str = ""
     CONTRACTS_OUT_DIR: str = str(Path(__file__).parent.parent / "contracts" / "out")
+    # Circle blockchain identifier for Arc — used when creating wallets on Arc testnet
+    CIRCLE_BLOCKCHAIN: str = "ARN"
 
     # ── Underwriting thresholds ───────────────────────────────────────────────
     ACCEPT_THRESHOLD: float = 0.65

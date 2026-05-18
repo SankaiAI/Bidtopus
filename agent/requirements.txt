@@ -24,6 +24,9 @@ apscheduler>=3.10.0
 # HTTP
 httpx>=0.25.0
 
+# Arc / Web3 (for on-chain reads via RPC — real adapter only, ARC_MOCK=False)
+web3>=6.0.0
+
 # MCP client (Meta Ads MCP integration)
 mcp>=1.0.0
 
