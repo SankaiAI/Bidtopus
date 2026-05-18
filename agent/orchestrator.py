@@ -331,6 +331,36 @@ def generate_strategy(
     return plan, thinking
 
 
+def generate_plan(
+    contract_id: str,
+    contract_terms: ContractTerms,
+    account_context: AccountContext,
+    contract_status: str,
+    db: Session,
+) -> tuple[StrategyPlan, str | None]:
+    """Like generate_strategy but without writing the aggregated approval_request.
+
+    Used by POST /agent/generate-plan, which writes one approval_request per action.
+    """
+    audit = AuditLogger(db)
+    _assert_valid_action(contract_status, "generate_strategy")
+
+    audit.log(contract_id, "llm_strategy", "intent", {
+        "contract_terms": contract_terms.model_dump(),
+        "account_context": account_context.model_dump(),
+    })
+
+    plan, thinking = _get_strategy_generator().generate_strategy(contract_terms, account_context)
+    audit.log(contract_id, "llm_strategy", "result", plan.model_dump())
+
+    logger.info(
+        "plan_generated",
+        contract_id=contract_id,
+        action_count=len(plan.actions),
+    )
+    return plan, thinking
+
+
 def stream_offer(
     contract_id: str,
     contract_terms: ContractTerms,

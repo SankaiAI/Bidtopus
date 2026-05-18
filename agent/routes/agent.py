@@ -91,6 +91,19 @@ class ActivateResponse(BaseModel):
     monitoring_scheduled: bool
 
 
+class GeneratePlanRequest(BaseModel):
+    contract_id: str
+    user_id: str
+    meta_ads_account_id: str | None = None
+
+
+class GeneratePlanResponse(BaseModel):
+    plan_id: str
+    action_count: int
+    approval_mode: str
+    strategy_summary: str
+
+
 class AccountContextResponse(BaseModel):
     meta_ads_account_id: str
     historical_roas_7d: float | None
@@ -351,6 +364,140 @@ def activate(body: ContractRequest, db: Session = Depends(get_db)):
 
     logger.info("request_complete", contract_id=body.contract_id, action="activate")
     return ActivateResponse(contract_id=body.contract_id, monitoring_scheduled=True)
+
+
+# ── Action-type label map ─────────────────────────────────────────────────────
+_ACTION_TYPE_MAP = {
+    "create_campaign": "campaign",
+    "create_ad_set":   "audience",
+    "set_budget":      "budget",
+    "update_targeting": "audience",
+    "pause_ad_set":    "campaign",
+}
+
+
+def _action_content(action_type: str, params: dict) -> str:
+    if action_type == "create_campaign":
+        return f"Launch {params.get('objective', 'sales')} campaign"
+    if action_type == "create_ad_set":
+        return (
+            f"Create ad set — audience: {params.get('audience', 'custom')}, "
+            f"budget: ${params.get('daily_budget_usd', 0):.0f}/day"
+        )
+    if action_type == "set_budget":
+        return f"Set daily budget to ${params.get('daily_budget_usd', 0):.0f}"
+    if action_type == "update_targeting":
+        return f"Update targeting: {params.get('targeting_description', '')}"
+    if action_type == "pause_ad_set":
+        return f"Pause ad set — {params.get('reason', 'optimisation')}"
+    return action_type
+
+
+@router.post("/generate-plan", response_model=GeneratePlanResponse)
+def generate_plan(body: GeneratePlanRequest, db: Session = Depends(get_db)):
+    """Generate a Meta Ads campaign plan and write one approval_request per action.
+
+    Status gate: Funded. Respects user.approval_mode ('manual' | 'auto').
+    Called by the backend immediately after the merchant funds escrow.
+    """
+    from sqlalchemy import text as _text
+
+    contract = _get_contract_or_404(body.contract_id, db)
+    attach_session(body.contract_id)
+    logger.info(
+        "request_received",
+        contract_id=body.contract_id,
+        action="generate_plan",
+        state=contract.status,
+        user_id=body.user_id,
+    )
+
+    if contract.status != "Funded":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Contract is not Funded (current status: {contract.status}). "
+                   "generate-plan only runs after escrow is funded.",
+        )
+
+    # Resolve approval mode — default to 'manual' if user row missing
+    approval_mode = "manual"
+    try:
+        row = db.execute(
+            _text("SELECT approval_mode FROM users WHERE id = :uid"),
+            {"uid": body.user_id},
+        ).fetchone()
+        if row and row.approval_mode:
+            approval_mode = row.approval_mode
+    except Exception as exc:
+        logger.warning("approval_mode_lookup_failed", user_id=body.user_id, error=str(exc))
+
+    # Build account context — prefer account ID passed in request body
+    account_context = _to_account_context(contract)
+    if body.meta_ads_account_id:
+        from models.types import AccountContext as _AC
+        account_context = _AC(
+            account_id=body.meta_ads_account_id,
+            pixel_id=account_context.pixel_id,
+            avg_daily_spend=account_context.avg_daily_spend,
+            historical_roas_7d=account_context.historical_roas_7d,
+            historical_roas_30d=account_context.historical_roas_30d,
+            aov=account_context.aov,
+        )
+
+    try:
+        plan, _ = orchestrator.generate_plan(
+            contract_id=body.contract_id,
+            contract_terms=_to_contract_terms(contract),
+            account_context=account_context,
+            contract_status=contract.status,
+            db=db,
+        )
+    except Exception as e:
+        _handle_agent_error(e, body.contract_id)
+
+    plan_id = str(uuid.uuid4())
+    messages = []
+    from db.messages_repo import MessagesRepo
+    repo = MessagesRepo(db)
+
+    action_status = "auto" if approval_mode == "auto" else "pending"
+
+    for action in plan.actions:
+        ui_type = _ACTION_TYPE_MAP.get(action.type, action.type)
+        content = _action_content(action.type, action.params)
+        msg = repo.append(
+            body.contract_id,
+            role="agent",
+            type="approval_request",
+            content=content,
+            metadata={
+                "plan_id": plan_id,
+                "action_type": ui_type,
+                "title": content,
+                "detail": str(action.params),
+                "estimated_daily_spend": plan.estimated_daily_spend,
+                "expected_roas": plan.expected_roas,
+            },
+            status=action_status,
+        )
+        messages.append(str(msg.id))
+
+    db.commit()
+
+    logger.info(
+        "request_complete",
+        contract_id=body.contract_id,
+        action="generate_plan",
+        plan_id=plan_id,
+        action_count=len(plan.actions),
+        approval_mode=approval_mode,
+    )
+    return GeneratePlanResponse(
+        plan_id=plan_id,
+        action_count=len(plan.actions),
+        approval_mode=approval_mode,
+        strategy_summary=plan.strategy_summary,
+    )
 
 
 _SSE_HEADERS = {
