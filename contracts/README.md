@@ -1,5 +1,70 @@
 # OutcomeX — Contracts
 
+## How the Contract Fits Into the App
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant M  as Merchant (Frontend)
+    participant B  as Backend
+    participant A  as Agent
+    participant C  as PerformanceEscrow<br/>(Arc Testnet)
+    participant CW as Circle Wallets<br/>(Settler)
+
+    rect rgb(220, 235, 255)
+        Note over M,C: Phase 1 — Deploy (one-time, contracts team)
+        C-->>B: contracts/out/address.json + abi.json
+        C-->>A: contracts/out/address.json + abi.json
+    end
+
+    rect rgb(220, 255, 220)
+        Note over M,C: Phase 2 — Negotiation & Funding
+        M->>B: Accept agent offer
+        B->>M: Initiate escrow (contract ID, amount)
+        M->>C: approve(USDC, amount)
+        M->>C: fund(contractId, amount, merchant, agent)
+        C-->>C: Status → Funded 🔒 USDC locked
+        M->>B: POST /fund-escrow (tx_hash)
+        B->>C: Verify Funded event on-chain
+        B-->>B: Status → Funded in DB
+    end
+
+    rect rgb(255, 245, 200)
+        Note over A,CW: Phase 3 — Campaign Execution
+        A->>A: Run Meta Ads campaign
+        A->>A: Evaluate ROAS vs target
+    end
+
+    rect rgb(220, 255, 220)
+        Note over A,C: Phase 4a — Success (ROAS ≥ target)
+        A->>CW: Execute release(contractId)
+        CW->>C: release(contractId)  [settler only]
+        C-->>C: Status → Released
+        C->>A: Transfer USDC to agent wallet ✅
+        A->>B: Settlement result (tx_hash)
+        B-->>M: Show tx proof on Resolution screen
+    end
+
+    rect rgb(255, 220, 220)
+        Note over A,C: Phase 4b — Failure (ROAS < target)
+        A->>CW: Execute refund(contractId)
+        CW->>C: refund(contractId)  [settler only]
+        C-->>C: Status → Refunded
+        C->>M: Return USDC to merchant wallet 🔄
+        A->>B: Settlement result (tx_hash)
+        B-->>M: Show tx proof on Resolution screen
+    end
+
+    rect rgb(240, 220, 255)
+        Note over M,C: Phase 5 — Emergency (settler silent > 30 days)
+        M->>C: merchantEmergencyRefund(contractId)
+        C-->>C: Status → Refunded
+        C->>M: Return USDC to merchant wallet 🛡️
+    end
+```
+
+---
+
 ## Purpose
 The contracts folder contains the on-chain smart contract that powers the escrow and settlement mechanics. This is what makes OutcomeX trustless: neither the merchant nor the agent can move funds unilaterally — the contract enforces the agreed terms, immutably, on Arc.
 
