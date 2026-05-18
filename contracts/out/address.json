@@ -1,0 +1,10 @@
+{
+  "address": "0xfc1c0ede47a43A38c4335ed60C64A133433Ee6c8",
+  "network": "arc",
+  "chainId": "5042002",
+  "deployTxHash": "0x3c3604359dcbe277b9993e0fd70c5c2f97113641959df8eedb3803ebe9eaaf90",
+  "blockNumber": 42899728,
+  "deployedAt": "2026-05-18T21:02:42.169Z",
+  "settler": "0x4afd41589f5923b9e1377e1943ac0b924296d3bd",
+  "usdc": "0x3600000000000000000000000000000000000000"
+}

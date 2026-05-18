@@ -94,6 +94,32 @@ def _load_address() -> str:
     return data["address"]
 
 
+def _fresh_ciphertext() -> str:
+    """Encrypt ENTITY_SECRET with Circle's public RSA key. Must be called fresh per request."""
+    import base64
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
+
+    entity_secret = bytes.fromhex(settings.ENTITY_SECRET)
+    resp = httpx.get(
+        f"{settings.CIRCLE_BASE_URL}/config/entity/publicKey",
+        headers={"Authorization": f"Bearer {settings.CIRCLE_API_KEY}"},
+        timeout=10.0,
+    )
+    if resp.status_code >= 400:
+        raise ArcError(f"Failed to fetch Circle public key: {resp.status_code}")
+    public_key = serialization.load_pem_public_key(resp.json()["data"]["publicKey"].encode())
+    ciphertext = public_key.encrypt(
+        entity_secret,
+        asym_padding.OAEP(
+            mgf=asym_padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None,
+        ),
+    )
+    return base64.b64encode(ciphertext).decode()
+
+
 def _contract_id_to_bytes32(contract_id: str) -> str:
     """Convert a string contract ID (e.g. UUID) to a bytes32 hex string.
 
@@ -122,6 +148,8 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
             raise ArcError("CIRCLE_API_KEY is required when ARC_MOCK=False")
         if not settings.AGENT_WALLET_ID:
             raise ArcError("AGENT_WALLET_ID (settler Circle wallet) required when ARC_MOCK=False")
+        if not settings.ENTITY_SECRET:
+            raise ArcError("ENTITY_SECRET is required when ARC_MOCK=False")
 
         try:
             from web3 import Web3
@@ -239,6 +267,7 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
                 "contractAddress": self._address,
                 "abiFunctionSignature": abi_function_signature,
                 "abiParameters": abi_parameters,
+                "entitySecretCiphertext": _fresh_ciphertext(),
                 "fee": {
                     "type": "level",
                     "config": {"feeLevel": "MEDIUM"},

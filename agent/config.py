@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     CIRCLE_API_KEY: str = ""
     CIRCLE_WALLET_SET_ID: str = ""
     AGENT_WALLET_ID: str = ""
+    ENTITY_SECRET: str = ""
     CIRCLE_BASE_URL: str = "https://api.circle.com/v1/w3s"
 
     # ── Arc / Web3 ────────────────────────────────────────────────────────────
@@ -36,7 +37,7 @@ class Settings(BaseSettings):
     ESCROW_CONTRACT_ADDRESS: str = ""
     CONTRACTS_OUT_DIR: str = str(Path(__file__).parent.parent / "contracts" / "out")
     # Circle blockchain identifier for Arc — used when creating wallets on Arc testnet
-    CIRCLE_BLOCKCHAIN: str = "ARN"
+    CIRCLE_BLOCKCHAIN: str = "ARC-TESTNET"
 
     # ── Underwriting thresholds ───────────────────────────────────────────────
     ACCEPT_THRESHOLD: float = 0.65

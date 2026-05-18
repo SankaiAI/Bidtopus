@@ -20,6 +20,189 @@ The contracts folder contains the on-chain smart contract that powers the escrow
 
 ---
 
+## Environment Setup — Getting All Keys
+
+Complete these steps in order. Steps 1–5 are one-time only.
+
+---
+
+### Step 1 — Arc RPC URL
+
+No account needed. Use the public Arc testnet endpoint directly:
+
+```
+ARC_RPC_URL=https://rpc.testnet.arc.network
+```
+
+Set this in `contracts/.env`, `agent/.env`, and `backend/.env`.
+
+> The Arc CLI (`arc-canteen`) can also provide a personalized RPC URL.
+> Install: `uv tool install git+https://github.com/the-canteen-dev/ARC-cli`
+> Then: `arc-canteen login && arc-canteen rpc-url`
+> Binary is at `C:\Users\<you>\.local\bin\arc-canteen.exe` (add to PATH if needed).
+
+---
+
+### Step 2 — Circle API Key
+
+1. Go to **https://console.circle.com** → sign in
+2. Left sidebar → **Keys** → **API Keys** → **Create API Key**
+3. Type: **API Key** | Access: **Standard Key** | Name: `OutcomeX Agent`
+4. Make sure the **Testnet** toggle (top-left) is active
+5. Copy the key (format: `TEST_API_KEY:xxx:yyy`)
+
+Set `CIRCLE_API_KEY` in `agent/.env` and `backend/.env`.
+
+---
+
+### Step 3 — Register Entity Secret & Create Agent Wallet
+
+The entity secret is Circle's security mechanism for developer-controlled wallets. Generate and register it once, then use it to create the settler wallet.
+
+**3a — Register entity secret in Circle Console:**
+
+Run this to generate the encrypted ciphertext:
+
+```powershell
+cd agent
+$env:CIRCLE_API_KEY = "<your key>"
+.\.venv\Scripts\python.exe -c "
+import base64, httpx, os, secrets
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+
+entity_secret = secrets.token_hex(32)
+print('ENTITY_SECRET =', entity_secret)
+
+resp = httpx.get('https://api.circle.com/v1/w3s/config/entity/publicKey',
+    headers={'Authorization': f'Bearer {os.environ[\"CIRCLE_API_KEY\"]}'})
+pub = serialization.load_pem_public_key(resp.json()['data']['publicKey'].encode())
+ct = pub.encrypt(bytes.fromhex(entity_secret),
+    padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
+print('Ciphertext =', base64.b64encode(ct).decode())
+"
+```
+
+Then in the Circle Console:
+- Go to **Wallets** → **DEV CONTROLLED** → **Configurator** → **Entity Secret**
+- Paste the ciphertext (684 characters) → click **Register**
+
+Save `ENTITY_SECRET` in `agent/.env`.
+
+**3b — Create the settler wallet:**
+
+```powershell
+cd agent
+$env:CIRCLE_API_KEY = "<your key>"
+.\.venv\Scripts\python.exe setup_circle_wallet.py
+```
+
+This prints three values — paste them into the env files:
+
+| Value | File | Key |
+|---|---|---|
+| `CIRCLE_WALLET_SET_ID` | `agent/.env` | `CIRCLE_WALLET_SET_ID` |
+| `AGENT_WALLET_ID` | `agent/.env` | `AGENT_WALLET_ID` |
+| `SETTLER_ADDRESS` (0x...) | `contracts/.env` | `SETTLER_ADDRESS` |
+
+---
+
+### Step 4 — Deployer Private Key (throwaway, one-time)
+
+```powershell
+cd contracts
+node -e "const {ethers}=require('ethers'); const w=ethers.Wallet.createRandom(); console.log('DEPLOYER_PRIVATE_KEY=' + w.privateKey); console.log('Deployer address: ' + w.address)"
+```
+
+Set `DEPLOYER_PRIVATE_KEY` in `contracts/.env`. Note the deployer address for Step 5.
+
+> This key is only used once to deploy. It is not the settler and does not control any escrows.
+
+---
+
+### Step 5 — Fund Deployer with USDC
+
+1. Go to **https://faucet.circle.com**
+2. Select **USDC** and **Arc Testnet**
+3. Paste the deployer address from Step 4
+4. Click **Send 20 USDC**
+
+> The agent settler wallet (Step 3) is auto-funded by Circle testnet. No faucet needed for it.
+
+---
+
+### Step 6 — Deploy the Contract
+
+`contracts/.env` must have all four values set before running:
+
+```
+ARC_RPC_URL=https://rpc.testnet.arc.network
+DEPLOYER_PRIVATE_KEY=0x...
+USDC_TOKEN_ADDRESS=0x3600000000000000000000000000000000000000
+SETTLER_ADDRESS=0x...
+```
+
+Then deploy:
+
+```powershell
+cd contracts
+npm install
+npx hardhat compile
+echo "yes" | npx hardhat run scripts/deploy.js --network arc
+```
+
+The script prints the contract address, writes `out/abi.json` and `out/address.json`.
+
+Set `ESCROW_CONTRACT_ADDRESS` in `agent/.env` and `backend/.env`.
+
+---
+
+### Key Distribution Summary
+
+| Key | contracts/.env | agent/.env | backend/.env | frontend/.env.local |
+|---|---|---|---|---|
+| `ARC_RPC_URL` | deploy only | required | required | — |
+| `DEPLOYER_PRIVATE_KEY` | deploy only | — | — | — |
+| `USDC_TOKEN_ADDRESS` | deploy only | — | — | — |
+| `SETTLER_ADDRESS` | deploy only | — | — | — |
+| `CIRCLE_API_KEY` | — | required | required | — |
+| `CIRCLE_WALLET_SET_ID` | — | required | — | — |
+| `AGENT_WALLET_ID` | — | required | — | — |
+| `ENTITY_SECRET` | — | required | — | — |
+| `ESCROW_CONTRACT_ADDRESS` | — | required | required | — |
+| `CLERK_SECRET_KEY` | — | — | required | required |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | — | — | — | required |
+
+> Arc testnet USDC address is fixed: `0x3600000000000000000000000000000000000000` — do not change.
+> Arc testnet explorer: **https://testnet.arcscan.app**
+
+---
+
+### After Deploy — What Agent and Backend Must Update
+
+Once the contract is deployed (Step 6), two values must be propagated to the other components. Nothing else changes — these are the only post-deploy updates required.
+
+**agent/.env** — add/update:
+```
+ESCROW_CONTRACT_ADDRESS=<from contracts/out/address.json>
+ARC_RPC_URL=https://rpc.testnet.arc.network
+```
+The agent also reads `contracts/out/abi.json` automatically via `CONTRACTS_OUT_DIR` (defaults to `../contracts/out` relative to `agent/`). No copy needed if running from the same repo.
+
+**backend/.env** — add/update:
+```
+ESCROW_CONTRACT_ADDRESS=<from contracts/out/address.json>
+ARC_RPC_URL=https://rpc.testnet.arc.network
+```
+
+To go live (turn off mocks in agent):
+```
+ARC_MOCK=False
+CIRCLE_MOCK=False
+```
+
+---
+
 ## Engineering Principles (Read Before Building)
 
 ---

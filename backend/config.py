@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     clerk_publishable_key: str = ""
 
+    # Arc / contracts — used to verify fund() tx hashes on-chain (see issue #69)
+    arc_rpc_url: str = ""
+    escrow_contract_address: str = ""
+
     model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}
 
     @property
