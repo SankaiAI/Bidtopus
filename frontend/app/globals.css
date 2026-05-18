@@ -167,6 +167,11 @@ a { font-family: inherit; color: inherit; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d0cfe0; border-radius: 3px; }
 
+.ws-list-scroll { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.ws-list-scroll::-webkit-scrollbar-thumb { background: transparent; transition: background 0.2s; }
+.ws-list-scroll:hover { scrollbar-color: #d0cfe0 transparent; }
+.ws-list-scroll:hover::-webkit-scrollbar-thumb { background: #d0cfe0; }
+
 textarea:focus { outline: none; }
 
 /* ─── APP SHELL ────────────────────────────────────────────────────────────── */

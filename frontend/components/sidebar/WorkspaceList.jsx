@@ -173,8 +173,8 @@ export default function WorkspaceList() {
   }
 
   return (
-    <div style={{ padding: '0 10px' }}>
-      <div style={{ position: 'relative' }}>
+    <div style={{ padding: '0 10px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         <div style={sectionLbl}>
           <span>Workspace</span>
           <button
@@ -207,6 +207,7 @@ export default function WorkspaceList() {
         )}
       </div>
 
+      <div className="ws-list-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       {filtered.length === 0 ? (
         <div style={{ padding: '8px 8px 12px' }}>
           <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>No contracts match</p>
@@ -252,6 +253,7 @@ export default function WorkspaceList() {
           })}
         </div>
       )}
+      </div>
 
       {menuState && createPortal(
         <div

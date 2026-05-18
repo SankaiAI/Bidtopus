@@ -17,7 +17,7 @@ const PRODUCTS = [
 ]
 
 const S = {
-  navScroll:  { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', minHeight: 0 },
+  navScroll:  { flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 },
   sectionLbl: { fontSize: '12px', fontWeight: 600, color: 'var(--c-sidebar-section)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '14px 8px 6px', fontFamily: 'Plus Jakarta Sans, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   divider:    { height: '1px', background: 'var(--c-sidebar-border-s)', margin: '10px 12px' },
 }
@@ -254,8 +254,6 @@ function SidebarContent({ activeItem, collapsed, onToggle, onNavigate }) {
         </div>
 
         {!collapsed && <WorkspaceList />}
-
-        <div style={{ flex: 1 }} />
       </div>
 
       <EscrowProtect collapsed={collapsed} walletConnected={walletConnected} onConnect={() => setWalletConnected(true)} />
