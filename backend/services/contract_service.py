@@ -123,6 +123,86 @@ def _execute_ads_bg(contract_id: str) -> None:
         db.close()
 
 
+def _verify_fund_tx_onchain(tx_hash: str, contract_id: str, amount_usdc: float) -> None:
+    """Verify tx_hash emitted Funded(contractId, _, _, amount, _) on Arc.
+
+    No-ops with a warning when ARC_RPC_URL or ESCROW_CONTRACT_ADDRESS are not configured.
+    Raises HTTPException on any verification failure.
+    """
+    from config import settings
+    rpc_url = settings.arc_rpc_url
+    contract_addr = settings.escrow_contract_address
+
+    if not rpc_url or not contract_addr:
+        log.warning(
+            "Skipping on-chain fund verification (ARC_RPC_URL or ESCROW_CONTRACT_ADDRESS not set)"
+            " contract=%s tx=%s",
+            contract_id, tx_hash,
+        )
+        return
+
+    import httpx
+    from eth_hash.auto import keccak
+
+    try:
+        resp = httpx.post(
+            rpc_url,
+            json={"jsonrpc": "2.0", "method": "eth_getTransactionReceipt", "params": [tx_hash], "id": 1},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        result = resp.json().get("result")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not fetch transaction receipt: {exc}")
+
+    if result is None:
+        raise HTTPException(status_code=400, detail=f"Transaction not found on Arc: {tx_hash}")
+
+    if result.get("status") != "0x1":
+        raise HTTPException(status_code=400, detail="Transaction reverted on-chain")
+
+    to_addr = (result.get("to") or "").lower()
+    if to_addr != contract_addr.lower():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Transaction target {to_addr!r} does not match escrow contract",
+        )
+
+    # Derive expected bytes32 contractId and Funded event topic signature
+    expected_cid_hex = "0x" + keccak(contract_id.encode("utf-8")).hex()
+    funded_topic = "0x" + keccak(b"Funded(bytes32,address,address,uint256,uint256)").hex()
+    # USDC has 6 decimals
+    expected_amount = int(amount_usdc * 1_000_000)
+
+    for log_entry in result.get("logs", []):
+        topics = log_entry.get("topics", [])
+        if (
+            (log_entry.get("address") or "").lower() == contract_addr.lower()
+            and topics
+            and topics[0].lower() == funded_topic.lower()
+            and len(topics) > 1
+            and topics[1].lower() == expected_cid_hex.lower()
+        ):
+            # Non-indexed data layout (each 32 bytes ABI-encoded):
+            # [0:32]  merchant address  [32:64] agent address
+            # [64:96] amount (uint256)  [96:128] timestamp (uint256)
+            data_hex = (log_entry.get("data") or "0x").removeprefix("0x")
+            if len(data_hex) < 192:
+                raise HTTPException(status_code=400, detail="Funded event data malformed")
+            amount_on_chain = int(data_hex[128:192], 16)
+            if abs(amount_on_chain - expected_amount) > 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Amount mismatch: on-chain {amount_on_chain}, expected ~{expected_amount}",
+                )
+            return  # verified
+
+    raise HTTPException(
+        status_code=400,
+        detail="Funded event not found in transaction logs for this contract",
+    )
+
+
 def _sanitize(text: str) -> str:
     return bleach.clean(text, tags=[], strip=True)
 
@@ -278,6 +358,8 @@ def fund_escrow(
 
     if not current_user.wallet_address:
         raise HTTPException(status_code=400, detail="Wallet address required for escrow funding")
+
+    _verify_fund_tx_onchain(tx_hash, str(contract.id), amount_usdc)
 
     record = repo.create_escrow_record(
         db,
