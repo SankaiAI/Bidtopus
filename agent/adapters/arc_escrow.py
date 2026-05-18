@@ -268,10 +268,8 @@ class RealArcEscrowAdapter(ArcEscrowAdapterBase):
                 "abiFunctionSignature": abi_function_signature,
                 "abiParameters": abi_parameters,
                 "entitySecretCiphertext": _fresh_ciphertext(),
-                "fee": {
-                    "type": "level",
-                    "config": {"feeLevel": "MEDIUM"},
-                },
+                # Arc SCA wallets require feeLevel at the top level (not nested in fee.config)
+                "feeLevel": settings.ARC_FEE_LEVEL,
             },
         )
         if resp.status_code >= 400:

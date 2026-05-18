@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     CONTRACTS_OUT_DIR: str = str(Path(__file__).parent.parent / "contracts" / "out")
     # Circle blockchain identifier for Arc — used when creating wallets on Arc testnet
     CIRCLE_BLOCKCHAIN: str = "ARC-TESTNET"
+    # Arc SCA wallets require feeLevel as a flat top-level field (not nested in fee.config)
+    ARC_FEE_LEVEL: str = "MEDIUM"
 
     # ── Underwriting thresholds ───────────────────────────────────────────────
     ACCEPT_THRESHOLD: float = 0.65
