@@ -77,7 +77,7 @@ sequenceDiagram
 
     Note over OutcomeX,Arc/Meta: 9. RESOLUTION & SETTLEMENT
     OutcomeX->>OutcomeX: spend ≥ min AND roas ≥ target AND window elapsed
-    OutcomeX->>Arc/Meta: release() or refund()
+    OutcomeX->>Arc/Meta: Circle Wallets signs release() or refund()
     Note right of Arc/Meta: settlement tx_hash [on-chain ✓]
 ```
 

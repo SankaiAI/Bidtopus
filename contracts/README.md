@@ -8,20 +8,21 @@ sequenceDiagram
     participant M  as Merchant (Frontend)
     participant B  as Backend
     participant A  as Agent
+    participant U  as USDC Token<br/>(Arc Testnet)
     participant C  as PerformanceEscrow<br/>(Arc Testnet)
     participant CW as Circle Wallets<br/>(Settler)
 
     rect rgb(220, 235, 255)
         Note over M,C: Phase 1 — Deploy (one-time, contracts team)
-        C-->>B: contracts/out/address.json + abi.json
-        C-->>A: contracts/out/address.json + abi.json
+        Note over B,A: deploy script writes contracts/out/ → committed to git → git pull
+        Note over B,A: Set ESCROW_CONTRACT_ADDRESS in agent/.env and backend/.env
     end
 
     rect rgb(220, 255, 220)
         Note over M,C: Phase 2 — Negotiation & Funding
         M->>B: Accept agent offer
         B->>M: Initiate escrow (contract ID, amount)
-        M->>C: approve(USDC, amount)
+        M->>U: approve(escrowAddress, amount)
         M->>C: fund(contractId, amount, merchant, agent)
         C-->>C: Status → Funded 🔒 USDC locked
         M->>B: POST /fund-escrow (tx_hash)
