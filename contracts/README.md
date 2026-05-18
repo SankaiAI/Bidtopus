@@ -268,6 +268,61 @@ CIRCLE_MOCK=False
 
 ---
 
+## Deploying to Arc Testnet
+
+Complete the Environment Setup steps above first (all four values in `contracts/.env` must be set).
+
+### 1. Install and compile
+
+```powershell
+cd contracts
+npm install
+npx hardhat compile
+```
+
+### 2. Deploy
+
+```powershell
+echo "yes" | npx hardhat run scripts/deploy.js --network arc
+```
+
+The script prints a confirmation prompt showing the USDC address, settler address, network, and deployer. It then deploys and outputs:
+
+```
+✅ Contract deployed successfully!
+  Contract address: 0x...
+  Deployment tx:    0x...
+  Block number:     ...
+  Network:          arc
+
+📄 Output written to contracts/out/
+   → abi.json
+   → address.json
+```
+
+### 3. Verify on Arc explorer
+
+```
+https://testnet.arcscan.app/address/<contract-address>
+```
+
+### 4. Smoke test
+
+Confirms the deployed contract is live and addresses match the manifest:
+
+```powershell
+npx hardhat run scripts/smoke_test.js --network arc
+```
+
+### 5. Notify agent and backend
+
+Set `ESCROW_CONTRACT_ADDRESS` in `agent/.env` and `backend/.env` with the deployed address. The `contracts/out/abi.json` and `contracts/out/address.json` files are committed to the repo — teammates get them automatically on `git pull`.
+
+> **Already deployed:** `0xfc1c0ede47a43A38c4335ed60C64A133433Ee6c8` on Arc testnet (block 42899728).
+> Only redeploy if the contract code changes.
+
+---
+
 ## Engineering Principles (Read Before Building)
 
 ---
@@ -437,28 +492,31 @@ emit Refunded(contractId, merchant, amount, block.timestamp);
 ```
 contracts/
 ├── src/
-│   └── EscrowContract.sol    ← Core escrow contract
+│   ├── PerformanceEscrow.sol  ← Core escrow contract
+│   └── mocks/
+│       └── MockERC20.sol      ← Test-only ERC20 mock
 ├── test/
-│   └── Escrow.test.js        ← Unit tests: fund, release, refund, double-settlement
+│   └── Escrow.test.js         ← 29 unit tests: fund, release, refund, emergency refund
 ├── scripts/
-│   └── deploy.js             ← Deploy script via ARC CLI
+│   ├── deploy.js              ← Deploy to Arc testnet via Hardhat
+│   └── smoke_test.js          ← Verify deployed contract is live
 ├── out/
-│   ├── abi.json              ← Exported after deploy (consumed by agent/)
-│   └── address.json          ← Exported after deploy (consumed by agent/ + backend/)
-└── hardhat.config.js         ← ARC CLI RPC endpoint configuration
+│   ├── abi.json               ← Exported after deploy (consumed by agent/ + backend/)
+│   └── address.json           ← Exported after deploy (consumed by agent/ + backend/)
+└── hardhat.config.js          ← Hardhat config with Arc network
 ```
 
 ---
 
 ## Build Order
 
-1. `src/EscrowContract.sol` — fund, release, refund, getStatus with security modifiers
-2. `test/Escrow.test.js` — test all paths: fund, release, refund, double-settlement rejection, non-settler rejection
+1. `src/PerformanceEscrow.sol` — fund, release, refund, getStatus with security modifiers
+2. `test/Escrow.test.js` — test all paths: fund, release, refund, double-settlement, emergency refund
 3. `scripts/deploy.js` — configurable: USDC token address, settler address
-4. Deploy to Arc testnet via ARC CLI → capture contract address + deployment tx hash
-5. Export `out/abi.json` + `out/address.json`
-6. Wire Paymaster for both `fund()` (merchant) and `release()`/`refund()` (settler) calls
-7. Verify source on Arc block explorer
+4. Deploy to Arc testnet via Hardhat (`npx hardhat run scripts/deploy.js --network arc`)
+5. `out/abi.json` + `out/address.json` written automatically by deploy script
+6. `scripts/smoke_test.js` — verify deployed contract is live and addresses match
+7. Verify source on Arc block explorer: https://testnet.arcscan.app
 
 ---
 
