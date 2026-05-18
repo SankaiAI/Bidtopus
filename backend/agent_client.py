@@ -155,6 +155,35 @@ def get_account_context(meta_ads_account_id: str) -> dict[str, Any]:
     return _get("/agent/account-context", meta_ads_account_id=meta_ads_account_id)
 
 
+def generate_plan(
+    contract_id: str,
+    user_id: str,
+    meta_ads_account_id: str | None = None,
+) -> dict[str, Any]:
+    """
+    Generate a Meta Ads campaign plan as individual approval_request messages.
+    Trigger: Funded transition. Respects user.approval_mode ('manual' | 'auto').
+    Expected return shape:
+    {
+        "plan_id": str,
+        "action_count": int,
+        "approval_mode": str,
+        "strategy_summary": str,
+    }
+    """
+    url = f"{settings.agent_base_url}/agent/generate-plan"
+    log.debug("agent call → /agent/generate-plan contract=%s user=%s", contract_id, user_id)
+    resp = httpx.post(url, json={
+        "contract_id": str(contract_id),
+        "user_id": str(user_id),
+        "meta_ads_account_id": meta_ads_account_id,
+    }, timeout=_TIMEOUT)
+    resp.raise_for_status()
+    result = resp.json()
+    log.debug("agent result ← /agent/generate-plan:\n%s", json.dumps(result, indent=2, default=str))
+    return result
+
+
 def activate_contract(contract_id: str) -> dict[str, Any]:
     """
     Register the 24h monitoring job in the agent's APScheduler.

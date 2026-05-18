@@ -90,7 +90,7 @@ All LLM outputs used in decisions must be structured JSON, validated by the back
 
 **Primary question:** "How do I explain this underwriting result to the brand and what do I offer?"
 
-**Required during negotiation:** The agent must collect the brand's **Meta Ads Account ID** (format: `act_XXXXXXXXX`) and optionally their **Business Manager ID** before the contract is finalized. These are required for the MCP data pull in strategy generation (4.3). The agent should ask for them naturally during the negotiation conversation if not already provided in `account_context`.
+**Meta Ads Account ID:** The merchant's Meta Ads account ID (format: `act_XXXXXXXXX`) is collected via the sidebar account selector in the frontend Settings screen — it is **not** asked during negotiation. The backend passes it in every agent request that requires it. The agent reads it from the request body; it never needs to ask for it conversationally.
 
 **Inputs:** The full underwriting output from 4.1 plus the original contract request.
 
@@ -126,11 +126,10 @@ All LLM outputs used in decisions must be structured JSON, validated by the back
 **Primary question:** "What Meta Ads strategy should I run to hit the contracted target?"
 
 **Step 1 — MCP data pull (before LLM is called):** Use the Meta Ads MCP to read the brand's existing account data:
-- Active and recent campaigns (objectives, status, spend, ROAS)
-- Ad set audience performance (reach, CTR, ROAS by audience segment)
-- Pixel events (purchase events, conversion rates)
-- Creative performance (top-performing ads by ROAS)
-- Current spend pacing vs. daily budget
+- `mcp_meta_ads_get_campaigns` — active and recent campaigns (objectives, status, spend, ROAS)
+- `mcp_meta_ads_get_insights` with `level=adset` — audience segment performance (reach, CTR, ROAS)
+- `mcp_meta_ads_get_adsets` — audience targeting configs for top-performing ad sets
+- `mcp_meta_ads_get_ad_creatives` — creative performance (top-performing ads by ROAS)
 
 This data is passed as structured context to the LLM. The strategy is built from the brand's actual account, not generic templates. If MCP is unavailable, fall back to the mock adapter.
 
@@ -141,14 +140,18 @@ This data is passed as structured context to the LLM. The strategy is built from
 {
   "strategy_summary": "Launch a retargeting campaign focused on warm audiences with a value-oriented product angle.",
   "actions": [
-    {"type": "create_campaign", "objective": "sales"},
-    {"type": "create_ad_set", "audience": "30-day website visitors"},
-    {"type": "set_budget", "daily_budget_usd": 75}
+    {"type": "create_campaign", "objective": "OUTCOME_SALES"},
+    {"type": "create_adset", "audience": "30-day website visitors", "daily_budget_usd": 75},
+    {"type": "create_ad_creative", "headline": "...", "call_to_action": "SHOP_NOW"}
   ]
 }
 ```
 
-The strategy is presented to the merchant for approval before any action executes. The LLM generates the plan; the merchant authorizes it; the Meta Ads adapter executes it.
+The strategy is written to the DB as **four individual `approval_request` messages** — one per action type (`campaign`, `audience`, `budget`, `creative`). Each card includes structured MCP-executable parameters (not just human text) so the execution adapter can act on the approved card directly without re-deriving parameters from the LLM.
+
+The merchant approves or declines each card independently. Execution only begins once all cards for the plan are approved. The LLM generates the plan; the merchant authorizes it card-by-card; the Meta Ads adapter executes the approved cards.
+
+**After Day 1 execution:** MCP return values (campaign_id, ad_set_ids, creative_ids) are written back to `strategy_plans.execution_receipts` so the 24h monitoring tick can reference existing campaign objects without re-reading from MCP.
 
 ---
 
@@ -179,7 +182,38 @@ This model runs continuously while the contract is Active and feeds the live mon
 
 ---
 
-### 4.5 Deterministic Resolution Engine
+### 4.5 24h Monitoring Tick Loop
+
+**Primary question:** "What should the agent adjust today, and does the merchant need to approve it first?"
+
+This loop runs once every 24h for each Active contract via APScheduler. It is the core of the autonomous execution cycle.
+
+**Step-by-step sequence:**
+
+1. **Expire stale cards** — mark any `approval_request` messages from the previous tick with status `expired` if they are still `pending`. The agent never acts on unanswered cards.
+2. **Read execution receipts** — load `strategy_plans.execution_receipts` to get the existing `campaign_id` and `ad_set_ids` created on Day 1.
+3. **MCP pull** — call Meta Ads MCP `get_adset_insights` scoped to the existing `ad_set_ids` from `execution_receipts`. Retrieve ad-set-level ROAS, spend, CTR, and conversion events. This is real account data, not the contract-level snapshot.
+4. **ML forecast** — run the live outcome forecast model (4.4) with current spend, revenue, and days remaining. Produces `predicted_final_roas`, `success_probability`, `status`.
+5. **LLM decision** — Claude reasons over the ad-set breakdown + ML forecast and produces a list of structured optimization actions: which ad_sets to scale, pause, or swap; whether to adjust creative. Each action references a real `ad_set_id` from the execution receipts.
+6. **Write `daily_update`** — append one `daily_update` message to the contract timeline with the real metrics and ML forecast.
+7. **Branch on `user.approval_mode`:**
+   - **Manual mode:** Write one `approval_request` card per suggested action. Each card has `expires_at = now + 23h`. Do **not** execute. Wait for the merchant to approve or decline each card via `/actions/:id/approve`. Unanswered cards expire at the next tick.
+   - **Auto mode:** Execute all actions immediately via the Meta Ads adapter. Write one `system_event` per action executed. No approval cards.
+8. **Write execution receipts** (auto mode or after all cards approved) — update `strategy_plans.execution_receipts` with any new or modified campaign object IDs.
+
+**Urgency levels on approval cards:**
+
+| Level | Condition | Behaviour |
+|---|---|---|
+| `recommended` | Normal optimization opportunity | Standard card |
+| `urgent` | ROAS trending below target, ≥3 days left | Card highlighted, push notification |
+| `critical` | ROAS critically off track, ≤2 days left | Card pinned to top, notification repeated |
+
+**Never execute unanswered cards.** If the merchant goes silent for 24h in manual mode, those cards expire at the next tick. The next tick starts fresh from real data.
+
+---
+
+### 4.6 Deterministic Resolution Engine
 
 **Primary question:** "Did the merchant's contracted outcome get achieved?"
 
@@ -212,25 +246,36 @@ On failure: calls Arc escrow adapter to refund USDC to merchant wallet.
 
 ---
 
-### 4.6 Meta Ads Adapter
+### 4.7 Meta Ads Adapter
 
 **Purpose:** Pluggable interface between the agent and Meta Ads. The adapter abstracts the execution layer so the demo works regardless of whether real Meta Ads MCP access is available.
 
+**MCP server:** `mcp.facebook.com/ads` (official Meta-hosted MCP, requires OAuth). No public docs yet as of May 2026 — the endpoint returns 401 without auth; the path `/ads` is valid. Community fallback: `pipeboard-co/meta-ads-mcp` at `mcp.pipeboard.co/meta-ads-mcp` (915 stars, actively maintained).
+
+**Tool name convention (from `pipeboard-co/meta-ads-mcp`):**
+- `mcp_meta_ads_get_campaigns` — list campaigns
+- `mcp_meta_ads_create_campaign` — create campaign (`objective`: OUTCOME_SALES, OUTCOME_TRAFFIC, etc.)
+- `mcp_meta_ads_create_adset` — create ad set with `daily_budget` (in cents), `targeting`, `optimization_goal`
+- `mcp_meta_ads_create_ad_creative` — create creative with `image_hash`, `headline`, `call_to_action_type`
+- `mcp_meta_ads_create_ad` — attach creative to ad set
+- `mcp_meta_ads_get_insights` — performance data with `level=adset`/`campaign`/`account` param
+- `mcp_meta_ads_update_adset` — scale (`daily_budget`) or pause (`status: PAUSED`)
+- `mcp_meta_ads_update_campaign` — pause/activate at campaign level
+
 **Must support:**
-- Reading current campaign performance (spend, revenue, ROAS)
-- Creating a campaign
-- Creating an ad set with audience targeting
-- Setting a daily budget
+- Reading current campaign performance (spend, revenue, ROAS) via `get_insights`
+- Creating a campaign, ad set, creative, and ad in sequence
+- Scaling or pausing ad sets via `update_adset`
 
 **Implementation priority:**
-1. Real Meta Ads MCP integration if access is available
+1. Real Meta Ads MCP integration via `mcp.facebook.com/ads` (OAuth) or Pipeboard remote MCP
 2. Adapter-backed mock that returns plausible structured data for the demo
 
 The mock must return realistic progression data so the monitoring dashboard tells a coherent story.
 
 ---
 
-### 4.7 Arc Escrow Adapter
+### 4.8 Arc Escrow Adapter
 
 **Purpose:** Interface between the agent's resolution engine and the on-chain escrow contract deployed on Arc.
 
@@ -246,7 +291,7 @@ Returns an Arc transaction hash for each settlement action, which the backend lo
 - ~$0.01 fees per transaction, covered by the Paymaster in USDC
 - Uses the ABI and contract address exported from `contracts/`
 
-### 4.8 Circle Wallets Integration
+### 4.9 Circle Wallets Integration
 
 **Purpose:** The agent needs its own autonomous wallet to receive USDC on successful settlement. Use Circle's Wallets product for this — it provides embedded secure wallets with automated key management designed for autonomous agents.
 
@@ -259,7 +304,7 @@ This is a Circle tool usage requirement (20% of judging). The merchant wallet ca
 
 ---
 
-### 4.9 Audit Logger
+### 4.10 Audit Logger
 
 Every agent action must be logged with a timestamp:
 - Underwriting model called (inputs + outputs)
@@ -282,16 +327,19 @@ The orchestrator is the entry point called by the backend. It sequences the comp
 |---|---|
 | `/underwrite` | Run ML underwriting model → return result |
 | `/agent-offer` | Pass underwriting result to LLM negotiation layer → return offer |
-| `/generate-strategy` | Call LLM strategy generator → return plan |
-| `/execute-ads-actions` | Call Meta Ads adapter with approved actions |
+| `/generate-plan` | MCP pull → LLM strategy generator → write 4 `approval_request` cards; handle `approval_mode` |
+| `/execute-ads-actions` | Re-read approved cards from DB → call Meta Ads adapter → write execution receipts |
 | `/performance` | Call Meta Ads adapter for current data + run live forecast model |
 | `/resolve` | Run deterministic resolution engine → call Arc escrow adapter |
+| APScheduler tick (every 24h) | Expire stale cards → MCP `get_adset_insights` → ML forecast → LLM decision → manual: write approval cards with `expires_at`; auto: execute immediately |
 
 ---
 
 ## 6. Safety & Trust Rules
 
-- No ad execution occurs unless `strategy_plans.approval_status = approved` is confirmed by the backend before the adapter is called.
+- No ad execution occurs unless the relevant `approval_request` card has `status = approved` confirmed by re-reading the DB at execution time — never trust in-memory state.
+- Monitoring tick actions in manual mode are **never executed** unless the merchant explicitly approves the corresponding card. Unanswered cards expire; the agent moves on at the next tick.
+- The initial strategy plan (4 action cards) always requires explicit approval regardless of `approval_mode`. Auto mode only applies to monitoring tick adjustments.
 - The resolution engine output is never modified by the LLM. LLM may narrate the result but cannot change it.
 - The Arc escrow adapter only triggers settlement after the deterministic engine has produced a final outcome.
 - All inputs and outputs to every component are logged before and after each call.
@@ -483,6 +531,8 @@ The agent operates in three modes that must never share a loop:
 ### 12.3 Save State Before Acting
 
 Every adapter call is preceded by an `audit_logger.log("intent", ...)` entry. This enables crash recovery for 7-day contracts: on restart, read the last intent from the audit log to determine where to resume.
+
+**Execution receipts must be persisted immediately after Day 1 execution.** When the Meta Ads adapter returns `campaign_id` and `ad_set_ids`, write them to `strategy_plans.execution_receipts` before returning. If the agent crashes between execution and receipt storage, the next monitoring tick will call MCP to re-discover existing campaigns (slow but safe). Without receipts, the monitoring tick cannot call `update_budget(ad_set_id=?)` because it doesn't know the IDs.
 
 ### 12.4 Audit Logger is Queryable, Not Write-Only
 

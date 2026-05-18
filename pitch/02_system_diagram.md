@@ -32,7 +32,7 @@ sequenceDiagram
     participant Arc/Meta
 
     Note over Merchant,OutcomeX: 1. NEGOTIATE
-    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"\n+ Meta Ads Account ID / Business Manager ID
+    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"\n(Meta Ads account pre-connected via sidebar)
     OutcomeX->>OutcomeX: Claude negotiates & locks terms
     Note right of OutcomeX: Contract created
 
@@ -52,19 +52,29 @@ sequenceDiagram
     Note over Merchant,OutcomeX: 5. STRATEGY GENERATION
     OutcomeX->>Arc/Meta: Meta Ads MCP → read existing campaigns,<br/>pixel events, audience performance
     Arc/Meta-->>OutcomeX: Real account data
-    OutcomeX-->>Merchant: Data-driven strategy plan<br/>(built from your actual account, not generic templates)
-    Note over Merchant,OutcomeX: 6. MERCHANT APPROVES
-    Merchant->>OutcomeX: Approve strategy
+    OutcomeX-->>Merchant: 4 action cards — campaign · audience · budget · creative<br/>(each grounded in your actual account data)
+    Note over Merchant,OutcomeX: 6. MERCHANT APPROVES (per-action)
+    Merchant->>OutcomeX: Approve / decline each card independently
+    Note right of OutcomeX: All approved → Active
 
     Note over OutcomeX,Arc/Meta: 7. EXECUTE ADS
-    OutcomeX->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_ad_set · set_budget
-    Arc/Meta-->>OutcomeX: Campaign live on Meta
+    OutcomeX->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_adset · create_ad_creative · create_ad
+    Arc/Meta-->>OutcomeX: Campaign live · execution receipts stored<br/>(campaign_id · ad_set_ids · creative_ids)
 
     Note over Merchant,Arc/Meta: 8. LIVE MONITORING (every 24h)
     loop Every 24h while Active
-        Arc/Meta-->>OutcomeX: Real spend / revenue data
-        OutcomeX->>OutcomeX: ML forecast: predicted ROAS,<br/>success probability, on_track / at_risk
-        OutcomeX-->>Merchant: Live dashboard update
+        OutcomeX->>Arc/Meta: Meta Ads MCP get_adset_insights → ad-set-level ROAS,<br/>spend, CTR, conversion events
+        Arc/Meta-->>OutcomeX: Real account performance data
+        OutcomeX->>OutcomeX: ML forecast: predicted ROAS, on_track / at_risk<br/>LLM decision: which ad_sets to scale · pause · swap
+        OutcomeX-->>Merchant: Daily update + suggested actions
+        alt Manual approval mode
+            OutcomeX-->>Merchant: Approval cards per action (expires in 23h)
+            Merchant->>OutcomeX: Approve / decline each action
+            OutcomeX->>Arc/Meta: Execute only approved actions via MCP
+        else Auto mode
+            OutcomeX->>Arc/Meta: Execute all decisions immediately via MCP
+        end
+        Note right of OutcomeX: Unanswered cards expire at next tick
     end
 
     Note over OutcomeX,Arc/Meta: 9. RESOLUTION & SETTLEMENT
@@ -87,7 +97,7 @@ flowchart TD
 
     D3["**Decision 3 — LLM Strategizes**\nMCP reads existing campaigns + pixel + audience data first\nBuilds data-driven Meta Ads plan with extended thinking\n→ 'Your warm 30d audience has 2.1x ROAS — scale it, cut cold interest'\n→ brand approves before any action"]
 
-    D4["**Decision 4 — ML Forecasts Live** *(every 24h)*\nExtrapolates ROAS trajectory from live data\n→ 'Day 4: ROAS 1.9x, on track for 2.2x by day 7'\n→ on_track / at_risk / off_track"]
+    D4["**Decision 4 — ML + LLM Optimize Live** *(every 24h)*\nML extrapolates ROAS trajectory from real MCP data\n→ 'Day 4: ROAS 1.9x, on track for 2.2x by day 7'\nLLM decides what to adjust based on ad-set breakdown\n→ 'Scale warm_30d · pause cold_interest · swap creative'\n→ approval cards in manual mode · immediate execution in auto"]
 
     D5["**Decision 5 — Engine Settles** *(deterministic)*\nPure logic — no LLM, no ML\nROAS 2.25x ≥ 2.0x ✓ · Spend $545 ≥ $500 ✓\n→ release USDC to agent or refund to merchant"]
 
@@ -201,9 +211,9 @@ stateDiagram-v2
 
     FundedPending --> Funded : Circle App Kit → Arc escrow funded on-chain
 
-    Funded --> Active : LLM generates strategy → merchant approves
+    Funded --> Active : LLM generates 4 action cards\nMerchant approves each → execution completes
 
-    Active --> Active : ML monitoring tick every 24h
+    Active --> Active : ML + LLM monitoring tick every 24h\nManual mode: approval cards per action\nAuto mode: immediate MCP execution
     Active --> Settled : After time window\ndeterministic resolution\n→ Arc release or refund
 
     Settled --> [*]

@@ -253,7 +253,7 @@ def approve_action(
         "action": "action_approved", "action_id": action_id,
     })
 
-    # In manual mode, execute once every per-action card for this plan is approved
+    # When every per-action card for this plan is approved, activate and execute
     plan_id = (msg.extra or {}).get("plan_id")
     if plan_id:
         pending = (
@@ -263,7 +263,13 @@ def approve_action(
             .count()
         )
         if pending == 0:
-            log.info("All per-action cards approved — triggering execution contract=%s plan=%s", contract_id, plan_id)
+            log.info("All per-action cards approved — activating contract=%s plan=%s", contract_id, plan_id)
+            repo.update_contract_status(db, contract_id, "Active")
+            import agent_client as _agent_client
+            try:
+                _agent_client.activate_contract(contract_id)
+            except Exception:
+                log.exception("Failed to register monitoring job contract=%s", contract_id)
             from services.contract_service import _bg, _execute_ads_bg
             _bg(_execute_ads_bg, contract_id)
 

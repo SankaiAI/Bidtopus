@@ -65,6 +65,14 @@ All endpoints are prefixed `/api`. The backend must implement all 14 of the foll
 | GET | `/api/contracts/:id/performance` | Return latest performance snapshot |
 | POST | `/api/contracts/:id/resolve` | Run deterministic resolution; trigger USDC settlement |
 
+**Per-action approval endpoints (3):**
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/contracts/:id/actions/:action_id/approve` | Merchant approves one `approval_request` card; triggers execution when all cards for a plan are approved |
+| POST | `/api/contracts/:id/actions/:action_id/decline` | Merchant declines one card; card status → `declined`; other cards unaffected |
+| GET | `/api/contracts/:id/pending-actions` | Return count of pending approval cards; used by frontend for badge and notification |
+
 **Message and streaming endpoints (4):**
 
 | Method | Endpoint | Purpose |
@@ -85,6 +93,8 @@ All endpoints are prefixed `/api`. The backend must implement all 14 of the foll
 | clerk_user_id | string | **UNIQUE NOT NULL** — Clerk's user ID; primary identity source |
 | email | string | Synced from Clerk on first login |
 | wallet_address | string | **Nullable** — populated when merchant connects wallet on Escrow Funding screen |
+| approval_mode | string | `manual` (default) / `auto` — controls monitoring tick execution; stored on user, not per-contract |
+| meta_ads_account_id | string | **Nullable** — connected Meta Ads account ID (format: `act_XXXXXXXXX`); set via Settings sidebar selector, not during negotiation |
 | created_at | timestamp | |
 
 **Auth model:** Clerk manages identity (email/Google login). `clerk_user_id` is the join key between Clerk and the backend DB. `wallet_address` is populated separately when the merchant connects their wallet for USDC operations. A merchant can create a contract and view their dashboard before ever connecting a wallet — the wallet is only required at the Escrow Funding step.
@@ -152,6 +162,7 @@ All endpoints are prefixed `/api`. The backend must implement all 14 of the foll
 | planned_actions | json | Structured list of ad actions |
 | approval_status | string | pending / approved / declined |
 | approved_at | timestamp | |
+| execution_receipts | json | **Nullable** — MCP return values written after Day 1 execution: `{campaign_id, ad_set_ids, creative_ids}`. Required by the 24h monitoring tick to reference existing campaigns when calling MCP. |
 
 ### performance_snapshots
 | Field | Type | Notes |
@@ -187,7 +198,8 @@ The source of truth for the merchant-facing chat timeline. Every event visible i
 | type | string | `message` / `daily_update` / `approval_request` / `system_event` |
 | content | text | Plain-language text shown in the UI |
 | metadata | json | Structured data for rendering cards (ROAS, action details, strategy_id, tx_hash) |
-| status | string | `pending` / `approved` / `declined` / null — only used for `approval_request` rows |
+| status | string | `pending` / `approved` / `declined` / `expired` / null — only used for `approval_request` rows |
+| expires_at | timestamptz | **Nullable** — deadline for monitoring-tick approval cards (23h window); null for initial strategy cards |
 | created_at | timestamptz | Indexed — timeline is ordered by this |
 
 **Type reference:**
@@ -198,7 +210,7 @@ The source of truth for the merchant-facing chat timeline. Every event visible i
 | `message` | `agent` | Agent chat bubble | No |
 | `message` | `merchant` | Merchant chat bubble | No |
 | `daily_update` | `agent` | AGENT UPDATE · DAY N card with ROAS and forecast | No |
-| `approval_request` | `agent` | Action card with Approve / Request changes buttons | Yes — `pending` → `approved` / `declined` |
+| `approval_request` | `agent` | Action card with Approve / Decline buttons | Yes — `pending` → `approved` / `declined` / `expired` |
 
 ### audit_events
 The internal observability store. Every agent component call is logged here — ML inputs/outputs, LLM decisions, adapter calls, crash recovery checkpoints. Not shown directly to the merchant; read by the agent for chat context and crash recovery.

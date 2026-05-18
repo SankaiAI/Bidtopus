@@ -26,7 +26,7 @@ def _bg(fn, *args):
 def _generate_strategy_bg(contract_id: str) -> None:
     db = SessionLocal()
     sequence_id = str(uuid.uuid4())
-    strategy_label = "Generating Meta Ads campaign strategy..."
+    strategy_label = "Generating Meta Ads campaign plan..."
     detail_parts: list[str] = []
     event_bus.publish(contract_id, "thinking_step_start", {
         "step_id": "strategy",
@@ -38,19 +38,30 @@ def _generate_strategy_bg(contract_id: str) -> None:
         if contract is None or contract.status != "Funded":
             log.warning("generate_strategy_bg: wrong state contract=%s status=%s", contract_id, getattr(contract, "status", None))
             return
-        log.info("generate_strategy_bg: starting contract=%s", contract_id)
+        merchant = repo.get_user_by_id(db, contract.merchant_id)
+        meta_ads_account_id = getattr(merchant, "meta_ads_account_id", None) if merchant else None
+        log.info("generate_strategy_bg: starting contract=%s meta_ads_account_id=%s", contract_id, meta_ads_account_id)
 
-        def on_reasoning(text: str):
-            detail_parts.append(text)
-            event_bus.publish(contract_id, "thinking_step_detail", {"delta": text})
-
-        result = generate_strategy(db, contract, on_reasoning=on_reasoning)
-        actions = result.get("planned_actions") or []
-        if actions:
-            action_text = f"\n\n{len(actions)} action(s) queued for your review."
+        result = agent_client.generate_plan(
+            contract_id=str(contract_id),
+            user_id=str(contract.merchant_id),
+            meta_ads_account_id=meta_ads_account_id,
+        )
+        summary = result.get("strategy_summary", "")
+        action_count = result.get("action_count", 0)
+        approval_mode = result.get("approval_mode", "manual")
+        if summary:
+            detail_parts.append(summary)
+            event_bus.publish(contract_id, "thinking_step_detail", {"delta": summary})
+        if action_count:
+            if approval_mode == "auto":
+                action_text = f"\n\n{action_count} action(s) auto-approved and ready to execute."
+            else:
+                action_text = f"\n\n{action_count} action(s) queued for your review."
             detail_parts.append(action_text)
             event_bus.publish(contract_id, "thinking_step_detail", {"delta": action_text})
-        log.info("generate_strategy_bg: complete contract=%s", contract_id)
+        repo.log_audit_event(db, contract_id, "llm_strategy", "result", result)
+        log.info("generate_strategy_bg: complete contract=%s plan=%s", contract_id, result.get("plan_id"))
     except Exception:
         log.exception("generate_strategy_bg: failed contract=%s", contract_id)
         fallback = "Strategy generation encountered an error. Will retry automatically."

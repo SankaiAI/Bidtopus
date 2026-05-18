@@ -35,10 +35,10 @@ The frontend must support this exact demo script end-to-end without any broken s
 
 | Scene | What the screen shows |
 |---|---|
-| 1. Contract creation | Brand fills in: ROAS >= 2.0, $500 min spend, 7 days, 100 USDC fee + Meta Ads Account ID (act_123) |
+| 1. Contract creation | Brand fills in: ROAS >= 2.0, $500 min spend, 7 days, 100 USDC fee (Meta Ads account pre-connected via sidebar — not entered in form) |
 | 2. Underwriting | ML result: 68% success probability. Agent accepts. |
 | 3. Escrow | Brand funds 100 USDC into Arc escrow. Status → Funded. |
-| 4. Strategy approval | Agent pulls live campaign data via MCP, proposes data-driven plan ("your warm 30d audience has 2.1x ROAS — scaling it"). Brand approves. Ads execute. |
+| 4. Strategy approval | Agent pulls live campaign data via MCP, proposes 4 action cards (campaign · audience · budget · creative), each grounded in real account data. Brand approves each card. Ads execute. |
 | 5. Monitoring | Dashboard: $318 spent, ROAS 1.86, 3 days left, 61% success probability |
 | 6. Resolution | Final: $545 spend, $1,226 revenue, ROAS 2.25 → success |
 | 7. Settlement | 100 USDC released to agent. On-chain tx hash shown. |
@@ -98,7 +98,8 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 - Evaluation time window in days (e.g. 7 days)
 - Success fee in USDC (e.g. 100 USDC)
 - Campaign mode: create new campaign or optimize existing campaign
-- Ad account context (account ID or relevant account data)
+
+**Meta Ads account:** The merchant's connected Meta Ads account ID is read from their profile (set via the Settings sidebar selector). It is **not** entered in the contract builder form. If no account is connected, show a prompt to connect one in Settings before the form can be submitted.
 
 **On submit:** calls `POST /api/contracts`, then immediately triggers underwriting and navigates to the Agent Evaluation screen.
 
@@ -140,24 +141,27 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 ---
 
 ### 4.5 Strategy Approval Screen
-**Purpose:** Show the agent's proposed Meta Ads strategy and get explicit merchant authorization before any ads run.
+**Purpose:** Show the agent's proposed Meta Ads strategy as individual action cards and get explicit per-action merchant authorization before any ads run.
 
 **Must show:**
-- Strategy summary in plain language (e.g. "Launch a retargeting campaign focused on warm audiences with a value-oriented product angle.")
-- Structured list of planned ad actions:
-  - Create campaign (objective: sales)
-  - Create ad set (audience: 30-day website visitors)
-  - Set daily budget ($75/day)
-- Rationale for the approach
-- Approve button (execution does not happen until this is clicked)
-- Option to decline or request a revised strategy
+- Strategy summary in plain language (e.g. "Launch a retargeting campaign focused on warm audiences — your warm 30d audience has 2.1x ROAS.")
+- **Four individual `approval_request` cards**, one per action type, each rendered independently:
+  - **Campaign card** — campaign objective, name, placement (e.g. "Create sales campaign targeting warm audiences")
+  - **Audience card** — targeting spec, audience size, lookalike % (e.g. "30-day website visitors + 1% lookalike")
+  - **Budget card** — daily budget, bid strategy (e.g. "$75/day · lowest-cost bidding")
+  - **Creative card** — ad copy, image, CTA (e.g. "Summer sale creative · Shop Now CTA")
+- Each card shows: title, detail, estimated daily spend, expected ROAS impact
+- Each card has independent **Approve** / **Decline** buttons
+- A summary banner shows how many cards are approved vs. pending
 
-**Safety rule:** No ad action executes without the merchant clicking Approve on this screen.
+**Execution rule:** Execution begins only after all four cards are approved. Declining one card skips that action; the remaining approved actions still execute.
+
+**Safety rule:** No ad action executes without the merchant explicitly approving its card. This applies in both manual and auto-approve modes for the initial strategy.
 
 ---
 
 ### 4.6 Live Monitoring Dashboard
-**Purpose:** Show real-time campaign progress while the contract is active.
+**Purpose:** Show real-time campaign progress and surface agent-suggested actions while the contract is active.
 
 **Must show:**
 - Current spend vs. minimum spend threshold (e.g. $318 / $500)
@@ -166,6 +170,13 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 - Days remaining in evaluation window (e.g. 3 days left)
 - ML-estimated probability of success (e.g. 61%)
 - Contract status indicator (Active / On Track / At Risk)
+
+**Daily monitoring tick UI (in the chat timeline):**
+- Each 24h tick appends a `daily_update` card to the timeline — shows real ROAS, spend, days left, and ML forecast.
+- In **manual mode**: the tick also appends `approval_request` cards for each suggested optimization. Each card shows the action, rationale, and a countdown to `expires_at` (23h window). The merchant clicks **Approve** or **Decline** per card. Unanswered cards show as expired at the next tick.
+- In **auto mode**: the tick appends a `system_event` per action executed (e.g. "Budget scaled · warm_30d $50 → $65/day"). No approval cards.
+- Urgency styling: `recommended` (standard), `urgent` (amber highlight), `critical` (red, pinned to top).
+- A badge on the workspace header shows the count of pending approval cards when in manual mode.
 
 **Data refreshes** periodically from `GET /api/contracts/:id/performance`.
 
@@ -205,11 +216,11 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 **Must show:**
 
 **Agent Execution — Approval Mode**
-- **Manual (default):** Agent pauses before every individual Meta Ads action and surfaces an approval card in the chat timeline. Merchant must click Approve before the action runs.
-- **Auto-approve:** Agent executes individual mid-campaign optimizations automatically once the overall strategy has been approved. Reduces friction during active contracts.
-- Even in auto-approve mode, the initial strategy plan always requires explicit merchant approval before the campaign launches.
-- An amber banner appears at the top of the Workspace when a contract is Active and approval mode is Manual, reminding the merchant and linking to Settings.
-- Preference is saved locally per browser.
+- **Manual (default):** Each 24h monitoring tick surfaces `approval_request` cards in the chat timeline — one per suggested action (scale budget, pause ad_set, swap creative, etc.). Merchant must click Approve per card before the action runs. Cards expire after 23h; unanswered cards are skipped at the next tick.
+- **Auto-approve:** The agent executes all monitoring tick decisions immediately via Meta Ads MCP. Actions are logged as `system_event` cards in the timeline. No approval cards for monitoring decisions.
+- **The initial strategy plan always requires explicit approval in both modes.** Auto mode only applies to mid-campaign monitoring adjustments.
+- An amber banner appears at the top of the Workspace when a contract is Active and approval mode is Manual, showing the count of pending approval cards and linking to Settings.
+- Preference is saved to the user's profile on the backend (not just browser-local) so it persists across devices.
 
 **Connected Accounts**
 - Meta Ads account: shows account ID and connection status
@@ -511,8 +522,21 @@ export interface ContractMessage {
   type: 'message' | 'daily_update' | 'approval_request' | 'system_event';
   content: string;
   metadata: Record<string, unknown>;
-  status: 'pending' | 'approved' | 'declined' | null;
+  status: 'pending' | 'approved' | 'declined' | 'expired' | null;
+  expires_at: string | null;   // ISO timestamp — set on monitoring-tick approval cards; null for initial strategy cards
   created_at: string;
+}
+
+// Metadata shape for approval_request messages (in ContractMessage.metadata)
+export interface ApprovalCardMetadata {
+  plan_id: string;
+  action_type: 'campaign' | 'audience' | 'budget' | 'creative'
+    | 'budget_adjustment' | 'pause_ad_set' | 'resume_ad_set' | 'swap_creative';
+  title: string;
+  detail: string;
+  estimated_daily_spend?: number;
+  expected_roas?: number;
+  urgency?: 'recommended' | 'urgent' | 'critical';  // monitoring tick cards only
 }
 
 // Full contract record from GET /contracts/:id
