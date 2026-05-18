@@ -222,7 +222,7 @@ Each folder deploys independently. The GitHub repo is shared; the deployment tar
 frontend/   →  Vercel          (Next.js, auto-deploys on push)
 backend/    →  Railway/Render  (FastAPI + agent, Python service)
 agent/      →  same service as backend (imported as a local Python module)
-contracts/  →  Arc testnet     (one-time deploy via ARC CLI, produces a contract address)
+contracts/  →  Arc testnet     (one-time deploy via Hardhat, produces a contract address)
 ```
 
 ---
@@ -258,21 +258,21 @@ PYTHONPATH=/app:/app/../agent uvicorn main:app --host 0.0.0.0 --port $PORT
 
 Contracts are not a running server. They are deployed once and produce a contract address that everything else references.
 
-1. Install the ARC CLI:
-   ```bash
-   uv tool install git+https://github.com/the-canteen-dev/ARC-cli
-   ```
-2. Follow Arc testnet setup at https://arc-node.thecanteenapp.com/
-3. Run the deployment script from `contracts/`:
-   ```bash
-   cd contracts
-   # deploy script TBD by contracts team
-   ```
-4. Copy the output contract address into environment variables for `backend/` and `agent/`
+**Already deployed:** `0xfc1c0ede47a43A38c4335ed60C64A133433Ee6c8` on Arc testnet. Only redeploy if the contract code changes.
+
+To redeploy:
+```bash
+cd contracts
+npm install
+echo "yes" | npx hardhat run scripts/deploy.js --network arc
+```
+
+Then set `ESCROW_CONTRACT_ADDRESS` in `backend/.env` and `agent/.env`. See `contracts/README.md` for the full key setup guide.
 
 Reference docs:
 - Arc developer docs: https://docs.arc.network
 - Circle developer docs: https://developers.circle.com
+- Arc testnet explorer: https://testnet.arcscan.app
 
 ---
 
@@ -290,12 +290,14 @@ Reference docs:
 | Variable | Description |
 |---|---|
 | `DATABASE_URL` | Neon pooled connection string (copy the **pooled** URL from Neon dashboard) |
-| `CLERK_SECRET_KEY` | Clerk secret key — used by `clerk-backend-api` to verify JWTs on every request |
+| `CLERK_SECRET_KEY` | Clerk secret key — used to verify JWTs on every request |
 | `ANTHROPIC_API_KEY` | Claude API key for LLM negotiation and strategy generation |
-| `ARC_RPC_URL` | Arc testnet RPC endpoint (from ARC CLI setup) |
-| `ESCROW_CONTRACT_ADDRESS` | Deployed Arc escrow contract address (from contracts/ deploy) |
-| `SETTLER_PRIVATE_KEY` | Private key for the authorized settler wallet (use Circle Wallets in production) |
-| `CIRCLE_API_KEY` | Circle API key for Wallets and Paymaster |
+| `ARC_RPC_URL` | Arc testnet RPC — use `https://rpc.testnet.arc.network` |
+| `ESCROW_CONTRACT_ADDRESS` | Deployed Arc escrow contract address (from `contracts/out/address.json`) |
+| `CIRCLE_API_KEY` | Circle API key — from console.circle.com → Keys → API Keys |
+| `CIRCLE_WALLET_SET_ID` | Circle wallet set ID — created via `agent/setup_circle_wallet.py` |
+| `AGENT_WALLET_ID` | Circle wallet ID for the settler — created via `agent/setup_circle_wallet.py` |
+| `ENTITY_SECRET` | 32-byte hex secret for Circle developer-controlled wallets — generated once, never changes |
 | `META_ADS_ACCESS_TOKEN` | Meta Ads API token (optional — mock adapter used if absent) |
 
 ### contracts/ (deploy time only)
@@ -377,7 +379,7 @@ cd backend && pip install -r requirements.txt && uvicorn main:app --reload
 cd contracts && # follow contracts/PRD.md
 ```
 
-For local backend → Arc testnet interaction, point `ARC_RPC_URL` to the Canteen-hosted testnet endpoint from the ARC CLI.
+For local backend → Arc testnet interaction, set `ARC_RPC_URL=https://rpc.testnet.arc.network` in your `.env`.
 
 ---
 
