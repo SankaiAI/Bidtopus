@@ -9,11 +9,10 @@ Schema verified against backend/db/models.py (ticket #34):
 """
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy import DateTime, Float, Integer, String, Text
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -22,11 +21,15 @@ class BackendBase(DeclarativeBase):
 
 
 class PerformanceContractORM(BackendBase):
-    """Read-only view of the backend's performance_contracts table."""
+    """Read-only view of the backend's performance_contracts table.
+
+    id and merchant_id are stored as VARCHAR(36) by the backend (String, not UUID type).
+    Using String here avoids a varchar=uuid operator error in PostgreSQL when filtering.
+    """
     __tablename__ = "performance_contracts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    merchant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    merchant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     target_metric: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -100,8 +103,8 @@ class StrategyPlanORM(BackendBase):
     """Read-only view of the backend's strategy_plans table."""
     __tablename__ = "strategy_plans"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    contract_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    contract_id: Mapped[str] = mapped_column(String(36), nullable=False)
     approval_status: Mapped[str] = mapped_column(String(20), nullable=False)  # pending | approved | rejected
     planned_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

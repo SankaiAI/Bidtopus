@@ -14,7 +14,6 @@ Usage:
 """
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -62,7 +61,7 @@ def _run_monitoring_tick_job(contract_id: str) -> None:
     with get_db() as db:
         contract = (
             db.query(PerformanceContractORM)
-            .filter(PerformanceContractORM.id == uuid.UUID(contract_id))
+            .filter(PerformanceContractORM.id == contract_id)
             .first()
         )
         if not contract:

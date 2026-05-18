@@ -117,7 +117,7 @@ class AccountContextResponse(BaseModel):
 def _get_contract_or_404(contract_id: str, db: Session) -> PerformanceContractORM:
     contract = (
         db.query(PerformanceContractORM)
-        .filter(PerformanceContractORM.id == uuid.UUID(contract_id))
+        .filter(PerformanceContractORM.id == contract_id)
         .first()
     )
     if not contract:
@@ -350,7 +350,19 @@ def activate(body: ContractRequest, db: Session = Depends(get_db)):
     """
     from scheduler import register_monitoring_job
 
-    contract = _get_contract_or_404(body.contract_id, db)
+    contract = (
+        db.query(PerformanceContractORM)
+        .filter(PerformanceContractORM.id == body.contract_id)
+        .first()
+    )
+    if not contract:
+        # Backend committed the status update before calling us, but replication
+        # lag or a race can occasionally leave the row invisible here. The startup
+        # recovery in main.py re-registers all Active contracts on next restart,
+        # so this is safe to treat as a soft warning rather than an error.
+        logger.warning("activate_contract_not_found", contract_id=body.contract_id)
+        return ActivateResponse(contract_id=body.contract_id, monitoring_scheduled=False)
+
     attach_session(body.contract_id)
     logger.info("request_received", contract_id=body.contract_id, action="activate", state=contract.status)
 
