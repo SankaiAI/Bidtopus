@@ -487,6 +487,17 @@ def resolve_contract(db: Session, contract: PerformanceContract) -> dict:
         settlement_tx_hash=result.get("settlement_tx_hash"),
     )
 
+    # Mirror settlement outcome on the EscrowRecord so the frontend can read
+    # both fund_tx_hash and settlement_tx_hash from a single escrow GET
+    escrow = repo.get_escrow_record(db, contract.id)
+    if escrow:
+        escrow_status = "released" if result["outcome"] == "success" else "refunded"
+        repo.update_escrow_status(
+            db, escrow.id,
+            status=escrow_status,
+            settlement_tx_hash=result.get("settlement_tx_hash"),
+        )
+
     new_status = "Settled"
     repo.update_contract_status(db, contract.id, new_status, resolved_at=datetime.now(timezone.utc))
     log.info("Contract resolved contract=%s outcome=%s roas=%.2f tx=%s", contract.id, result["outcome"], result["final_roas"], result.get("settlement_tx_hash"))

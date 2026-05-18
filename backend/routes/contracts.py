@@ -225,6 +225,59 @@ def resolve(
     return result
 
 
+# ── Escrow info ───────────────────────────────────────────────────────────────
+
+@router.get("/{contract_id}/escrow")
+def get_escrow(
+    contract_id: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract_service.require_contract_owner(db, contract_id, current_user)
+    from db.repo import get_escrow_record
+    record = get_escrow_record(db, contract_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="No escrow record for this contract")
+    return {
+        "id": str(record.id),
+        "contract_id": str(record.contract_id),
+        "fund_tx_hash": record.tx_hash,
+        "settlement_tx_hash": record.settlement_tx_hash,
+        "amount_usdc": record.amount_usdc,
+        "status": record.status,
+        "chain_contract_id": record.chain_contract_id,
+        "created_at": record.created_at,
+    }
+
+
+# ── Resolution info ───────────────────────────────────────────────────────────
+
+@router.get("/{contract_id}/resolution")
+def get_resolution(
+    contract_id: str,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    contract_service.require_contract_owner(db, contract_id, current_user)
+    from db.repo import get_resolution, get_escrow_record
+    record = get_resolution(db, contract_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Contract not yet resolved")
+    escrow = get_escrow_record(db, contract_id)
+    return {
+        "id": str(record.id),
+        "contract_id": str(record.contract_id),
+        "final_spend": record.final_spend,
+        "final_revenue": record.final_revenue,
+        "final_roas": record.final_roas,
+        "outcome": record.outcome,
+        "settlement_tx_hash": record.settlement_tx_hash,
+        "fund_tx_hash": escrow.tx_hash if escrow else None,
+        "amount_usdc": escrow.amount_usdc if escrow else None,
+        "resolved_at": record.resolved_at,
+    }
+
+
 # ── Per-action approval (manual approval mode) ────────────────────────────────
 
 def _resolve_action_message(db: Session, contract_id: str, action_id: str, current_user):

@@ -116,6 +116,7 @@ class StrategyPlan(Base):
     planned_actions = Column(JSON, nullable=False)
     approval_status = Column(String, nullable=False, default="pending")
     approved_at = Column(DateTime(timezone=True), nullable=True)
+    execution_receipts = Column(JSON, nullable=True)  # {campaign_id, ad_set_ids, creative_ids} written after Day 1 execution
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
 
     contract = relationship("PerformanceContract", back_populates="strategy_plans")
@@ -160,6 +161,7 @@ class ContractMessage(Base):
     content = Column(Text, nullable=False)
     extra = Column("metadata", JSON, nullable=True)
     status = Column(String, nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
 
     contract = relationship("PerformanceContract", back_populates="messages")
