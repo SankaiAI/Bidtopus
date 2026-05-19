@@ -248,7 +248,7 @@ def agent_offer(body: AgentOfferRequest, db: Session = Depends(get_db)):
     )
 
     try:
-        offer = orchestrator.generate_offer(
+        offer, _thinking = orchestrator.generate_offer(
             contract_id=body.contract_id,
             contract_terms=_to_contract_terms(contract),
             underwriting_result=underwriting_result,
