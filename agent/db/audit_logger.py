@@ -40,7 +40,13 @@ class AuditLogger:
         event_type: str,
         payload: dict[str, Any],
     ) -> None:
-        """Write one audit event. Flushes immediately so a crash still persists it."""
+        """Write one audit event and commit immediately.
+
+        Commit (not just flush) so that the row is visible to subsequent HTTP
+        requests that arrive before FastAPI's generator teardown runs db.commit().
+        FastAPI sends the response before running post-yield dependency cleanup,
+        so a flush-only write is invisible to the next agent call.
+        """
         event = AuditEventORM(
             contract_id=contract_id,
             component=component,
@@ -48,7 +54,7 @@ class AuditLogger:
             payload=_redact(payload),
         )
         self._db.add(event)
-        self._db.flush()
+        self._db.commit()
 
     # ── Read — all query patterns the agent uses ──────────────────────────────
 
