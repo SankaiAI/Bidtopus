@@ -342,7 +342,10 @@ def accept_offer(db: Session, contract: PerformanceContract, offer_id: str) -> P
     if offer.offer_type not in ("accept", "counteroffer"):
         raise HTTPException(status_code=400, detail="Offer type cannot be accepted (rejected)")
 
-    repo.update_contract_status(db, contract.id, "FundedPending")
+    # update_contract_status uses db.get() internally — reliable across Neon's pooled
+    # connections — so use its return value instead of a follow-up get_contract() that
+    # can intermittently return None on the same session.
+    updated = repo.update_contract_status(db, contract.id, "FundedPending")
     log.info("Offer accepted contract=%s offer=%s → FundedPending", contract.id, offer_id)
     repo.log_audit_event(db, contract.id, "contract", "result", {"action": "offer_accepted", "offer_id": offer_id})
     messages_repo.append(
@@ -350,7 +353,7 @@ def accept_offer(db: Session, contract: PerformanceContract, offer_id: str) -> P
         content="Merchant accepted offer — awaiting escrow",
         extra={"offer_id": offer_id},
     )
-    return repo.get_contract(db, contract.id)
+    return updated
 
 
 # ── Fund Escrow ───────────────────────────────────────────────────────────────
