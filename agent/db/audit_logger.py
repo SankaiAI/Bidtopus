@@ -7,12 +7,15 @@ The logger is NOT write-only. Every query method here must work from day 1.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from db.orm_models import AuditEventORM
+
+_log = logging.getLogger(__name__)
 
 SENSITIVE_KEYS = {"account_id", "pixel_id", "access_token", "wallet_address", "private_key"}
 
@@ -54,7 +57,15 @@ class AuditLogger:
             payload=_redact(payload),
         )
         self._db.add(event)
-        self._db.commit()
+        try:
+            self._db.commit()
+            _log.debug("audit_log_committed contract=%s component=%s event_type=%s id=%s",
+                       contract_id, component, event_type, event.id)
+        except Exception as exc:
+            _log.error("audit_log_commit_failed contract=%s component=%s event_type=%s error=%s",
+                       contract_id, component, event_type, exc, exc_info=True)
+            self._db.rollback()
+            raise
 
     # ── Read — all query patterns the agent uses ──────────────────────────────
 
@@ -93,7 +104,7 @@ class AuditLogger:
         return event.payload if event else None
 
     def get_by_component(self, contract_id: str, component: str) -> list[AuditEventORM]:
-        return (
+        results = (
             self._db.query(AuditEventORM)
             .filter(
                 AuditEventORM.contract_id == contract_id,
@@ -102,6 +113,9 @@ class AuditLogger:
             .order_by(AuditEventORM.created_at)
             .all()
         )
+        _log.debug("audit_get_by_component contract=%s component=%s found=%d",
+                   contract_id, component, len(results))
+        return results
 
     def get_since(self, contract_id: str, days_ago: int) -> list[AuditEventORM]:
         """Last N days of events — used by chat Q&A for context."""
