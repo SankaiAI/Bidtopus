@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Index, String, Text
-from sqlalchemy.dialects.postgresql import JSON, UUID
+from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -20,13 +20,17 @@ class AgentBase(DeclarativeBase):
 
 
 class AuditEventORM(AgentBase):
-    """Internal observability store — every component call logged here."""
+    """Internal observability store — every component call logged here.
+
+    id and contract_id are VARCHAR(36) in the DB (created by backend as String).
+    Using String here matches the actual schema and avoids varchar=uuid errors.
+    """
     __tablename__ = "audit_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    contract_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    contract_id: Mapped[str] = mapped_column(String(36), nullable=False)
     component: Mapped[str] = mapped_column(String(50), nullable=False)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
@@ -43,13 +47,17 @@ class AuditEventORM(AgentBase):
 
 
 class ContractMessageORM(AgentBase):
-    """Merchant-facing UI timeline — only what the merchant should see."""
+    """Merchant-facing UI timeline — only what the merchant should see.
+
+    id and contract_id are VARCHAR(36) in the DB (created by backend as String).
+    Using String here matches the actual schema and avoids varchar=uuid errors.
+    """
     __tablename__ = "contract_messages"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    contract_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    contract_id: Mapped[str] = mapped_column(String(36), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)   # "agent" | "merchant"
     type: Mapped[str] = mapped_column(String(50), nullable=False)   # "message" | "daily_update" | "approval_request" | "system_event"
     content: Mapped[str] = mapped_column(Text, nullable=False)

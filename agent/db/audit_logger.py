@@ -7,7 +7,6 @@ The logger is NOT write-only. Every query method here must work from day 1.
 """
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -43,7 +42,7 @@ class AuditLogger:
     ) -> None:
         """Write one audit event. Flushes immediately so a crash still persists it."""
         event = AuditEventORM(
-            contract_id=uuid.UUID(contract_id),
+            contract_id=contract_id,
             component=component,
             event_type=event_type,
             payload=_redact(payload),
@@ -56,7 +55,7 @@ class AuditLogger:
     def get_all(self, contract_id: str) -> list[AuditEventORM]:
         return (
             self._db.query(AuditEventORM)
-            .filter(AuditEventORM.contract_id == uuid.UUID(contract_id))
+            .filter(AuditEventORM.contract_id == contract_id)
             .order_by(AuditEventORM.created_at)
             .all()
         )
@@ -66,7 +65,7 @@ class AuditLogger:
         return (
             self._db.query(AuditEventORM)
             .filter(
-                AuditEventORM.contract_id == uuid.UUID(contract_id),
+                AuditEventORM.contract_id == contract_id,
                 AuditEventORM.event_type == "intent",
             )
             .order_by(AuditEventORM.created_at.desc())
@@ -78,7 +77,7 @@ class AuditLogger:
         event = (
             self._db.query(AuditEventORM)
             .filter(
-                AuditEventORM.contract_id == uuid.UUID(contract_id),
+                AuditEventORM.contract_id == contract_id,
                 AuditEventORM.component == "meta_ads",
                 AuditEventORM.event_type == "snapshot",
             )
@@ -91,7 +90,7 @@ class AuditLogger:
         return (
             self._db.query(AuditEventORM)
             .filter(
-                AuditEventORM.contract_id == uuid.UUID(contract_id),
+                AuditEventORM.contract_id == contract_id,
                 AuditEventORM.component == component,
             )
             .order_by(AuditEventORM.created_at)
@@ -104,7 +103,7 @@ class AuditLogger:
         return (
             self._db.query(AuditEventORM)
             .filter(
-                AuditEventORM.contract_id == uuid.UUID(contract_id),
+                AuditEventORM.contract_id == contract_id,
                 AuditEventORM.created_at >= cutoff,
             )
             .order_by(AuditEventORM.created_at.desc())
@@ -116,7 +115,7 @@ class AuditLogger:
         return (
             self._db.query(AuditEventORM)
             .filter(
-                AuditEventORM.contract_id == uuid.UUID(contract_id),
+                AuditEventORM.contract_id == contract_id,
                 AuditEventORM.component.in_(["llm_negotiation", "llm_strategy"]),
             )
             .order_by(AuditEventORM.created_at)
