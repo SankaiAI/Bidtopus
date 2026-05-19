@@ -72,7 +72,12 @@ def update_contract_title(db: Session, contract_id: str, title: str) -> None:
 
 
 def update_contract_status(db: Session, contract_id: str, status: str, **extra) -> PerformanceContract:
-    contract = get_contract(db, contract_id)
+    # db.get() uses the identity map and refreshes expired objects — more reliable
+    # than a plain filter().first() when the object was already loaded in this session
+    # and multiple commits have since expired it (common in background tasks on Neon).
+    contract = db.get(PerformanceContract, contract_id)
+    if contract is None:
+        raise ValueError(f"Contract {contract_id} not found for status update")
     contract.status = status
     for k, v in extra.items():
         setattr(contract, k, v)
