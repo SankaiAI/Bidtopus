@@ -58,6 +58,11 @@ class ContractResponse(BaseModel):
     campaign_mode: Optional[str] = None
     campaign_goal: Optional[str] = None
     created_at: datetime
+    resolution_outcome: Optional[str] = None    # "success" | "failure" | None
+    final_roas: Optional[float] = None
+    settled_at: Optional[datetime] = None
+    settle_tx_hash: Optional[str] = None
+    refund_tx_hash: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -68,6 +73,19 @@ class ContractResponse(BaseModel):
 
     @classmethod
     def from_orm_contract(cls, c) -> "ContractResponse":
+        # ResolutionRecord has a UNIQUE FK on contract_id, so at most one row.
+        resolution = c.resolution_records[0] if c.resolution_records else None
+
+        # ResolutionRecord stores a single settlement_tx_hash regardless of outcome —
+        # split it into settle/refund for the frontend based on outcome.
+        settle_tx = None
+        refund_tx = None
+        if resolution and resolution.settlement_tx_hash:
+            if resolution.outcome == "success":
+                settle_tx = resolution.settlement_tx_hash
+            elif resolution.outcome == "failure":
+                refund_tx = resolution.settlement_tx_hash
+
         return cls(
             id=str(c.id),
             merchant_id=str(c.merchant_id),
@@ -80,6 +98,11 @@ class ContractResponse(BaseModel):
             campaign_mode=c.campaign_mode,
             campaign_goal=c.campaign_goal,
             created_at=c.created_at,
+            resolution_outcome=resolution.outcome if resolution else None,
+            final_roas=resolution.final_roas if resolution else None,
+            settled_at=resolution.resolved_at if resolution else None,
+            settle_tx_hash=settle_tx,
+            refund_tx_hash=refund_tx,
         )
 
 
