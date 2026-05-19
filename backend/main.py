@@ -27,7 +27,7 @@ def _run_migrations():
         ("users", "meta_ads_account_id", "VARCHAR"),
         ("performance_contracts", "title", "VARCHAR"),
         ("strategy_plans", "execution_receipts", "JSON"),
-        ("contract_messages", "expires_at", "DATETIME"),
+        ("contract_messages", "expires_at", "TIMESTAMP WITH TIME ZONE"),
     ]
     with engine.connect() as conn:
         for table, col, definition in _new_cols:
