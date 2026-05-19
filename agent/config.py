@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # ── LLM ──────────────────────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str = ""
     CLAUDE_MODEL: str = "claude-sonnet-4-6"
-    NEGOTIATION_THINKING_BUDGET: int = 512
+    NEGOTIATION_THINKING_BUDGET: int = 1024
     STRATEGY_THINKING_BUDGET: int = 1024
 
     # ── Database ──────────────────────────────────────────────────────────────
