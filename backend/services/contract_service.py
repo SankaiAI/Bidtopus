@@ -324,7 +324,7 @@ def generate_agent_offer(db: Session, contract: PerformanceContract, on_reasonin
     messages_repo.append(
         db, contract.id, "agent", "message",
         content=_sanitize(result["message"]),
-        extra={"offer_type": result["offer_type"], "offer_id": offer.id},
+        extra={"offer_type": result["offer_type"], "offer_id": str(offer.id)},
     )
     return result
 
