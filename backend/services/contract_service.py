@@ -335,7 +335,9 @@ def accept_offer(db: Session, contract: PerformanceContract, offer_id: str) -> P
     _require_status(contract, "Offered")
 
     offer = repo.get_latest_agent_offer(db, contract.id)
-    if offer is None or offer.id != offer_id:
+    # offer.id hydrates as uuid.UUID under Postgres (column type is uuid, not String(36)),
+    # so coerce both sides before comparing against the str body field.
+    if offer is None or str(offer.id) != offer_id:
         raise HTTPException(status_code=400, detail="Offer not found or does not match contract")
     if offer.offer_type not in ("accept", "counteroffer"):
         raise HTTPException(status_code=400, detail="Offer type cannot be accepted (rejected)")
@@ -417,7 +419,7 @@ def generate_strategy(db: Session, contract: PerformanceContract, on_reasoning=N
     messages_repo.append(
         db, contract.id, "agent", "approval_request",
         content=_sanitize(result["summary"]),
-        extra={"plan_id": plan.id, "planned_actions": result["planned_actions"]},
+        extra={"plan_id": str(plan.id), "planned_actions": result["planned_actions"]},
         status="pending",
     )
     return {"plan_id": plan.id, **result}
@@ -427,7 +429,7 @@ def generate_strategy(db: Session, contract: PerformanceContract, on_reasoning=N
 
 def approve_execution(db: Session, contract: PerformanceContract, plan_id: str, approved: bool) -> dict:
     plan = repo.get_latest_strategy_plan(db, contract.id)
-    if plan is None or plan.id != plan_id:
+    if plan is None or str(plan.id) != plan_id:
         raise HTTPException(status_code=400, detail="Strategy plan not found")
     if plan.approval_status != "pending":
         raise HTTPException(status_code=400, detail="Strategy plan is not pending approval")
