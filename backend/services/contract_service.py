@@ -300,7 +300,14 @@ def generate_agent_offer(db: Session, contract: PerformanceContract, on_reasonin
 
     repo.log_audit_event(db, contract.id, "llm_negotiation", "intent", {"contract_id": contract.id})
 
-    result = agent_client.generate_agent_offer(contract.id, on_reasoning=on_reasoning)
+    uw_dict = {
+        "success_probability": underwriting.success_probability,
+        "risk_level": underwriting.risk_level,
+        "expected_roas_range": underwriting.expected_roas_range,
+        "recommendation": underwriting.recommendation,
+        "recommended_fee_usdc": underwriting.recommended_fee_usdc,
+    }
+    result = agent_client.generate_agent_offer(contract.id, underwriting_result=uw_dict, on_reasoning=on_reasoning)
 
     offer = repo.save_agent_offer(
         db,

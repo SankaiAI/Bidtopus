@@ -18,10 +18,11 @@ _TIMEOUT = 120.0  # agent calls can be slow (LLM + Meta Ads API)
 log = logging.getLogger(__name__)
 
 
-def _post(path: str, contract_id: str) -> dict[str, Any]:
+def _post(path: str, contract_id: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     url = f"{settings.agent_base_url}{path}"
     log.debug("agent call → %s contract=%s", path, contract_id)
-    resp = httpx.post(url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT)
+    body = {"contract_id": str(contract_id), **(extra or {})}
+    resp = httpx.post(url, json=body, timeout=_TIMEOUT)
     resp.raise_for_status()
     result = resp.json()
     log.debug("agent result ← %s:\n%s", path, json.dumps(result, indent=2, default=str))
@@ -79,9 +80,14 @@ def run_underwriting(contract_id: str) -> dict[str, Any]:
     return _post("/agent/underwrite", contract_id)
 
 
-def generate_agent_offer(contract_id: str, on_reasoning: Callable[[str], None] | None = None) -> dict[str, Any]:
+def generate_agent_offer(
+    contract_id: str,
+    underwriting_result: dict[str, Any] | None = None,
+    on_reasoning: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
     """
     LLM negotiation offer.
+    Pass underwriting_result to avoid the agent re-reading the audit log.
     Pass on_reasoning to stream reasoning tokens via /agent/agent-offer/stream.
     Expected return shape:
     {
@@ -92,9 +98,32 @@ def generate_agent_offer(contract_id: str, on_reasoning: Callable[[str], None] |
         "revised_time_window_days": int | None,
     }
     """
+    extra = {"underwriting_result": underwriting_result} if underwriting_result else None
     if on_reasoning is not None:
-        return _stream_sse("/agent/agent-offer/stream", contract_id, on_reasoning)
-    return _post("/agent/agent-offer", contract_id)
+        url = f"{settings.agent_base_url}/agent/agent-offer/stream"
+        body = {"contract_id": str(contract_id), **(extra or {})}
+        log.debug("agent stream → /agent/agent-offer/stream contract=%s", contract_id)
+        result: dict[str, Any] = {}
+        current_event: str | None = None
+        with httpx.stream("POST", url, json=body, timeout=_TIMEOUT) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if line.startswith("event: "):
+                    current_event = line[7:].strip()
+                elif line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                    except Exception:
+                        data = {}
+                    if current_event == "reasoning_delta":
+                        on_reasoning(data.get("text", ""))
+                    elif current_event == "result":
+                        result = data
+                    elif current_event == "error":
+                        raise RuntimeError(data.get("detail", "agent stream error"))
+                    current_event = None
+        return result
+    return _post("/agent/agent-offer", contract_id, extra)
 
 
 def generate_strategy(contract_id: str, on_reasoning: Callable[[str], None] | None = None) -> dict[str, Any]:

@@ -43,6 +43,11 @@ class ContractRequest(BaseModel):
     contract_id: str
 
 
+class AgentOfferRequest(BaseModel):
+    contract_id: str
+    underwriting_result: dict | None = None
+
+
 class UnderwriteResponse(BaseModel):
     success_probability: float
     risk_level: str
@@ -197,30 +202,41 @@ def underwrite(body: ContractRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/agent-offer", response_model=AgentOfferResponse)
-def agent_offer(body: ContractRequest, db: Session = Depends(get_db)):
-    """Generate LLM negotiation offer from latest underwriting result in audit log."""
+def agent_offer(body: AgentOfferRequest, db: Session = Depends(get_db)):
+    """Generate LLM negotiation offer.
+
+    Prefers underwriting_result from the request body (passed by the backend,
+    which already holds it from /underwrite). Falls back to reading the audit log
+    for callers that don't supply it.
+    """
     from db.audit_logger import AuditLogger
+    from models.types import UnderwritingResult
 
     contract = _get_contract_or_404(body.contract_id, db)
     attach_session(body.contract_id)
     logger.info("request_received", contract_id=body.contract_id, action="agent_offer", state=contract.status, turn=contract.negotiation_turn_count)
-    audit = AuditLogger(db)
 
-    # Read latest underwriting result from audit log
-    underwriting_events = audit.get_by_component(body.contract_id, "ml_underwriting")
-    result_events = [e for e in underwriting_events if e.event_type == "result"]
-    if not result_events:
-        raise HTTPException(
-            status_code=422,
-            detail="No underwriting result found. Call /underwrite first.",
-        )
-
-    latest = result_events[-1].payload.get("outputs", {})
-    from models.types import UnderwritingResult
-    try:
-        underwriting_result = UnderwritingResult(**latest)
-    except Exception:
-        raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
+    if body.underwriting_result:
+        # Fast path: caller supplied the result — no audit log read needed.
+        try:
+            underwriting_result = UnderwritingResult(**body.underwriting_result)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Invalid underwriting_result in request body")
+    else:
+        # Fallback: read from audit log (subject to commit-timing race on Neon).
+        audit = AuditLogger(db)
+        underwriting_events = audit.get_by_component(body.contract_id, "ml_underwriting")
+        result_events = [e for e in underwriting_events if e.event_type == "result"]
+        if not result_events:
+            raise HTTPException(
+                status_code=422,
+                detail="No underwriting result found. Call /underwrite first.",
+            )
+        latest = result_events[-1].payload.get("outputs", {})
+        try:
+            underwriting_result = UnderwritingResult(**latest)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
 
     logger.info(
         "state_handoff",
@@ -561,7 +577,7 @@ def underwrite_stream(body: ContractRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/agent-offer/stream")
-def agent_offer_stream(body: ContractRequest, db: Session = Depends(get_db)):
+def agent_offer_stream(body: AgentOfferRequest, db: Session = Depends(get_db)):
     """SSE variant of /agent-offer — streams reasoning_delta events then result."""
     from db.audit_logger import AuditLogger
     from models.types import UnderwritingResult
@@ -569,17 +585,22 @@ def agent_offer_stream(body: ContractRequest, db: Session = Depends(get_db)):
     contract = _get_contract_or_404(body.contract_id, db)
     attach_session(body.contract_id)
 
-    audit = AuditLogger(db)
-    underwriting_events = audit.get_by_component(body.contract_id, "ml_underwriting")
-    result_events = [e for e in underwriting_events if e.event_type == "result"]
-    if not result_events:
-        raise HTTPException(status_code=422, detail="No underwriting result found. Call /underwrite first.")
-
-    latest = result_events[-1].payload.get("outputs", {})
-    try:
-        underwriting_result = UnderwritingResult(**latest)
-    except Exception:
-        raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
+    if body.underwriting_result:
+        try:
+            underwriting_result = UnderwritingResult(**body.underwriting_result)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Invalid underwriting_result in request body")
+    else:
+        audit = AuditLogger(db)
+        underwriting_events = audit.get_by_component(body.contract_id, "ml_underwriting")
+        result_events = [e for e in underwriting_events if e.event_type == "result"]
+        if not result_events:
+            raise HTTPException(status_code=422, detail="No underwriting result found. Call /underwrite first.")
+        latest = result_events[-1].payload.get("outputs", {})
+        try:
+            underwriting_result = UnderwritingResult(**latest)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Corrupt underwriting result in audit log")
 
     return _sse_stream(orchestrator.stream_offer(
         contract_id=body.contract_id,
