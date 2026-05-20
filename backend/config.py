@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     arc_rpc_url: str = ""
     escrow_contract_address: str = ""
 
+    # Shared secret for agent → backend service-to-service calls (e.g. perf ingest, issue #79)
+    agent_service_token: str = ""
+
     model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}
 
     @property

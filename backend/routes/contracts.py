@@ -9,7 +9,9 @@ from limiter import limiter
 
 import db.messages_repo as messages_repo
 import db.repo as repo
+import event_bus
 from auth.clerk import get_current_user
+from auth.service_token import verify_service_token
 from db.models import (
     AgentOffer, AuditEvent, ContractMessage, EscrowRecord,
     PerformanceSnapshot, ResolutionRecord, StrategyPlan, UnderwritingResult,
@@ -21,6 +23,7 @@ from models.schemas import (
     ContractCreateRequest,
     ContractResponse,
     FundEscrowRequest,
+    PerformanceIngestRequest,
     TitleUpdateRequest,
 )
 from services import contract_service
@@ -215,6 +218,46 @@ def get_performance(
 ):
     contract = contract_service.require_contract_owner(db, contract_id, current_user)
     return contract_service.get_performance(db, contract)
+
+
+@router.post("/{contract_id}/performance", status_code=201)
+def ingest_performance(
+    contract_id: str,
+    body: PerformanceIngestRequest,
+    _: None = Depends(verify_service_token),
+    db: Session = Depends(get_db),
+):
+    """
+    Agent → backend ingest sink for Meta Ads performance snapshots.
+    Auth: X-Service-Token header must match AGENT_SERVICE_TOKEN env var.
+    """
+    contract = repo.get_contract(db, contract_id)
+    if contract is None:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    if contract.status != "Active":
+        # Snapshots arriving for non-Active contracts are dropped gracefully so the
+        # agent doesn't retry into a tombstone.
+        log.info("perf ingest: ignoring snapshot for non-Active contract=%s status=%s",
+                 contract_id, contract.status)
+        return Response(status_code=202)
+
+    snapshot_kwargs = {
+        "spend": body.spend,
+        "revenue": body.revenue,
+        "roas": body.roas,
+        "success_probability": body.success_probability,
+    }
+    # Only pass timestamp if explicitly supplied — otherwise the column default fires
+    if body.timestamp is not None:
+        snapshot_kwargs["timestamp"] = body.timestamp
+    snapshot = repo.save_performance_snapshot(db, contract_id=str(contract.id), **snapshot_kwargs)
+    event_bus.publish(str(contract.id), "performance_update", {
+        "spend": body.spend,
+        "revenue": body.revenue,
+        "roas": body.roas,
+        "timestamp": snapshot.timestamp.isoformat(),
+    })
+    return {"id": snapshot.id, "timestamp": snapshot.timestamp.isoformat()}
 
 
 # ── Resolve ───────────────────────────────────────────────────────────────────

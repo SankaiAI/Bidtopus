@@ -228,6 +228,14 @@ class PerformanceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PerformanceIngestRequest(BaseModel):
+    spend: float
+    revenue: float
+    roas: Optional[float] = None
+    success_probability: Optional[float] = None
+    timestamp: Optional[datetime] = None   # agent supplies; backend defaults to now()
+
+
 # ── Resolution ────────────────────────────────────────────────────────────────
 
 class ResolutionResponse(BaseModel):
