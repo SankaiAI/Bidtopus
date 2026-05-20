@@ -22,6 +22,7 @@ from typing import Any, Generator
 
 from sqlalchemy.orm import Session
 
+import backend_client
 from adapters.arc_escrow import get_arc_escrow_adapter
 from adapters.circle_wallets import get_circle_wallets_adapter
 from adapters.meta_ads import get_meta_ads_adapter
@@ -478,11 +479,13 @@ def stream_strategy(
 def execute_ads_actions(
     contract_id: str,
     contract_status: str,
+    account_id: str,
     db: Session,
 ) -> list[dict]:
     """Step 4: Execute approved strategy actions via Meta Ads adapter.
 
     Re-reads approval from DB with row-level lock — never trusts in-memory state.
+    `account_id` is the Meta-side "act_XXXXX" string, sourced from contract.account_id.
     """
     from sqlalchemy import text
 
@@ -514,13 +517,15 @@ def execute_ads_actions(
 
         audit.log(contract_id, "meta_ads", "intent", {
             "action_type": action.type,
+            "account_id": account_id,
             "params": action.params,
         })
 
-        result = meta_ads.execute_action(contract_id, action)
+        result = meta_ads.execute_action(contract_id, action, account_id)
 
         audit.log(contract_id, "meta_ads", "result", {
             "action_type": action.type,
+            "account_id": account_id,
             "response": result,
         })
         results.append(result)
@@ -528,6 +533,7 @@ def execute_ads_actions(
     logger.info(
         "ads_actions_executed",
         contract_id=contract_id,
+        account_id=account_id,
         action_count=len(results),
     )
     return results
@@ -599,9 +605,10 @@ def run_monitoring_tick(
     evaluation_window_complete: bool,
     db: Session,
 ) -> dict[str, Any]:
-    """Called by the background scheduler every 24h for Active contracts.
+    """Called by the background scheduler for Active contracts (every MONITORING_TICK_MINUTES).
 
-    Fetches performance, runs forecast, and triggers resolution if window is closed.
+    Fetches performance, runs forecast, pushes a snapshot to backend's ingest
+    endpoint, and triggers resolution if the evaluation window is closed.
     """
     result = get_performance(
         contract_id=contract_id,
@@ -612,6 +619,27 @@ def run_monitoring_tick(
         days_remaining=days_remaining,
         db=db,
     )
+
+    # Push snapshot to backend so the merchant's Live Performance card sees it.
+    # Failure is observability-only — must never abort the tick's primary work
+    # (forecast + timeline + downstream resolution).
+    snapshot = result["snapshot"]
+    forecast = result.get("forecast", {})
+    try:
+        import httpx
+
+        backend_client.push_performance(
+            contract_id,
+            spend=snapshot["spend"],
+            revenue=snapshot["revenue"],
+            roas=snapshot.get("roas"),
+            success_probability=forecast.get("success_probability"),
+        )
+    except httpx.HTTPError:
+        logger.exception(
+            "backend_push_failed",
+            contract_id=contract_id,
+        )
 
     if evaluation_window_complete:
         snapshot = result["snapshot"]

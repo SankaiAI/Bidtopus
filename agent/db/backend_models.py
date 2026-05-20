@@ -3,21 +3,36 @@
 The agent reads from these tables but never writes to them.
 All writes to performance_contracts and strategy_plans are owned by the backend.
 
-Schema verified against backend/db/models.py (ticket #34):
-  performance_contracts — core contract record + status
+Schema verified against backend/db/models.py (tickets #34, #76):
+  performance_contracts — core contract record + status + meta_ads_account FK
+  meta_ads_accounts     — per-merchant Meta ad accounts (act_XXXXX strings)
   strategy_plans        — LLM-generated plan + merchant approval status
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import DateTime, Float, Integer, String, Text
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class BackendBase(DeclarativeBase):
     pass
+
+
+class MetaAdsAccountORM(BackendBase):
+    """Read-only view of the backend's meta_ads_accounts table (ticket #76).
+
+    `meta_ads_account_id` is the Meta-side "act_XXXXX" string used by the Ads SDK;
+    `id` is the internal UUID used as FK from performance_contracts.
+    """
+    __tablename__ = "meta_ads_accounts"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    merchant_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    meta_ads_account_id: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class PerformanceContractORM(BackendBase):
@@ -30,6 +45,9 @@ class PerformanceContractORM(BackendBase):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     merchant_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    meta_ads_account_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("meta_ads_accounts.id"), nullable=True
+    )
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     target_metric: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
@@ -48,6 +66,10 @@ class PerformanceContractORM(BackendBase):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     funded_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    meta_account: Mapped["MetaAdsAccountORM | None"] = relationship(
+        "MetaAdsAccountORM", lazy="joined"
+    )
 
     # ── Python-level aliases so all existing route helpers work unchanged ──────
 
@@ -71,8 +93,19 @@ class PerformanceContractORM(BackendBase):
 
     @property
     def account_id(self) -> str:
+        # Prefer the FK relationship added in backend #76 — it points to the
+        # authoritative meta_ads_accounts row whose `meta_ads_account_id` column
+        # holds the Meta-side "act_XXXXX" string.
+        if self.meta_account and self.meta_account.meta_ads_account_id:
+            return self.meta_account.meta_ads_account_id
         ctx = self.account_context or {}
-        return ctx.get("meta_ads_account_id") or "act_0000000000"
+        json_account = ctx.get("meta_ads_account_id")
+        if json_account:
+            return json_account
+        raise ValueError(
+            f"Contract {self.id} has no meta_ads_account_id "
+            "(neither FK relationship nor account_context JSON)"
+        )
 
     @property
     def pixel_id(self) -> str | None:

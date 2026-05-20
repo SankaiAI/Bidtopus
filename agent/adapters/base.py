@@ -23,7 +23,9 @@ class MetaAdsAdapterBase(ABC):
     def get_performance(self, contract_id: str, day: int) -> PerformanceSnapshot: ...
 
     @abstractmethod
-    def execute_action(self, contract_id: str, action: StrategyAction) -> dict: ...
+    def execute_action(
+        self, contract_id: str, action: StrategyAction, account_id: str
+    ) -> dict: ...
 
     def get_account_context(self, account_id: str) -> dict:
         """Return historical Meta Ads context for an account.

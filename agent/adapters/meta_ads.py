@@ -78,14 +78,22 @@ class MockMetaAdsAdapter(MetaAdsAdapterBase):
         )
         return snapshot
 
-    def execute_action(self, contract_id: str, action: StrategyAction) -> dict[str, Any]:
+    def execute_action(
+        self, contract_id: str, action: StrategyAction, account_id: str
+    ) -> dict[str, Any]:
         logger.info(
             "mock_action_executed",
             contract_id=contract_id,
+            account_id=account_id,
             action_type=action.type,
             params=action.params,
         )
-        return {"status": "success", "mock": True, "action_type": action.type}
+        return {
+            "status": "success",
+            "mock": True,
+            "action_type": action.type,
+            "account_id": account_id,
+        }
 
     def get_account_context(self, account_id: str) -> dict[str, Any]:
         rng = random.Random(_seed_for(account_id))
@@ -126,8 +134,10 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
     def get_performance(self, contract_id: str, day: int) -> PerformanceSnapshot:
         return _run_sync(self._get_performance_async(contract_id, day))
 
-    def execute_action(self, contract_id: str, action: StrategyAction) -> dict[str, Any]:
-        return _run_sync(self._execute_action_async(contract_id, action))
+    def execute_action(
+        self, contract_id: str, action: StrategyAction, account_id: str
+    ) -> dict[str, Any]:
+        return _run_sync(self._execute_action_async(contract_id, action, account_id))
 
     # ── Async MCP internals ───────────────────────────────────────────────────
 
@@ -161,7 +171,7 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
         return snapshot
 
     async def _execute_action_async(
-        self, contract_id: str, action: StrategyAction
+        self, contract_id: str, action: StrategyAction, account_id: str
     ) -> dict[str, Any]:
         tool = _ACTION_MCP_TOOL[action.type]
         async with streamablehttp_client(self._MCP_URL, headers=self._headers) as (read, write, _):
@@ -169,7 +179,7 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
                 await session.initialize()
                 result = await session.call_tool(
                     tool,
-                    {"contract_id": contract_id, **action.params},
+                    {"contract_id": contract_id, "account_id": account_id, **action.params},
                 )
                 if result.isError:
                     raise MetaAdsError(f"MCP {tool} error: {_extract_text(result)}")
@@ -177,6 +187,7 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
         logger.info(
             "mcp_action_executed",
             contract_id=contract_id,
+            account_id=account_id,
             action_type=action.type,
             mcp_tool=tool,
         )

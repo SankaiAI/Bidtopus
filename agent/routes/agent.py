@@ -146,7 +146,7 @@ def _to_contract_terms(c: PerformanceContractORM) -> ContractTerms:
 
 def _to_account_context(c: PerformanceContractORM) -> AccountContext:
     return AccountContext(
-        account_id=c.account_id or "act_0000000000",
+        account_id=c.account_id,
         pixel_id=c.pixel_id,
         avg_daily_spend=c.avg_daily_spend,
         historical_roas_7d=c.historical_roas_7d,
@@ -319,6 +319,7 @@ def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
         results = orchestrator.execute_ads_actions(
             contract_id=body.contract_id,
             contract_status=contract.status,
+            account_id=contract.account_id,
             db=db,
         )
     except Exception as e:
@@ -638,6 +639,7 @@ def execute_ads_stream(body: ContractRequest, db: Session = Depends(get_db)):
             results = orchestrator.execute_ads_actions(
                 contract_id=body.contract_id,
                 contract_status=contract.status,
+                account_id=contract.account_id,
                 db=db,
             )
             payload = ExecuteAdsResponse(

@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     ARC_MOCK: bool = True
     CIRCLE_MOCK: bool = True
 
+    # ── Backend push (agent → backend) ────────────────────────────────────────
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+    AGENT_SERVICE_TOKEN: str = ""
+
+    # ── Monitoring scheduler ──────────────────────────────────────────────────
+    MONITORING_TICK_MINUTES: int = 15
+
 
 @lru_cache
 def get_settings() -> Settings:

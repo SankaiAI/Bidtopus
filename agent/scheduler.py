@@ -1,4 +1,8 @@
-"""APScheduler background scheduler — 24h monitoring for Active contracts.
+"""APScheduler background scheduler — periodic monitoring for Active contracts.
+
+Cadence is `settings.MONITORING_TICK_MINUTES` (default 15 min). Meta Ads
+Insights lags ~1-5 min for spend and hours for revenue/ROAS, so 15 min is the
+sweet spot — tighter would burn rate-limit quota without producing fresher data.
 
 Usage:
     from scheduler import get_scheduler, register_monitoring_job
@@ -18,6 +22,7 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from config import settings
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +35,7 @@ def get_scheduler() -> BackgroundScheduler:
 
 
 def register_monitoring_job(contract_id: str) -> None:
-    """Schedule a 24h monitoring tick for contract_id. Safe to call multiple times."""
+    """Schedule a periodic monitoring tick for contract_id. Safe to call multiple times."""
     job_id = f"monitor_{contract_id}"
     if _scheduler.get_job(job_id):
         logger.info("monitoring_job_already_registered", contract_id=contract_id)
@@ -38,13 +43,17 @@ def register_monitoring_job(contract_id: str) -> None:
     _scheduler.add_job(
         _run_monitoring_tick_job,
         trigger="interval",
-        hours=24,
+        minutes=settings.MONITORING_TICK_MINUTES,
         args=[contract_id],
         id=job_id,
         replace_existing=True,
         misfire_grace_time=3600,  # allow up to 1h late on server restart
     )
-    logger.info("monitoring_job_registered", contract_id=contract_id)
+    logger.info(
+        "monitoring_job_registered",
+        contract_id=contract_id,
+        interval_minutes=settings.MONITORING_TICK_MINUTES,
+    )
 
 
 def _run_monitoring_tick_job(contract_id: str) -> None:
