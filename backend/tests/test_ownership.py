@@ -88,9 +88,10 @@ def test_delete_forbidden_for_wrong_user(client, other_contract):
     assert res.status_code == 403
 
 
-def test_delete_returns_404_for_missing_contract(client):
+def test_delete_returns_204_for_missing_contract(client):
+    """DELETE is idempotent — already-gone resource is the desired end state, so 204."""
     res = client.delete("/api/contracts/00000000-0000-0000-0000-nonexistent")
-    assert res.status_code == 404
+    assert res.status_code == 204
 
 
 def test_delete_returns_204_and_removes_contract(client, db, contract_in_state):
