@@ -26,6 +26,10 @@ def _run_migrations():
         ("users", "approval_mode", "VARCHAR NOT NULL DEFAULT 'manual'"),
         ("users", "meta_ads_account_id", "VARCHAR"),
         ("performance_contracts", "title", "VARCHAR"),
+        # UUID type for Postgres FK compatibility with meta_ads_accounts.id
+        # (try/except in the loop swallows the SQLite-side syntax error harmlessly —
+        # SQLite tests get the column from create_all() with the with_variant String form).
+        ("performance_contracts", "meta_ads_account_id", "UUID"),
         ("strategy_plans", "execution_receipts", "JSON"),
         ("contract_messages", "expires_at", "TIMESTAMP WITH TIME ZONE"),
     ]
@@ -40,6 +44,82 @@ def _run_migrations():
                 log.debug("Migration: %s.%s already exists, skipping", table, col)
 
 _run_migrations()
+
+
+def _backfill_meta_accounts():
+    """
+    One-shot backfill (idempotent): every existing merchant gets at least one
+    MetaAdsAccount row (seeded from User.meta_ads_account_id, falling back to
+    'act_1234567' to match the frontend's hardcoded placeholder), and every
+    existing contract gets pointed at that account.
+
+    Skips work when there's nothing to do, so it's safe to re-run on every boot.
+    """
+    from db.session import SessionLocal
+    from db.models import User, PerformanceContract, MetaAdsAccount
+
+    db = SessionLocal()
+    try:
+        # 1. Seed one account per merchant if they don't already have one
+        users = db.query(User).all()
+        for u in users:
+            existing = (
+                db.query(MetaAdsAccount)
+                .filter(MetaAdsAccount.merchant_id == u.id)
+                .first()
+            )
+            if existing is not None:
+                continue
+            placeholder_id = u.meta_ads_account_id or "act_1234567"
+            label = (u.email or "Merchant") + " — " + placeholder_id
+            db.add(MetaAdsAccount(
+                merchant_id=u.id,
+                meta_ads_account_id=placeholder_id,
+                name=label,
+            ))
+        db.commit()
+
+        # 2. Point any contract with NULL meta_ads_account_id at the merchant's first account
+        orphan_count = (
+            db.query(PerformanceContract)
+            .filter(PerformanceContract.meta_ads_account_id.is_(None))
+            .count()
+        )
+        if orphan_count == 0:
+            log.debug("Backfill: no orphan contracts to attach to a meta account")
+            return
+
+        # Map merchant_id → first MetaAdsAccount.id. Coerce both sides to str so
+        # uuid.UUID vs str mismatches between dialects don't silently produce no-ops.
+        first_account_by_merchant: dict[str, str] = {}
+        for acc in db.query(MetaAdsAccount).order_by(MetaAdsAccount.connected_at.asc()).all():
+            first_account_by_merchant.setdefault(str(acc.merchant_id), str(acc.id))
+
+        contracts = (
+            db.query(PerformanceContract)
+            .filter(PerformanceContract.meta_ads_account_id.is_(None))
+            .all()
+        )
+        attached = 0
+        for c in contracts:
+            account_id = first_account_by_merchant.get(str(c.merchant_id))
+            if account_id is None:
+                continue
+            c.meta_ads_account_id = account_id
+            attached += 1
+        db.commit()
+        log.info("Backfill: attached %d orphan contracts to a meta account", attached)
+    except Exception:
+        log.exception("Backfill: failed (continuing — contracts may still need attaching)")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# Skip in tests — fixtures manage their own meta accounts; running the backfill
+# would seed placeholder rows for test fixtures and break empty-state assertions.
+if settings.environment != "test":
+    _backfill_meta_accounts()
 
 app = FastAPI(
     title="OutcomeX API",

@@ -42,11 +42,16 @@ def create_contract(
 
 @router.get("")
 def list_contracts(
+    meta_ads_account_id: str | None = None,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if meta_ads_account_id is not None:
+        account = repo.get_meta_account(db, meta_ads_account_id)
+        if account is None or account.merchant_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized for this account")
     from db.repo import list_contracts_for_merchant
-    contracts = list_contracts_for_merchant(db, current_user.id)
+    contracts = list_contracts_for_merchant(db, current_user.id, meta_ads_account_id)
     return [ContractResponse.from_orm_contract(c) for c in contracts]
 
 

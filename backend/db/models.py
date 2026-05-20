@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey,
-    Index, Integer, String, Text, JSON,
+    Index, Integer, String, Text, UniqueConstraint, JSON,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship
 
 from db.session import Base
@@ -12,6 +13,14 @@ from db.session import Base
 
 def _uuid():
     return str(uuid.uuid4())
+
+
+# Variant type: stored as `uuid` in Postgres (matches the existing users.id /
+# performance_contracts.id columns on Neon), and as VARCHAR(36) in SQLite for
+# tests. Values are kept as plain strings (as_uuid=False) so Python-side
+# comparisons stay consistent across dialects — this is the same lesson the
+# accept_offer / approve_execution coercions baked in (commit b6c0487).
+UUID_FK = String(36).with_variant(PG_UUID(as_uuid=False), "postgresql")
 
 
 def _now():
@@ -30,6 +39,24 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
 
     contracts = relationship("PerformanceContract", back_populates="merchant")
+    meta_accounts = relationship("MetaAdsAccount", back_populates="merchant")
+
+
+class MetaAdsAccount(Base):
+    __tablename__ = "meta_ads_accounts"
+
+    id = Column(UUID_FK, primary_key=True, default=_uuid)
+    merchant_id = Column(UUID_FK, ForeignKey("users.id"), nullable=False, index=True)
+    meta_ads_account_id = Column(String, nullable=False)   # the "act_XXXXX" string Meta uses
+    name = Column(String, nullable=True)
+    connected_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+
+    merchant = relationship("User", back_populates="meta_accounts")
+    contracts = relationship("PerformanceContract", back_populates="meta_account")
+
+    __table_args__ = (
+        UniqueConstraint("merchant_id", "meta_ads_account_id", name="uq_merchant_meta_account"),
+    )
 
 
 class PerformanceContract(Base):
@@ -37,6 +64,7 @@ class PerformanceContract(Base):
 
     id = Column(String(36), primary_key=True, default=_uuid)
     merchant_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    meta_ads_account_id = Column(UUID_FK, ForeignKey("meta_ads_accounts.id"), nullable=True, index=True)
     title = Column(String, nullable=True)
     target_metric = Column(String, nullable=False, default="ROAS")
     threshold = Column(Float, nullable=True)
@@ -52,6 +80,7 @@ class PerformanceContract(Base):
     resolved_at = Column(DateTime(timezone=True), nullable=True)
 
     merchant = relationship("User", back_populates="contracts")
+    meta_account = relationship("MetaAdsAccount", back_populates="contracts")
     underwriting_results = relationship("UnderwritingResult", back_populates="contract")
     agent_offers = relationship("AgentOffer", back_populates="contract")
     escrow_records = relationship("EscrowRecord", back_populates="contract")

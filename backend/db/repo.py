@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from db.models import (
     User, PerformanceContract, UnderwritingResult, AgentOffer,
     EscrowRecord, StrategyPlan, PerformanceSnapshot, ResolutionRecord,
-    AuditEvent,
+    AuditEvent, MetaAdsAccount,
 )
 
 
@@ -44,6 +44,59 @@ def update_user_settings(db: Session, user_id: str, **kwargs) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+# ── Meta Ads Accounts ─────────────────────────────────────────────────────────
+
+def list_meta_accounts(db: Session, merchant_id: str) -> list[MetaAdsAccount]:
+    return (
+        db.query(MetaAdsAccount)
+        .filter(MetaAdsAccount.merchant_id == merchant_id)
+        .order_by(MetaAdsAccount.connected_at.asc())
+        .all()
+    )
+
+
+def get_meta_account(db: Session, account_id: str) -> Optional[MetaAdsAccount]:
+    try:
+        _uuid_mod.UUID(account_id)
+    except (ValueError, AttributeError):
+        return None
+    return db.query(MetaAdsAccount).filter(MetaAdsAccount.id == account_id).first()
+
+
+def get_meta_account_by_external_id(
+    db: Session, merchant_id: str, meta_ads_account_id: str,
+) -> Optional[MetaAdsAccount]:
+    return (
+        db.query(MetaAdsAccount)
+        .filter(
+            MetaAdsAccount.merchant_id == merchant_id,
+            MetaAdsAccount.meta_ads_account_id == meta_ads_account_id,
+        )
+        .first()
+    )
+
+
+def create_meta_account(
+    db: Session, merchant_id: str, meta_ads_account_id: str, name: Optional[str] = None,
+) -> MetaAdsAccount:
+    account = MetaAdsAccount(
+        merchant_id=merchant_id,
+        meta_ads_account_id=meta_ads_account_id,
+        name=name,
+    )
+    db.add(account)
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def delete_meta_account(db: Session, account_id: str) -> None:
+    db.query(MetaAdsAccount).filter(MetaAdsAccount.id == account_id).delete(
+        synchronize_session=False,
+    )
+    db.commit()
 
 
 # ── Contracts ─────────────────────────────────────────────────────────────────
@@ -111,13 +164,15 @@ def finalize_negotiating_contract(
     return contract
 
 
-def list_contracts_for_merchant(db: Session, merchant_id: str) -> list[PerformanceContract]:
-    return (
-        db.query(PerformanceContract)
-        .filter(PerformanceContract.merchant_id == merchant_id)
-        .order_by(PerformanceContract.created_at.desc())
-        .all()
+def list_contracts_for_merchant(
+    db: Session, merchant_id: str, meta_ads_account_id: Optional[str] = None,
+) -> list[PerformanceContract]:
+    q = db.query(PerformanceContract).filter(
+        PerformanceContract.merchant_id == merchant_id
     )
+    if meta_ads_account_id is not None:
+        q = q.filter(PerformanceContract.meta_ads_account_id == meta_ads_account_id)
+    return q.order_by(PerformanceContract.created_at.desc()).all()
 
 
 # ── Underwriting ──────────────────────────────────────────────────────────────

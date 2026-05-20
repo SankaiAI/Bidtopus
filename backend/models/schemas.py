@@ -34,6 +34,36 @@ class UserSettingsRequest(BaseModel):
         return v
 
 
+# ── Meta Ads Accounts ─────────────────────────────────────────────────────────
+
+class MetaAdsAccountResponse(BaseModel):
+    id: str
+    merchant_id: str
+    meta_ads_account_id: str   # the "act_XXXXX" string Meta uses
+    name: Optional[str] = None
+    connected_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("id", "merchant_id", mode="before")
+    @classmethod
+    def coerce_uuid(cls, v: Any) -> str:
+        return str(v) if v is not None else v
+
+
+class MetaAdsAccountCreateRequest(BaseModel):
+    meta_ads_account_id: str
+    name: Optional[str] = None
+
+    @field_validator("meta_ads_account_id")
+    @classmethod
+    def validate_account_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("meta_ads_account_id must be a non-empty string")
+        return v
+
+
 # ── Contract Create ───────────────────────────────────────────────────────────
 
 class ContractCreateRequest(BaseModel):
@@ -49,6 +79,7 @@ class ContractCreateRequest(BaseModel):
 class ContractResponse(BaseModel):
     id: str
     merchant_id: str
+    meta_ads_account_id: Optional[str] = None
     status: str
     title: Optional[str] = None
     target_roas: Optional[float] = None
@@ -66,7 +97,7 @@ class ContractResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @field_validator("id", "merchant_id", mode="before")
+    @field_validator("id", "merchant_id", "meta_ads_account_id", mode="before")
     @classmethod
     def coerce_uuid(cls, v: Any) -> str:
         return str(v) if v is not None else v
@@ -89,6 +120,7 @@ class ContractResponse(BaseModel):
         return cls(
             id=str(c.id),
             merchant_id=str(c.merchant_id),
+            meta_ads_account_id=str(c.meta_ads_account_id) if c.meta_ads_account_id else None,
             status=c.status,
             title=c.title or (c.campaign_goal[:80] if c.campaign_goal else None),
             target_roas=c.threshold,
