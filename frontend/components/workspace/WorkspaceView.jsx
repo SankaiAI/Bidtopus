@@ -8,6 +8,7 @@ import { useAuth } from '@clerk/nextjs'
 import AgentInputBar from '@/components/AgentInputBar'
 import EscrowFundButton from '@/components/EscrowFundButton'
 import AcceptOfferCard from '@/components/AcceptOfferCard'
+import TxHashLink, { isValidTxHash, truncateHash } from '@/components/TxHashLink'
 import { useMessages } from '@/hooks/useMessages'
 import { useActionApprovals } from '@/hooks/useActionApprovals'
 import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
@@ -378,7 +379,14 @@ function PanelContent({ c, refetchContract }) {
             )}
           </div>
           {c.roasHistory?.length > 2 && <div style={{ marginBottom: '10px' }}><RoasChart data={c.roasHistory} target={c.targetRoas} color={accent}/></div>}
-          {txHash && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontFamily: font }}><span style={{ color: C.faint }}>Settlement tx</span><span style={{ color: C.indigo, fontWeight: 600 }}>{txHash}</span></div>}
+          {txHash && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontFamily: font }}>
+              <span style={{ color: C.faint }}>Settlement tx</span>
+              {isValidTxHash(txHash)
+                ? <TxHashLink hash={txHash} label={truncateHash(txHash)} style={{ color: C.indigo, fontWeight: 600, textDecoration: 'none' }} />
+                : <span style={{ color: C.muted, fontWeight: 600 }}>{txHash}</span>}
+            </div>
+          )}
         </div>
       </InnerCard>
     )

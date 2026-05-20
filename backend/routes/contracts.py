@@ -266,7 +266,9 @@ def ingest_performance(
 # ── Resolve ───────────────────────────────────────────────────────────────────
 
 @router.post("/{contract_id}/resolve")
+@limiter.limit("10/minute")
 def resolve(
+    request: Request,
     contract_id: str,
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),

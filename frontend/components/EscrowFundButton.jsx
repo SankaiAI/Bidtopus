@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAccount, useConnect, useSwitchChain, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
-import { keccak256, toBytes, parseUnits, maxUint256, UserRejectedRequestError, SwitchChainError } from 'viem'
+import { keccak256, toBytes, parseUnits, UserRejectedRequestError, SwitchChainError } from 'viem'
 import { useAuth } from '@clerk/nextjs'
 import { createApiClient } from '@/lib/api'
 import { ESCROW_ABI, ERC20_ABI } from '@/lib/escrowAbi'
@@ -117,6 +117,10 @@ export default function EscrowFundButton({
         await switchChainAsync({ chainId: arcTestnet.id })
       }
 
+      // Approve exactly what's needed, not maxUint256. Unlimited approvals
+      // leave a lingering attack surface if the escrow contract is ever
+      // compromised. Cost: one extra approve() tx per fund — acceptable on
+      // Arc since gas is paid in USDC via Paymaster (~$0.01).
       const allowance = allowanceQuery.data ?? 0n
       if (allowance < amountBaseUnits) {
         currentPhase = 'approving'
@@ -125,7 +129,7 @@ export default function EscrowFundButton({
           address: USDC_ADDRESS,
           abi: ERC20_ABI,
           functionName: 'approve',
-          args: [ESCROW_ADDRESS, maxUint256],
+          args: [ESCROW_ADDRESS, amountBaseUnits],
           chainId: arcTestnet.id,
         })
         setApproveTxHash(hash)

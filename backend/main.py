@@ -121,11 +121,14 @@ def _backfill_meta_accounts():
 if settings.environment != "test":
     _backfill_meta_accounts()
 
+_expose_docs = settings.environment == "development"
 app = FastAPI(
     title="OutcomeX API",
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    # Disable interactive docs outside development — full API enumeration is recon for attackers
+    docs_url="/docs" if _expose_docs else None,
+    redoc_url="/redoc" if _expose_docs else None,
+    openapi_url="/openapi.json" if _expose_docs else None,
 )
 
 app.state.limiter = limiter

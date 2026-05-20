@@ -7,6 +7,7 @@ import { useOpenMobileSidebar } from '@/components/AppShell'
 import EscrowFundButton from '@/components/EscrowFundButton'
 import { createApiClient } from '@/lib/api'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved, canFund } from '@/lib/contractStatus'
+import TxHashLink, { isValidTxHash, truncateHash } from '@/components/TxHashLink'
 
 const C = {
   bg:      'var(--c-bg)',
@@ -175,11 +176,17 @@ function Bar({ value, max, color }) {
     </div>
   )
 }
+// Renders a label + hash row. If `hash` is a valid 0x[64-hex] string we link
+// it to the Arc explorer (via the allowlisted TxHashLink); otherwise we
+// fall through to plain text (used for non-hash values like settledAt).
 function TxRow({ label, hash }) {
+  const valueStyle = { fontSize: '11px', fontWeight: 600, color: 'var(--c-indigo)', fontFamily: font, fontVariantNumeric: 'tabular-nums', textDecoration: 'none' }
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
       <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>{label}</span>
-      <span style={{ fontSize: '11px', fontWeight: 600, color: C.indigo, fontFamily: font, fontVariantNumeric: 'tabular-nums' }}>{hash}</span>
+      {isValidTxHash(hash)
+        ? <TxHashLink hash={hash} label={truncateHash(hash)} style={valueStyle} />
+        : <span style={{ ...valueStyle, color: C.muted }}>{hash || '—'}</span>}
     </div>
   )
 }

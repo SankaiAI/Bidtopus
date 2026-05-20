@@ -134,8 +134,21 @@ def _verify_fund_tx_onchain(tx_hash: str, contract_id: str, amount_usdc: float) 
     contract_addr = settings.escrow_contract_address
 
     if not rpc_url or not contract_addr:
+        # Fail-closed outside development: silently accepting any tx_hash as "funded"
+        # in prod is a full-theft attack window. In dev/test we keep the soft skip so
+        # local flows don't require an Arc RPC, but anywhere else this is a 503.
+        if settings.environment != "development":
+            log.error(
+                "Refusing fund-escrow: ARC_RPC_URL or ESCROW_CONTRACT_ADDRESS not configured"
+                " (environment=%s) contract=%s",
+                settings.environment, contract_id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail="Escrow verification is not configured; cannot accept fund proof",
+            )
         log.warning(
-            "Skipping on-chain fund verification (ARC_RPC_URL or ESCROW_CONTRACT_ADDRESS not set)"
+            "Skipping on-chain fund verification (development mode, RPC not set)"
             " contract=%s tx=%s",
             contract_id, tx_hash,
         )

@@ -152,8 +152,14 @@ async def stream_chat(
                 finally:
                     write_db.close()
 
-        except Exception as e:
+        except Exception:
+            # Log full exception server-side; return a generic error to the client to
+            # avoid leaking exception strings (which can carry stack traces, paths, or
+            # internal config). The contract_id in logs is enough to find this case.
             log.exception("stream_chat: agent proxy failed contract=%s", contract_id)
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+            yield (
+                "event: error\n"
+                f"data: {json.dumps({'message': 'Agent service error — please retry'})}\n\n"
+            )
 
     return StreamingResponse(generate(), media_type="text/event-stream")

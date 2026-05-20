@@ -483,7 +483,9 @@ async def stream_negotiation(
                         fallback = "ML model unavailable — using conservative estimate."
                         uw_detail_parts.append(fallback)
                         yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': fallback})}\n\n"
-                        tool_result = json.dumps({"error": str(exc), "recommendation": "counteroffer"})
+                        # Don't pass raw exception string back to the LLM — it may
+                        # echo internals into the merchant-visible response.
+                        tool_result = json.dumps({"error": "ml_model_unavailable", "recommendation": "counteroffer"})
 
                     messages_repo.append(
                         db, contract_id, "agent", "thinking_step",
@@ -608,8 +610,12 @@ async def stream_negotiation(
                 log.warning("Unknown tool called during negotiation: %s", tool_block.name)
                 return
 
-        except Exception as e:
+        except Exception:
+            # Log full exception server-side; return a generic error to the client.
             log.exception("negotiation stream error user=%s contract=%s", current_user.id, contract_id)
-            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+            yield (
+                "event: error\n"
+                f"data: {json.dumps({'message': 'Negotiation stream error — please retry'})}\n\n"
+            )
 
     return StreamingResponse(generate(), media_type="text/event-stream")
