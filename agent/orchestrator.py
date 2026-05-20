@@ -253,18 +253,11 @@ def generate_offer(
 
     audit.log(contract_id, "llm_negotiation", "result", offer.model_dump())
 
-    # Write to merchant-facing timeline
-    messages.append(
-        contract_id, role="agent", type="message",
-        content=offer.message,
-        metadata={
-            "offer_type": offer.offer_type,
-            "probability": underwriting_result.success_probability,
-            "revised_threshold": offer.revised_threshold,
-            "revised_fee_usdc": offer.revised_fee_usdc,
-            "revised_time_window_days": offer.revised_time_window_days,
-        },
-    )
+    # Do NOT append offer.message to contract_messages here. The backend
+    # persists the same text (with the offer_id it just minted) right after
+    # this call returns — writing it here causes a duplicate agent bubble on
+    # workspace restore (#83). The turn-limit reject above stays because it
+    # raises before backend gets a chance to write.
 
     logger.info(
         "offer_generated",
@@ -423,17 +416,9 @@ def stream_offer(
                     )
                 })
             audit.log(contract_id, "llm_negotiation", "result", offer.model_dump())
-            messages.append(
-                contract_id, role="agent", type="message",
-                content=offer.message,
-                metadata={
-                    "offer_type": offer.offer_type,
-                    "probability": underwriting_result.success_probability,
-                    "revised_threshold": offer.revised_threshold,
-                    "revised_fee_usdc": offer.revised_fee_usdc,
-                    "revised_time_window_days": offer.revised_time_window_days,
-                },
-            )
+            # See generate_offer above: backend persists offer.message with the
+            # minted offer_id after this call returns; writing it here too
+            # produces a duplicate bubble (#83).
             logger.info("offer_generated", contract_id=contract_id, offer_type=offer.offer_type, turn=turn_count)
             yield f"event: result\ndata: {offer.model_dump_json()}\n\n"
 

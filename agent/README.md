@@ -286,25 +286,31 @@ If the process restarts, read the last intent from audit_logger to determine whe
 Every notable agent action writes to **two** stores. Never conflate them.
 
 ```python
-# When the agent generates a negotiation offer:
+# When the agent runs a daily monitoring tick:
 
 # Write 1 — internal (always, every component call)
-audit_logger.log(contract_id, "llm_negotiation", "result", offer.model_dump())
+audit_logger.log(contract_id, "meta_ads", "snapshot", snapshot.model_dump())
 
 # Write 2 — UI (only when the merchant should see something new)
 messages_repo.append(contract_id,
-    role="agent", type="message",
-    content=offer.message,
-    metadata={"offer_type": offer.offer_type, "probability": underwriting.success_probability}
+    role="agent", type="daily_update",
+    content=f"Day {day}: ROAS {snapshot.roas:.2f}x | Spend ${snapshot.spend:.0f}",
+    metadata={"snapshot": snapshot.model_dump(), "forecast": forecast.model_dump()}
 )
 ```
+
+> ⚠️ **Negotiation offers are the exception**: the orchestrator only writes
+> `llm_negotiation` to `audit_logger`. The backend persists the offer message
+> to `contract_messages` after the agent's HTTP response returns (so it can
+> attach the `offer_id` it just minted). Writing here too produces duplicate
+> bubbles on workspace restore — see [issue #83](https://github.com/SankaiAI/outcomeX/issues/83).
 
 What each component writes to `contract_messages`:
 
 | Component | `type` | When |
 |---|---|---|
 | Orchestrator | `system_event` | Contract created, escrow confirmed, campaign launched, settled |
-| LLM Negotiation | `message` | Offer generated (accept / counteroffer / reject) |
+| LLM Negotiation | `message` | Turn-limit auto-reject only (regular offers are persisted backend-side) |
 | LLM Strategy | `approval_request` (status=`pending`) | Strategy plan ready for merchant review |
 | Background Scheduler | `daily_update` | Each daily monitoring tick with ROAS + forecast |
 | Orchestrator (optimization) | `approval_request` (status=`pending`) | Budget shift > threshold, needs merchant approval |
