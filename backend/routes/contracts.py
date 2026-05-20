@@ -51,7 +51,10 @@ def list_contracts(
 ):
     if meta_ads_account_id is not None:
         account = repo.get_meta_account(db, meta_ads_account_id)
-        if account is None or account.merchant_id != current_user.id:
+        # Coerce both sides to str: account.merchant_id can hydrate as str (PG_UUID
+        # variant with as_uuid=False) while current_user.id hydrates as uuid.UUID
+        # — same bug class as #74 / #82.
+        if account is None or str(account.merchant_id) != str(current_user.id):
             raise HTTPException(status_code=403, detail="Not authorized for this account")
     from db.repo import list_contracts_for_merchant
     contracts = list_contracts_for_merchant(db, current_user.id, meta_ads_account_id)
@@ -67,7 +70,7 @@ def delete_contract(
     contract = repo.get_contract(db, contract_id)
     if contract is None:
         return Response(status_code=204)
-    if contract.merchant_id != current_user.id:
+    if str(contract.merchant_id) != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized for this contract")
 
     for model in (

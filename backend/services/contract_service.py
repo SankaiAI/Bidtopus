@@ -227,7 +227,7 @@ def require_contract_owner(
     contract = repo.get_contract(db, contract_id)
     if contract is None:
         raise HTTPException(status_code=404, detail="Contract not found")
-    if contract.merchant_id != current_user.id:
+    if str(contract.merchant_id) != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized for this contract")
     return contract
 

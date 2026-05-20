@@ -6,7 +6,11 @@ Covers:
 - Cross-merchant ownership denial
 - ?meta_ads_account_id= filter on GET /api/contracts
 - ContractResponse.meta_ads_account_id is populated
+- Regression for #82: ownership checks coerce uuid.UUID and str before comparing
 """
+import uuid
+from types import SimpleNamespace
+
 from db.models import MetaAdsAccount
 
 
@@ -124,3 +128,93 @@ def test_contract_response_meta_account_id_is_none_when_unset(client, contract_i
     res = client.get(f"/api/contracts/{c.id}")
     assert res.status_code == 200
     assert res.json()["meta_ads_account_id"] is None
+
+
+# ── Regression for #82 — UUID-vs-str ownership comparison ────────────────────
+
+def test_list_filter_ownership_handles_uuid_typed_merchant_id(
+    monkeypatch, client, db, test_user,
+):
+    """
+    On Postgres, account.merchant_id hydrates as str (PG_UUID with as_uuid=False)
+    while current_user.id hydrates as uuid.UUID — UUID != str silently broke the
+    ownership check until the str() coercion landed (#82). SQLite hydrates both
+    sides as str, so we monkeypatch repo.get_meta_account to force the mismatch.
+    """
+    acc = _make_account(db, test_user.id, "act_uuid_regression")
+    acc_id = acc.id
+
+    import db.repo as repo_mod
+    real_get = repo_mod.get_meta_account
+
+    def _fake_get(db_, account_id_):
+        row = real_get(db_, account_id_)
+        if row is None:
+            return None
+        return SimpleNamespace(
+            id=row.id,
+            # Force str-typed merchant_id; current_user.id is also str under SQLite
+            # so we additionally wrap test_user.id in uuid.UUID below.
+            merchant_id=str(row.merchant_id),
+            meta_ads_account_id=row.meta_ads_account_id,
+        )
+
+    monkeypatch.setattr(repo_mod, "get_meta_account", _fake_get)
+    # Force the dependency-injected current_user.id to be a uuid.UUID, as it would
+    # be on Postgres. We rewrap the client's get_current_user override.
+    from main import app
+    from auth.clerk import get_current_user
+
+    forced_user = SimpleNamespace(
+        id=uuid.UUID(test_user.id),
+        clerk_user_id=test_user.clerk_user_id,
+        email=test_user.email,
+        wallet_address=test_user.wallet_address,
+        meta_ads_account_id=test_user.meta_ads_account_id,
+    )
+    app.dependency_overrides[get_current_user] = lambda: forced_user
+    try:
+        res = client.get(f"/api/contracts?meta_ads_account_id={acc_id}")
+        assert res.status_code == 200, res.text
+    finally:
+        # restore for downstream tests
+        app.dependency_overrides[get_current_user] = lambda: test_user
+
+
+def test_delete_account_ownership_handles_uuid_typed_merchant_id(
+    monkeypatch, client, db, test_user,
+):
+    """Same regression class for DELETE /api/users/me/meta-accounts/:id."""
+    acc = _make_account(db, test_user.id, "act_delete_uuid")
+    acc_id = acc.id
+
+    import db.repo as repo_mod
+    real_get = repo_mod.get_meta_account
+
+    def _fake_get(db_, account_id_):
+        row = real_get(db_, account_id_)
+        if row is None:
+            return None
+        return SimpleNamespace(
+            id=row.id,
+            merchant_id=str(row.merchant_id),
+            meta_ads_account_id=row.meta_ads_account_id,
+        )
+
+    monkeypatch.setattr(repo_mod, "get_meta_account", _fake_get)
+    from main import app
+    from auth.clerk import get_current_user
+
+    forced_user = SimpleNamespace(
+        id=uuid.UUID(test_user.id),
+        clerk_user_id=test_user.clerk_user_id,
+        email=test_user.email,
+        wallet_address=test_user.wallet_address,
+        meta_ads_account_id=test_user.meta_ads_account_id,
+    )
+    app.dependency_overrides[get_current_user] = lambda: forced_user
+    try:
+        res = client.delete(f"/api/users/me/meta-accounts/{acc_id}")
+        assert res.status_code == 204
+    finally:
+        app.dependency_overrides[get_current_user] = lambda: test_user

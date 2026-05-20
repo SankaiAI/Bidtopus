@@ -89,7 +89,7 @@ def disconnect_meta_account(
     account = repo.get_meta_account(db, account_id)
     if account is None:
         return Response(status_code=204)
-    if account.merchant_id != current_user.id:
+    if str(account.merchant_id) != str(current_user.id):
         raise HTTPException(status_code=403, detail="Not authorized for this account")
     repo.delete_meta_account(db, account_id)
     return Response(status_code=204)
