@@ -6,8 +6,15 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { getAllSessions, subscribeToSessions, deleteSession } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
+import { useMetaAccount } from '@/contexts/MetaAccountContext'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
 import { Icon } from './icons'
+
+// 30s belt-and-suspenders interval. Focus refetch handles "switched tabs and
+// came back"; the interval catches users who keep the tab pinned and never
+// re-focus, plus background status transitions like /accept → FundedPending
+// or fund-escrow → Funded that flip a contract while they're looking at it.
+const LIST_REFRESH_MS = 30_000
 
 const ACCENT = 'var(--c-indigo)'
 
@@ -64,6 +71,7 @@ export default function WorkspaceList() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [toast, setToast]               = useState(null)
   const { isSignedIn, isLoaded, getToken } = useAuth()
+  const { activeAccount } = useMetaAccount()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -72,23 +80,56 @@ export default function WorkspaceList() {
     return subscribeToSessions(() => setSessions(getAllSessions()))
   }, [])
 
+  // Restore cache only after Clerk confirms signed-in, otherwise an
+  // unauthenticated tab would show the previous user's contracts (the localStorage
+  // cache is per-browser, not per-Clerk-user). When Clerk transitions to
+  // signed-out, blow away both the in-memory state and the cache so nothing
+  // leaks across users on the same browser.
   useEffect(() => {
+    if (!isLoaded) return
+    if (!isSignedIn) {
+      setContracts([])
+      try { localStorage.removeItem('outcomex_contracts') } catch {}
+      return
+    }
     try {
       const cached = JSON.parse(localStorage.getItem('outcomex_contracts') || 'null')
       if (cached?.length > 0) setContracts(cached)
     } catch {}
-  }, [])
+  }, [isLoaded, isSignedIn])
 
+  // Refetch the server contract list on mount, on window focus, every 30s,
+  // and whenever the active Meta Ads account changes. Stale-while-revalidate:
+  // we never clear `contracts` mid-fetch, so the list never flashes empty.
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
-    createApiClient(getToken).listContracts()
-      .then(data => {
-        const list = data || []
-        setContracts(list)
-        try { localStorage.setItem('outcomex_contracts', JSON.stringify(list)) } catch {}
-      })
-      .catch(() => {})
-  }, [isLoaded, isSignedIn])
+
+    const api = createApiClient(getToken)
+    const opts = activeAccount?.id ? { metaAdsAccountId: activeAccount.id } : {}
+    let cancelled = false
+
+    const refetch = () => {
+      api.listContracts(opts)
+        .then(data => {
+          if (cancelled) return
+          const list = data || []
+          setContracts(list)
+          try { localStorage.setItem('outcomex_contracts', JSON.stringify(list)) } catch {}
+        })
+        .catch(() => {})
+    }
+
+    refetch()
+    const onFocus = () => refetch()
+    window.addEventListener('focus', onFocus)
+    const intervalId = setInterval(refetch, LIST_REFRESH_MS)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', onFocus)
+      clearInterval(intervalId)
+    }
+  }, [isLoaded, isSignedIn, getToken, activeAccount?.id])
 
   useEffect(() => {
     if (!menuState) return
@@ -127,7 +168,11 @@ export default function WorkspaceList() {
     .filter(s => !serverIds.has(s.id))
     .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/workspace/${s.id}`, hasContract: false, _ts: s.createdAt }))
 
-  const allItems = [
+  // Privacy gate: never surface workspaces (server contracts, local drafts,
+  // or the demo MOCK_CONTRACTS) to an unauthenticated browser. Local drafts
+  // (`sessions`) are kept in localStorage so the user doesn't lose them on
+  // sign-out, but they only render once a Clerk session is active.
+  const allItems = !isSignedIn ? [] : [
     ...serverNegotiating,
     ...serverFunded,
     ...localOnly,
@@ -215,7 +260,9 @@ export default function WorkspaceList() {
       <div className="ws-list-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
       {filtered.length === 0 ? (
         <div style={{ padding: '8px 8px 12px' }}>
-          <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>No contracts match</p>
+          <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+            {!isLoaded ? 'Loading…' : !isSignedIn ? 'Sign in to see your workspaces.' : 'No contracts match'}
+          </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

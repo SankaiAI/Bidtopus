@@ -6,6 +6,7 @@ import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useWalletConnect } from '@/hooks/useWalletConnect'
+import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
 import { Icon, PanelClose, PanelOpen } from './sidebar/icons'
 import EscrowProtect from './sidebar/EscrowProtect'
 import UserProfile from './sidebar/UserProfile'
@@ -33,12 +34,12 @@ const hoverOff = e => { e.currentTarget.style.background = 'none'; e.currentTarg
 
 // ─── META ACCOUNT SELECTOR ────────────────────────────────────────────────────
 function MetaAccountSelector({ collapsed }) {
+  const { accounts, activeAccount, loading, setActiveAccount } = useMetaAccount()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState(null)
   const containerRef = React.useRef(null)
-  const accounts = ['Shawn Zhou — Act #1234567']
-  const filtered = accounts.filter(a => a.toLowerCase().includes(search.toLowerCase()))
+  const filtered = accounts.filter(a => accountLabel(a).toLowerCase().includes(search.toLowerCase()))
+  const selectedLabel = activeAccount ? accountLabel(activeAccount) : null
 
   React.useEffect(() => {
     if (!open) return
@@ -52,7 +53,7 @@ function MetaAccountSelector({ collapsed }) {
   if (collapsed) {
     return (
       <div
-        title={selected || 'Select Meta Ads account'}
+        title={selectedLabel || 'Select Meta Ads account'}
         onClick={() => setOpen(v => !v)}
         style={{ width: '56px', height: '48px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: 'transparent', transition: 'background 0.15s' }}
         onMouseEnter={e => e.currentTarget.style.background = '#f9f9fb'}
@@ -62,6 +63,10 @@ function MetaAccountSelector({ collapsed }) {
       </div>
     )
   }
+
+  const placeholder = loading ? 'Loading accounts…'
+    : accounts.length === 0 ? 'No connected accounts'
+    : 'Select account'
 
   return (
     <div ref={containerRef} style={{ padding: '8px 12px 10px', flexShrink: 0 }}>
@@ -81,7 +86,7 @@ function MetaAccountSelector({ collapsed }) {
         >
           <Icon.Meta />
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {selected || 'Select account'}
+            {selectedLabel || placeholder}
           </span>
           <span style={{ color: '#a8a5b8', display: 'flex', flexShrink: 0, transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
             <Icon.ChevronDown />
@@ -110,16 +115,28 @@ function MetaAccountSelector({ collapsed }) {
 
             <div style={{ padding: '10px 12px' }}>
               {filtered.length === 0 ? (
-                <p style={{ fontSize: '14px', color: '#a8a5b8', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>No ad accounts found.</p>
-              ) : filtered.map(a => (
-                <div
-                  key={a}
-                  onClick={() => { setSelected(a); setOpen(false) }}
-                  style={{ padding: '8px', fontSize: '14px', color: 'var(--c-sub)', cursor: 'pointer', borderRadius: '6px', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'background 0.12s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >{a}</div>
-              ))}
+                <p style={{ fontSize: '14px', color: '#a8a5b8', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+                  {accounts.length === 0 ? 'No Meta Ads accounts connected yet.' : 'No accounts match.'}
+                </p>
+              ) : filtered.map(a => {
+                const isSelected = activeAccount?.id === a.id
+                return (
+                  <div
+                    key={a.id}
+                    onClick={() => { setActiveAccount(a); setOpen(false) }}
+                    style={{ padding: '8px', fontSize: '14px', color: isSelected ? 'var(--c-indigo)' : 'var(--c-sub)', fontWeight: isSelected ? 600 : 500, cursor: 'pointer', borderRadius: '6px', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'background 0.12s', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ flex: 1 }}>{accountLabel(a)}</span>
+                    {isSelected && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <div style={{ borderTop: '1px solid #f0eef8' }}>

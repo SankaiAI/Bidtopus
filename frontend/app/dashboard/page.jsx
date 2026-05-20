@@ -1,7 +1,11 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
+import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
+import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
+import { createApiClient } from '@/lib/api'
+import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
 
 const C = {
   bg:        'var(--c-bg)',
@@ -73,17 +77,29 @@ function Sparkline({ points, color }) {
 }
 
 // ─── KPI STRIP ────────────────────────────────────────────────────────────────
-const MOCK_KPIS = [
-  { label: 'Active Contracts', value: '2', sub: '1 on track, 1 at risk', sparkline: [1, 1, 2, 2, 3, 3, 2, 2], color: C.indigo },
-  { label: 'USDC in Escrow',   value: '$200',  sub: 'across all contracts',  sparkline: [100, 100, 200, 200, 200, 200, 200, 200], color: C.amber },
-  { label: 'Avg. Success Prob', value: '64%', sub: 'live ML estimate',      sparkline: [70, 68, 65, 64, 62, 64, 65, 64], color: C.green },
-  { label: 'Settled (lifetime)', value: '1',  sub: '100 USDC earned by agent', sparkline: [0, 0, 0, 1, 1, 1, 1, 1], color: C.indigoMid },
-]
+// Aggregate KPIs client-side from the contracts list returned by /api/contracts.
+// Backend may later expose a dedicated summary endpoint (#77 notes this is fine
+// for now); switch to that when it lands.
+function computeKpis(contracts) {
+  const active   = contracts.filter(c => isLive(c.status)).length
+  const awaiting = contracts.filter(c => isAwaitingFund(c.status)).length
+  const resolved = contracts.filter(c => isResolved(c.status)).length
+  const lockedUsdc = contracts
+    .filter(c => isLive(c.status) || normalizeStatus(c.status) === 'funded')
+    .reduce((acc, c) => acc + Number(c.success_fee_usdc || 0), 0)
+  return [
+    { label: 'Active Contracts', value: String(active),   sub: active === 0 ? 'No live contracts yet' : `${awaiting} awaiting funding`, color: C.indigo },
+    { label: 'USDC in Escrow',   value: `$${lockedUsdc.toFixed(0)}`, sub: 'across funded contracts', color: C.amber },
+    { label: 'Settled (lifetime)', value: String(resolved), sub: resolved === 0 ? 'No resolutions yet' : 'completed contracts', color: C.indigoMid },
+    { label: 'Total Contracts',  value: String(contracts.length), sub: 'on this Meta Ads account', color: C.green },
+  ]
+}
 
-function KpiStrip() {
+function KpiStrip({ contracts }) {
+  const tiles = computeKpis(contracts)
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
-      {MOCK_KPIS.map(tile => (
+      {tiles.map(tile => (
         <div key={tile.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -91,7 +107,6 @@ function KpiStrip() {
               <div style={{ fontSize: '22px', fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1, marginBottom: '5px' }}>{tile.value}</div>
               <span style={{ fontSize: '10px', color: C.muted }}>{tile.sub}</span>
             </div>
-            <Sparkline points={tile.sparkline} color={tile.color} />
           </div>
         </div>
       ))}
@@ -162,49 +177,11 @@ function AgentCard() {
   )
 }
 
-// ─── DEMO GOLDEN PATH ─────────────────────────────────────────────────────────
-const DEMO_CONTRACTS = [
-  {
-    id: 'c1',
-    campaign: 'Summer ROAS Campaign — Retargeting',
-    target: 'ROAS ≥ 2.0×',
-    status: 'active',
-    roas: 1.86,
-    targetRoas: 2.0,
-    spend: '$318',
-    daysLeft: 3,
-    prob: 61,
-    fee: '100 USDC',
-  },
-  {
-    id: 'c2',
-    campaign: 'Brand Awareness — Warm Audiences',
-    target: 'ROAS ≥ 2.0×',
-    status: 'settled',
-    roas: 2.25,
-    targetRoas: 2.0,
-    spend: '$545',
-    daysLeft: 0,
-    prob: 100,
-    fee: '100 USDC',
-    txHash: '0xabc123...def456',
-  },
-  {
-    id: 'c3',
-    campaign: 'Q3 Performance Contract',
-    target: 'ROAS ≥ 2.5×',
-    status: 'funded',
-    roas: null,
-    targetRoas: 2.5,
-    spend: '—',
-    daysLeft: 7,
-    prob: 68,
-    fee: '150 USDC',
-  },
-]
-
 function ContractRow({ contract }) {
-  const roasOk = contract.roas && contract.roas >= contract.targetRoas
+  const target = contract.target_roas
+  const fee = contract.success_fee_usdc
+  const status = normalizeStatus(contract.status)
+  const name = contract.title || contract.campaign_goal || 'Contract'
   return (
     <Link
       href={`/contracts/${contract.id}`}
@@ -218,37 +195,21 @@ function ContractRow({ contract }) {
     >
       {/* Campaign name */}
       <div style={{ flex: 2, minWidth: 0 }}>
-        <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{contract.campaign}</div>
-        <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{contract.target} · {contract.fee}</div>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+        <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>
+          {target != null ? `ROAS ≥ ${target}×` : 'ROAS pending'} · {fee != null ? `${fee} USDC` : '—'}
+        </div>
       </div>
 
-      {/* ROAS */}
-      <div style={{ minWidth: '70px', textAlign: 'right' }}>
-        {contract.roas != null ? (
-          <>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: roasOk ? C.green : C.amber }}>{contract.roas.toFixed(2)}×</div>
-            <div style={{ fontSize: '10px', color: C.muted }}>target {contract.targetRoas}×</div>
-          </>
-        ) : (
-          <div style={{ fontSize: '12px', color: C.muted }}>—</div>
-        )}
-      </div>
-
-      {/* Prob */}
-      <div style={{ minWidth: '60px', textAlign: 'right' }}>
-        <div style={{ fontSize: '13px', fontWeight: 700, color: contract.prob >= 70 ? C.green : contract.prob >= 50 ? C.amber : C.red }}>{contract.prob}%</div>
-        <div style={{ fontSize: '10px', color: C.muted }}>success</div>
-      </div>
-
-      {/* Days / spend */}
-      <div style={{ minWidth: '64px', textAlign: 'right' }}>
-        <div style={{ fontSize: '12px', fontWeight: 600, color: C.text }}>{contract.spend}</div>
-        <div style={{ fontSize: '10px', color: C.muted }}>{contract.daysLeft > 0 ? `${contract.daysLeft}d left` : 'Closed'}</div>
+      {/* Fee */}
+      <div style={{ minWidth: '74px', textAlign: 'right' }}>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: C.text }}>{fee != null ? `${fee} USDC` : '—'}</div>
+        <div style={{ fontSize: '10px', color: C.muted }}>success fee</div>
       </div>
 
       {/* Status */}
       <div style={{ flexShrink: 0 }}>
-        <StatusBadge status={contract.status} />
+        <StatusBadge status={status} />
       </div>
 
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -256,7 +217,8 @@ function ContractRow({ contract }) {
   )
 }
 
-function RecentContracts() {
+function RecentContracts({ contracts, loading, error, isSignedIn }) {
+  const rows = contracts.slice(0, 6)
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
@@ -267,14 +229,27 @@ function RecentContracts() {
       {/* Table header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 16px', borderBottom: `1px solid ${C.border}`, background: C.surfaceAlt }}>
         <div style={{ flex: 2, fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Campaign</div>
-        <div style={{ minWidth: '70px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>ROAS</div>
-        <div style={{ minWidth: '60px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Prob.</div>
-        <div style={{ minWidth: '64px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Spend</div>
+        <div style={{ minWidth: '74px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Fee</div>
         <div style={{ flexShrink: 0, fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
         <div style={{ width: '13px' }} />
       </div>
 
-      {DEMO_CONTRACTS.map(c => <ContractRow key={c.id} contract={c} />)}
+      {error ? (
+        <div style={{ padding: '24px', fontSize: '12px', color: C.muted, textAlign: 'center' }}>{error}</div>
+      ) : rows.length === 0 ? (
+        <div style={{ padding: '36px 20px', textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', color: C.muted, margin: '0 0 4px', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            {loading ? 'Loading contracts…'
+              : !isSignedIn ? 'Sign in to see your contracts.'
+              : 'No contracts on this account yet.'}
+          </p>
+          {!loading && isSignedIn && (
+            <Link href="/workspace/new" style={{ fontSize: '12px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              Start a new contract →
+            </Link>
+          )}
+        </div>
+      ) : rows.map(c => <ContractRow key={c.id} contract={c} />)}
     </div>
   )
 }
@@ -305,6 +280,11 @@ const QUICK_LINKS = [
 export default function DashboardPage() {
   const openMobileSidebar = useOpenMobileSidebar()
   const [isMobile, setIsMobile] = React.useState(false)
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const { activeAccount } = useMetaAccount()
+  const [contracts, setContracts] = React.useState([])
+  const [loading, setLoading] = React.useState(false)
+  const [error, setError] = React.useState(null)
 
   React.useLayoutEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -312,6 +292,27 @@ export default function DashboardPage() {
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // Fetch contracts for the active Meta Ads account. Refetches whenever the
+  // user switches accounts in the sidebar dropdown.
+  React.useEffect(() => {
+    if (!isLoaded || !isSignedIn) return
+    setLoading(true)
+    setError(null)
+    const opts = activeAccount?.id ? { metaAdsAccountId: activeAccount.id } : {}
+    let cancelled = false
+    createApiClient(getToken).listContracts(opts)
+      .then(data => {
+        if (cancelled) return
+        setContracts(data || [])
+      })
+      .catch(e => {
+        if (cancelled) return
+        setError(e?.message || 'Failed to load contracts')
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [isLoaded, isSignedIn, getToken, activeAccount?.id])
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.bg }}>
@@ -354,14 +355,14 @@ export default function DashboardPage() {
 
           {/* ── KPI strip ── */}
           <div style={{ marginBottom: '12px' }}>
-            <KpiStrip />
+            <KpiStrip contracts={contracts} />
           </div>
 
           {/* ── Bottom: Contracts + Quick Access ── */}
           <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.8fr 1fr', gap: '12px' }}>
 
             {/* Recent Contracts */}
-            <RecentContracts />
+            <RecentContracts contracts={contracts} loading={loading} error={error} isSignedIn={!!isSignedIn} />
 
             {/* Quick Access */}
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -383,13 +384,15 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* Demo notice */}
-              <div style={{ marginTop: '16px', padding: '12px', background: 'var(--c-indigo-subtle)', border: '1px solid var(--c-indigo-border)', borderRadius: '10px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, marginBottom: '4px' }}>Demo mode</div>
-                <p style={{ fontSize: '11px', color: 'var(--c-indigo-mid)', lineHeight: 1.6, margin: 0 }}>
-                  Contract data is mocked. Connect backend API endpoints to see live data.
-                </p>
-              </div>
+              {/* Active account context — only meaningful when authenticated */}
+              {isSignedIn && activeAccount && (
+                <div style={{ marginTop: '16px', padding: '10px 12px', background: 'var(--c-indigo-subtle)', border: '1px solid var(--c-indigo-border)', borderRadius: '10px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, marginBottom: '4px' }}>Active account</div>
+                  <p style={{ fontSize: '11px', color: 'var(--c-indigo-mid)', lineHeight: 1.6, margin: 0 }}>
+                    Showing contracts on <strong>{accountLabel(activeAccount)}</strong>. Switch in the sidebar to scope to another account.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

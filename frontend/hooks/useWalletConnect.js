@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi'
 import { useAuth, useUser } from '@clerk/nextjs'
 import { createApiClient } from '@/lib/api'
@@ -19,8 +19,19 @@ export function useWalletConnect() {
   const { connectAsync, connectors, isPending: isConnecting } = useConnect()
   const { disconnect } = useDisconnect()
   const { signMessageAsync } = useSignMessage()
-  const { getToken, isSignedIn } = useAuth()
+  const { getToken, isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
+
+  // Mirror wagmi's connected state to the Clerk session. wagmi's shimDisconnect
+  // persists the connection in localStorage, so without this effect a user who
+  // signs out (or whose session simply expires) sees their address still
+  // "connected" on the next page load — and the next person to sign in on the
+  // same browser sees the previous user's wallet. Disconnect on signed-out.
+  useEffect(() => {
+    if (isLoaded && !isSignedIn && isConnected) {
+      disconnect()
+    }
+  }, [isLoaded, isSignedIn, isConnected, disconnect])
 
   const [busy, setBusy]   = useState(false)
   const [error, setError] = useState(null)

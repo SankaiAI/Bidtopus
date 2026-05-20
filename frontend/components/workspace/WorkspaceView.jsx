@@ -215,30 +215,99 @@ function RoasChart({ data, target, color }) {
   )
 }
 
+// Workspace version of the Live Performance card. Self-fetches the latest
+// snapshot from /api/contracts/:id/performance so it never relies on mock
+// `currentRoas`/`prob`/`roasHistory` fields that don't exist on real contracts.
+// Mirrors LiveMonitor's empty-state behavior — never render a red ❌ for a
+// freshly-funded contract that simply hasn't produced its first snapshot yet.
+function _relMin(iso) {
+  if (!iso) return null
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (Number.isNaN(diffMs) || diffMs < 0) return null
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hr ago`
+  return `${Math.floor(hrs / 24)} days ago`
+}
+
+function LivePerfPanel({ c }) {
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [perf, setPerf] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
+  const isRealContract = typeof c.id === 'string' && c.id.length >= 32
+
+  React.useEffect(() => {
+    if (!isRealContract || !isLoaded || !isSignedIn) { setLoading(false); return }
+    let cancelled = false
+    createApiClient(getToken).getPerformance(c.id)
+      .then(p => { if (!cancelled) setPerf(p) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [c.id, isRealContract, isLoaded, isSignedIn, getToken])
+
+  const hasSnapshot = perf && perf.timestamp != null && perf.roas != null
+  const currentRoas = hasSnapshot ? perf.roas : null
+  const currentSpend = perf?.spend ?? 0
+  const updated = _relMin(perf?.timestamp)
+  const prob = perf?.success_probability != null ? Math.round(perf.success_probability * 100) : null
+
+  if (!hasSnapshot) {
+    return (
+      <InnerCard>
+        <div style={{ padding: '20px 16px 18px', textAlign: 'center' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--c-indigo-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>
+            {loading ? 'Checking for telemetry…' : 'Awaiting first telemetry'}
+          </p>
+          <p style={{ fontSize: '11px', color: C.muted, lineHeight: 1.55, margin: 0, fontFamily: font }}>
+            Snapshots arrive about every 15 min once the campaign is live.
+          </p>
+        </div>
+        <div style={{ padding: '10px 16px 12px', borderTop: '1px solid var(--c-inner-border)', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: C.faint, fontFamily: font }}>
+          <span>Target <strong style={{ color: C.sub }}>ROAS ≥ {c.targetRoas}×</strong></span>
+          <span>Min spend ${Number(c.minSpend || 0).toLocaleString()}</span>
+        </div>
+      </InnerCard>
+    )
+  }
+
+  const pct = Math.min(100, (currentRoas / c.targetRoas) * 100)
+  const color = pct >= 100 ? C.green : pct >= 80 ? C.amber : C.indigo
+
+  return (
+    <InnerCard>
+      <div style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
+          <span style={{ fontSize: '36px', fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{currentRoas.toFixed(2)}<span style={{ fontSize: '20px' }}>×</span></span>
+          <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>of {c.targetRoas}× target</span>
+          {prob != null && (
+            <span style={{ marginLeft: 'auto', fontSize: '18px', fontWeight: 800, color: prob >= 65 ? C.green : C.amber, fontFamily: font }}>{prob}%</span>
+          )}
+        </div>
+        <Bar value={currentRoas} max={c.targetRoas} color={color}/>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: C.faint, fontFamily: font }}>
+          <span>${currentSpend.toLocaleString()} / ${Number(c.minSpend || 0).toLocaleString()} spend</span>
+          {updated && <span>Updated {updated}</span>}
+        </div>
+      </div>
+    </InnerCard>
+  )
+}
+
 function PanelContent({ c, refetchContract }) {
   const rows = [['Target', `ROAS ≥ ${c.targetRoas}×`], ['Min spend', `$${Number(c.minSpend || 0).toLocaleString()}`], ['Window', `${c.windowDays} days`], ['Fee', `${c.fee} USDC`]]
 
   const StatusSection = () => {
     if (isLive(c.status)) {
-      const pct = Math.min(100, (c.currentRoas / c.targetRoas) * 100)
-      const color = pct >= 100 ? C.green : pct >= 80 ? C.amber : C.indigo
-      return (
-        <InnerCard>
-          <div style={{ padding: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '4px' }}>
-              <span style={{ fontSize: '36px', fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{c.currentRoas?.toFixed(2)}<span style={{ fontSize: '20px' }}>×</span></span>
-              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>of {c.targetRoas}× target</span>
-              <span style={{ marginLeft: 'auto', fontSize: '18px', fontWeight: 800, color: c.prob >= 65 ? C.green : C.amber, fontFamily: font }}>{c.prob}%</span>
-            </div>
-            {c.roasHistory && <div style={{ margin: '12px 0 10px' }}><RoasChart data={c.roasHistory} target={c.targetRoas} color={color}/></div>}
-            <Bar value={c.currentRoas} max={c.targetRoas} color={color}/>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '11px', color: C.faint, fontFamily: font }}>
-              <span>{c.daysLeft} day{c.daysLeft !== 1 ? 's' : ''} left</span>
-              <span>${Number(c.spend || 0).toLocaleString()} / ${Number(c.minSpend || 0).toLocaleString()} spend</span>
-            </div>
-          </div>
-        </InnerCard>
-      )
+      return <LivePerfPanel c={c} />
     }
     if (awaitingOfferAcceptance(c.status)) {
       return (
@@ -659,6 +728,7 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
       <WorkspaceHeader
         title={localTitle || c.title || c.name}
         contractId={id}
+        contractMetaAccountId={contract?.meta_ads_account_id}
         onTitleSave={saveTitle}
         onNew={() => router.push(`/workspace/${generateSessionId()}`)}
       />

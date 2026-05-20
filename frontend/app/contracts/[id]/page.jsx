@@ -1,9 +1,12 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
+import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import EscrowFundButton from '@/components/EscrowFundButton'
+import { createApiClient } from '@/lib/api'
+import { normalizeStatus, isAwaitingFund, isLive, isResolved, canFund } from '@/lib/contractStatus'
 
 const C = {
   bg:      'var(--c-bg)',
@@ -90,18 +93,34 @@ const ALL = {
 
 // ─── TIMELINE STAGES ──────────────────────────────────────────────────────────
 function buildStages(c) {
-  const currentIdx = { pending_funding: 3, active: 4, success: 7, failure: 7 }[c.status] ?? 0
+  // Stage indices: 0 Created · 1 Underwriting · 2 Agent decision · 3 Escrow ·
+  // 4 Campaign · 5 Outcome · 6 Settlement. Maps every backend status to the
+  // stage that's currently "active"; everything before is done.
+  const currentIdx = {
+    created:         3, // mock convention — local state after finalize means "awaiting fund"
+    underwriting:    2,
+    offered:         3,
+    pending_funding: 3,
+    funded:          4,
+    active:          4,
+    settled:         7,
+    success:         7,
+    failure:         7,
+  }[c.status] ?? 0
+  const uwNote = c.prob != null && c.expectedRange?.length === 2
+    ? `${c.prob}% probability · ${c.risk || 'unknown'} risk · expected ${c.expectedRange[0]}–${c.expectedRange[1]}×`
+    : null
   const raw = [
     { label: 'Contract created',
       note: c.createdAt },
     { label: 'ML underwriting',
-      note: `${c.prob}% probability · ${c.risk} risk · expected ${c.expectedRange[0]}–${c.expectedRange[1]}×` },
+      note: uwNote },
     { label: c.agentDecision === 'counteroffer' ? 'Agent countered → accepted' : 'Agent accepted',
       note: null },
     { label: 'Escrow funded',
       note: c.fundedAt ? `${c.fee} USDC locked on Arc · ${c.fundedAt}` : null },
     { label: 'Campaign running',
-      note: c.status === 'active' ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
+      note: c.status === 'active' && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
     { label: 'Outcome resolved',
       note: c.status === 'success' ? `ROAS ${c.finalRoas}× — target met ✓` : c.status === 'failure' ? `ROAS ${c.finalRoas}× — target missed` : null },
     { label: 'Settlement',
@@ -166,55 +185,117 @@ function TxRow({ label, hash }) {
 }
 
 // ─── LIVE MONITOR ─────────────────────────────────────────────────────────────
+// Self-fetches the latest performance snapshot. Empty state is the common case
+// during the first hour after fund — Meta Ads telemetry lags ~15 min and the
+// monitoring tick runs on a 24h cadence — so we lead with that copy instead of
+// rendering a red ❌ "X of 0.9× target" which reads as a failure.
+function formatRelativeMin(iso) {
+  if (!iso) return null
+  const diffMs = Date.now() - new Date(iso).getTime()
+  if (Number.isNaN(diffMs) || diffMs < 0) return null
+  const mins = Math.floor(diffMs / 60000)
+  if (mins < 1) return 'Just now'
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hr ago`
+  return `${Math.floor(hrs / 24)} days ago`
+}
+
 function LiveMonitor({ c }) {
-  const roasPct  = Math.min(100, (c.currentRoas / c.targetRoas) * 100)
-  const spendPct = Math.min(100, (c.spend / c.minSpend) * 100)
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [perf, setPerf] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  // Only fetch for real (UUID-shaped) contract IDs — the mock route uses 'c1'/'c2'.
+  const isRealContract = typeof c.id === 'string' && c.id.length >= 32
+  useEffect(() => {
+    if (!isRealContract || !isLoaded || !isSignedIn) { setLoading(false); return }
+    let cancelled = false
+    createApiClient(getToken).getPerformance(c.id)
+      .then(p => { if (!cancelled) setPerf(p) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [c.id, isRealContract, isLoaded, isSignedIn, getToken])
+
+  // Until backend ingest pipeline lands, every funded contract returns
+  // { spend: 0, revenue: 0, roas: null, timestamp: null }. Render the
+  // awaiting-telemetry state for that case; render the real numbers otherwise.
+  const hasSnapshot = perf && perf.timestamp != null && perf.roas != null
+  const currentRoas = hasSnapshot ? perf.roas : null
+  const currentSpend = perf?.spend ?? 0
+  const updated = formatRelativeMin(perf?.timestamp)
+
+  if (!hasSnapshot) {
+    return (
+      <Card>
+        <CardHead>Live Performance</CardHead>
+        <div style={{ padding: '28px 18px 24px', textAlign: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--c-indigo-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+          </div>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>
+            {loading ? 'Checking for telemetry…' : 'Awaiting first telemetry from Meta Ads'}
+          </p>
+          <p style={{ fontSize: '12px', color: C.muted, lineHeight: 1.6, margin: 0, fontFamily: font }}>
+            Snapshots arrive about every 15 minutes once the campaign is live.
+          </p>
+        </div>
+        <div style={{ padding: '10px 18px 14px', borderTop: `1px solid ${C.borderS}`, display: 'flex', gap: '24px' }}>
+          <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Target <strong style={{ color: C.sub }}>ROAS ≥ {c.targetRoas}×</strong></span>
+          <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Min spend ${Number(c.minSpend || 0).toLocaleString()}</span>
+        </div>
+      </Card>
+    )
+  }
+
+  const roasPct  = Math.min(100, (currentRoas / c.targetRoas) * 100)
+  const spendPct = Math.min(100, (currentSpend / c.minSpend) * 100)
   const roasColor = roasPct >= 100 ? C.green : roasPct >= 80 ? C.amber : C.indigo
-  const probColor = c.prob >= 65 ? C.green : C.amber
+  const prob = perf?.success_probability != null ? Math.round(perf.success_probability * 100) : null
+  const probColor = prob != null && prob >= 65 ? C.green : C.amber
 
   return (
     <Card>
       <CardHead>Live Performance</CardHead>
       <div style={{ padding: '20px 18px 16px' }}>
-        {/* Hero number */}
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', marginBottom: '4px' }}>
-          <div style={{ fontSize: '48px', fontWeight: 800, color: roasColor, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{c.currentRoas.toFixed(2)}<span style={{ fontSize: '28px' }}>×</span></div>
+          <div style={{ fontSize: '48px', fontWeight: 800, color: roasColor, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{currentRoas.toFixed(2)}<span style={{ fontSize: '28px' }}>×</span></div>
           <div style={{ paddingBottom: '6px' }}>
             <div style={{ fontSize: '13px', color: C.muted, fontFamily: font }}>current ROAS</div>
             <div style={{ fontSize: '13px', color: C.muted, fontFamily: font }}>target <span style={{ fontWeight: 700, color: C.sub }}>{c.targetRoas}×</span></div>
           </div>
-          <div style={{ marginLeft: 'auto', textAlign: 'right', paddingBottom: '4px' }}>
-            <div style={{ fontSize: '22px', fontWeight: 800, color: probColor, fontFamily: font, lineHeight: 1 }}>{c.prob}%</div>
-            <div style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>ML success estimate</div>
-          </div>
+          {prob != null && (
+            <div style={{ marginLeft: 'auto', textAlign: 'right', paddingBottom: '4px' }}>
+              <div style={{ fontSize: '22px', fontWeight: 800, color: probColor, fontFamily: font, lineHeight: 1 }}>{prob}%</div>
+              <div style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>ML success estimate</div>
+            </div>
+          )}
         </div>
 
-        {/* Chart */}
-        <div style={{ margin: '16px 0' }}>
-          <RoasChart data={c.roasHistory} target={c.targetRoas} color={roasColor} />
-        </div>
-
-        {/* Progress bars */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginTop: '4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', marginTop: '16px' }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>ROAS toward target</span>
               <span style={{ fontSize: '12px', fontWeight: 700, color: roasColor, fontFamily: font }}>{roasPct.toFixed(0)}%</span>
             </div>
-            <Bar value={c.currentRoas} max={c.targetRoas} color={roasColor} />
+            <Bar value={currentRoas} max={c.targetRoas} color={roasColor} />
           </div>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>${c.spend.toLocaleString()} of ${c.minSpend.toLocaleString()} min spend</span>
+              <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>${currentSpend.toLocaleString()} of ${Number(c.minSpend || 0).toLocaleString()} min spend</span>
               <span style={{ fontSize: '12px', fontWeight: 700, color: C.sub, fontFamily: font }}>{spendPct.toFixed(0)}%</span>
             </div>
-            <Bar value={c.spend} max={c.minSpend} color={C.sub} />
+            <Bar value={currentSpend} max={c.minSpend} color={C.sub} />
           </div>
         </div>
       </div>
-      <div style={{ padding: '10px 18px 14px', borderTop: `1px solid ${C.borderS}`, display: 'flex', gap: '24px' }}>
-        <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>{c.daysLeft} day{c.daysLeft !== 1 ? 's' : ''} remaining</span>
-        <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Started {c.createdAt}</span>
+      <div style={{ padding: '10px 18px 14px', borderTop: `1px solid ${C.borderS}`, display: 'flex', gap: '24px', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>{c.daysLeft != null ? `${c.daysLeft} day${c.daysLeft !== 1 ? 's' : ''} remaining` : `Started ${c.createdAt || ''}`}</span>
+        {updated && <span style={{ fontSize: '12px', color: C.faint, fontFamily: font }}>Updated {updated}</span>}
       </div>
     </Card>
   )
@@ -222,25 +303,29 @@ function LiveMonitor({ c }) {
 
 // ─── FUND ESCROW PANEL ────────────────────────────────────────────────────────
 function FundEscrowPanel({ c }) {
+  const hasAgentDecision = c.agentNote || c.prob != null
   return (
     <Card>
       <CardHead>Fund Escrow to Begin</CardHead>
       <div style={{ padding: '20px 18px' }}>
-        {/* Agent note */}
-        <div style={{ background: 'var(--c-indigo-subtle)', border: '1px solid var(--c-indigo-border)', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
-          <div style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: font }}>Agent decision — Accepted</div>
-          <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.7, margin: 0, fontFamily: font }}>"{c.agentNote}"</p>
-          <div style={{ marginTop: '10px', display: 'flex', gap: '20px' }}>
-            <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Success probability: <span style={{ fontWeight: 700, color: C.green }}>{c.prob}%</span></span>
-            <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Risk level: <span style={{ fontWeight: 600, color: C.sub }}>{c.risk}</span></span>
+        {hasAgentDecision && (
+          <div style={{ background: 'var(--c-indigo-subtle)', border: '1px solid var(--c-indigo-border)', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em', fontFamily: font }}>Agent decision — Accepted</div>
+            {c.agentNote && <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.7, margin: 0, fontFamily: font }}>&quot;{c.agentNote}&quot;</p>}
+            {(c.prob != null || c.risk) && (
+              <div style={{ marginTop: '10px', display: 'flex', gap: '20px' }}>
+                {c.prob != null && <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Success probability: <span style={{ fontWeight: 700, color: C.green }}>{c.prob}%</span></span>}
+                {c.risk && <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Risk level: <span style={{ fontWeight: 600, color: C.sub }}>{c.risk}</span></span>}
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Terms summary */}
         <div style={{ border: `1px solid ${C.border}`, borderRadius: '8px', overflow: 'hidden', marginBottom: '20px' }}>
           {[
             ['Target',      `ROAS ≥ ${c.targetRoas}×`],
-            ['Minimum spend', `$${c.minSpend.toLocaleString()}`],
+            ['Minimum spend', `$${Number(c.minSpend || 0).toLocaleString()}`],
             ['Time window', `${c.windowDays} days`],
             ['Success fee', `${c.fee} USDC`],
           ].map(([k, v], i, arr) => (
@@ -295,9 +380,9 @@ function ResolutionPanel({ c }) {
         {/* Stats */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '18px' }}>
           {[
-            ['Total spend',   `$${c.spend.toLocaleString()}`],
-            ['Min. required', `$${c.minSpend.toLocaleString()}`],
-            ['Final ROAS',    `${c.finalRoas}×`],
+            ['Total spend',   c.spend != null ? `$${Number(c.spend).toLocaleString()}` : '—'],
+            ['Min. required', `$${Number(c.minSpend || 0).toLocaleString()}`],
+            ['Final ROAS',    c.finalRoas != null ? `${c.finalRoas}×` : '—'],
             ['Target ROAS',   `${c.targetRoas}×`],
           ].map(([k, v]) => (
             <div key={k} style={{ padding: '10px 12px', background: 'var(--c-bg)', borderRadius: '8px', border: `1px solid ${C.border}` }}>
@@ -344,8 +429,16 @@ function StrategyPanel({ strategy }) {
 }
 
 // ─── AGENT DECISION CARD ──────────────────────────────────────────────────────
+// Decision details (note, probability, expected range, risk) only exist on the
+// underwriting + agent-offer rows, which the contract response doesn't carry
+// today. When the page is rendering from /api/contracts/:id alone, those fields
+// are null — in that case we skip this card rather than render a hollow shell.
 function AgentDecisionCard({ c }) {
   const isCounter = c.agentDecision === 'counteroffer'
+  const hasNote   = !!c.agentNote
+  const hasProb   = c.prob != null
+  const hasRange  = Array.isArray(c.expectedRange) && c.expectedRange.length === 2
+  if (!c.agentDecision && !hasNote && !hasProb) return null
   return (
     <Card>
       <CardHead>Agent Decision</CardHead>
@@ -355,13 +448,15 @@ function AgentDecisionCard({ c }) {
           <span style={{ fontSize: '12px', fontWeight: 700, color: isCounter ? C.amber : C.green, fontFamily: font, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {isCounter ? 'Countered → Accepted' : 'Accepted'}
           </span>
-          <span style={{ marginLeft: 'auto', fontSize: '11px', color: C.faint, fontFamily: font }}>ML probability: <span style={{ fontWeight: 700 }}>{c.prob}%</span></span>
+          {hasProb && <span style={{ marginLeft: 'auto', fontSize: '11px', color: C.faint, fontFamily: font }}>ML probability: <span style={{ fontWeight: 700 }}>{c.prob}%</span></span>}
         </div>
-        <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.7, margin: '0 0 10px', fontFamily: font }}>"{c.agentNote}"</p>
-        <div style={{ display: 'flex', gap: '16px' }}>
-          <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Expected range: <span style={{ fontWeight: 600, color: C.sub }}>{c.expectedRange[0]}–{c.expectedRange[1]}×</span></span>
-          <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Risk: <span style={{ fontWeight: 600, color: C.sub }}>{c.risk}</span></span>
-        </div>
+        {hasNote && <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.7, margin: '0 0 10px', fontFamily: font }}>&quot;{c.agentNote}&quot;</p>}
+        {(hasRange || c.risk) && (
+          <div style={{ display: 'flex', gap: '16px' }}>
+            {hasRange && <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Expected range: <span style={{ fontWeight: 600, color: C.sub }}>{c.expectedRange[0]}–{c.expectedRange[1]}×</span></span>}
+            {c.risk && <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Risk: <span style={{ fontWeight: 600, color: C.sub }}>{c.risk}</span></span>}
+          </div>
+        )}
       </div>
     </Card>
   )
@@ -469,12 +564,64 @@ function TermsCard({ c }) {
 }
 
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
-const STATUS_LABEL = { active: 'Active', pending_funding: 'Awaiting Escrow', success: 'Success', failure: 'Refunded' }
+const STATUS_LABEL = {
+  negotiating:     'Negotiating',
+  created:         'Ready to Fund',
+  underwriting:    'Underwriting',
+  offered:         'Reviewing Offer',
+  pending_funding: 'Awaiting Escrow',
+  funded:          'Funded',
+  active:          'Active',
+  settled:         'Settled',
+  success:         'Success',
+  failure:         'Refunded',
+}
 const STATUS_COLORS = {
-  active:          { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  negotiating:     { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  created:         { color: C.amber,  bg: 'var(--c-amber-bg)'  },
+  underwriting:    { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  offered:         { color: C.amber,  bg: 'var(--c-amber-bg)'  },
   pending_funding: { color: C.amber,  bg: 'var(--c-amber-bg)'  },
+  funded:          { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  active:          { color: C.indigo, bg: 'var(--c-indigo-bg)' },
+  settled:         { color: C.green,  bg: 'var(--c-green-bg)'  },
   success:         { color: C.green,  bg: 'var(--c-green-bg)'  },
   failure:         { color: C.muted,  bg: 'var(--c-bg)'        },
+}
+
+// Map the backend's ContractResponse into the shape this page renders. Fields
+// the response doesn't carry (probability, agent note, strategy plan, live
+// performance) come from other endpoints — LiveMonitor self-fetches the perf
+// snapshot; the others gracefully degrade with the gates added to each panel.
+function shapeContract(raw) {
+  if (!raw) return null
+  const rawStatus = normalizeStatus(raw.status)
+  const outcome   = raw.resolution_outcome ?? raw.resolutionOutcome ?? null
+  // Collapse Settled + outcome into the success/failure slugs the existing
+  // ResolutionPanel branch checks against.
+  const status   = rawStatus === 'settled' && (outcome === 'success' || outcome === 'failure') ? outcome : rawStatus
+  return {
+    id:          raw.id,
+    name:        raw.title || raw.campaign_goal || raw.name || 'Contract',
+    status,
+    targetRoas:  raw.target_roas  ?? raw.targetRoas,
+    minSpend:    raw.min_spend_usd ?? raw.minSpend,
+    windowDays:  raw.time_window_days ?? raw.windowDays,
+    fee:         raw.success_fee_usdc ?? raw.fee,
+    createdAt:   raw.created_at ? new Date(raw.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : raw.createdAt,
+    // Resolution fields populated by backend #71. Null when unresolved.
+    finalRoas:    raw.final_roas    ?? raw.finalRoas    ?? null,
+    settledAt:    raw.settled_at    ? new Date(raw.settled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : raw.settledAt ?? null,
+    settleTxHash: raw.settle_tx_hash ?? raw.settleTxHash ?? null,
+    refundTxHash: raw.refund_tx_hash ?? raw.refundTxHash ?? null,
+    fundedAt:     raw.funded_at ?? raw.fundedAt ?? null,
+    // Underwriting / agent-offer / strategy / live-perf data isn't on the
+    // contract response — leave undefined so the panels' gates can skip them.
+    prob: undefined, risk: undefined, expectedRange: undefined,
+    agentDecision: undefined, agentNote: undefined,
+    strategy: undefined, spend: undefined, currentRoas: undefined,
+    daysLeft: undefined, roasHistory: undefined,
+  }
 }
 
 // ─── PAGE ─────────────────────────────────────────────────────────────────────
@@ -482,6 +629,10 @@ export default function ContractDetailPage() {
   const { id } = useParams()
   const openMobileSidebar = useOpenMobileSidebar()
   const [isMobile, setIsMobile] = React.useState(false)
+  const { getToken, isLoaded, isSignedIn } = useAuth()
+  const [raw, setRaw]         = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError]     = React.useState(null)
 
   React.useLayoutEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -490,11 +641,34 @@ export default function ContractDetailPage() {
     return () => window.removeEventListener('resize', check)
   }, [])
 
-  const c = ALL[id]
+  // Mock fallback for the demo c1/c2/c3/c4 IDs (still wired from sidebar
+  // MOCK_CONTRACTS); real UUID-shaped IDs go to the API.
+  React.useEffect(() => {
+    if (ALL[id]) { setRaw(ALL[id]); setLoading(false); return }
+    if (!isLoaded) return
+    if (!isSignedIn) { setLoading(false); return }
+    let cancelled = false
+    createApiClient(getToken).getContract(id)
+      .then(c => { if (!cancelled) setRaw(c) })
+      .catch(e => { if (!cancelled) setError(e?.message || 'Failed to load contract') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [id, isLoaded, isSignedIn, getToken])
+
+  const c = React.useMemo(() => ALL[id] ? ALL[id] : shapeContract(raw), [id, raw])
+
+  if (loading) return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
+      <p style={{ fontSize: '13px', color: C.muted, fontFamily: font }}>Loading contract…</p>
+    </div>
+  )
+
   if (!c) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
       <div style={{ textAlign: 'center' }}>
-        <p style={{ fontSize: '14px', color: C.muted, fontFamily: font, marginBottom: '12px' }}>Contract not found.</p>
+        <p style={{ fontSize: '14px', color: C.muted, fontFamily: font, marginBottom: '12px' }}>
+          {error ? error : !isSignedIn ? 'Sign in to view this contract.' : 'Contract not found.'}
+        </p>
         <Link href="/contracts" style={{ fontSize: '13px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: font }}>← Back to My Contracts</Link>
       </div>
     </div>
@@ -535,7 +709,7 @@ export default function ContractDetailPage() {
                 <span style={{ fontSize: '11px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
               </div>
               <p style={{ fontSize: '13px', color: C.muted, margin: 0, fontFamily: font }}>
-                ROAS ≥ {c.targetRoas}× · ${c.minSpend.toLocaleString()} min spend · {c.windowDays} days · {c.fee} USDC fee · Created {c.createdAt}
+                ROAS ≥ {c.targetRoas}× · ${Number(c.minSpend || 0).toLocaleString()} min spend · {c.windowDays} days · {c.fee} USDC fee · Created {c.createdAt}
               </p>
             </div>
           </div>
@@ -545,11 +719,11 @@ export default function ContractDetailPage() {
 
             {/* ── Main column ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {c.status === 'active'          && <LiveMonitor c={c} />}
-              {c.status === 'pending_funding' && <FundEscrowPanel c={c} />}
+              {isLive(c.status)     && <LiveMonitor c={c} />}
+              {canFund(c.status)    && <FundEscrowPanel c={c} />}
               {(c.status === 'success' || c.status === 'failure') && <ResolutionPanel c={c} />}
               {c.strategy && <StrategyPanel strategy={c.strategy} />}
-              {c.status !== 'pending_funding' && <AgentDecisionCard c={c} />}
+              {!canFund(c.status) && <AgentDecisionCard c={c} />}
             </div>
 
             {/* ── Right sidebar ── */}

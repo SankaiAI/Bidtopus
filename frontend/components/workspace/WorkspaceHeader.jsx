@@ -1,9 +1,14 @@
 'use client'
 import React from 'react'
 import { useOpenMobileSidebar } from '@/components/AppShell'
+import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
 import { C, font } from './constants'
 
-export default function WorkspaceHeader({ title, contractId, onTitleSave, onNew }) {
+export default function WorkspaceHeader({ title, contractId, contractMetaAccountId, onTitleSave, onNew }) {
+  const { accounts } = useMetaAccount()
+  const contractAccount = contractMetaAccountId
+    ? accounts.find(a => a.id === contractMetaAccountId)
+    : null
   const openMobileSidebar = useOpenMobileSidebar()
   const [isEditing, setIsEditing] = React.useState(false)
   const [editValue, setEditValue] = React.useState('')
@@ -58,6 +63,15 @@ export default function WorkspaceHeader({ title, contractId, onTitleSave, onNew 
           </>
         )}
       </div>
+
+      {contractAccount && (
+        <span
+          title={`This contract is scoped to ${accountLabel(contractAccount)}`}
+          style={{ fontSize: '10px', fontWeight: 700, color: C.indigo, background: 'var(--c-indigo-subtle)', border: '1px solid var(--c-indigo-border)', padding: '3px 9px', borderRadius: '20px', fontFamily: font, whiteSpace: 'nowrap', flexShrink: 0, marginRight: '8px', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}
+        >
+          {accountLabel(contractAccount)}
+        </span>
+      )}
 
       {onNew && (
         <button

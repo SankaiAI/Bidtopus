@@ -59,7 +59,11 @@ export function createApiClient(getToken) {
     // ── Contracts ──────────────────────────────────────────────────────
     createContract: (body) => post('/api/contracts', body),
     getContract:    (id)   => get(`/api/contracts/${id}`),
-    listContracts:  ()     => get('/api/contracts'),
+    // Optional { metaAdsAccountId } scopes results to a Meta Ads account.
+    listContracts:  (opts = {}) => {
+      const qp = opts.metaAdsAccountId ? `?meta_ads_account_id=${encodeURIComponent(opts.metaAdsAccountId)}` : ''
+      return get(`/api/contracts${qp}`)
+    },
     deleteContract: (id)   => del(`/api/contracts/${id}`),
 
     // ── Underwriting & Offer ───────────────────────────────────────────
@@ -112,5 +116,11 @@ export function createApiClient(getToken) {
     getMe: () => get('/api/users/me'),
     connectWallet: (walletAddress, signature) =>
       post('/api/users/me/wallet', { wallet_address: walletAddress, signature }),
+
+    // ── Meta Ads accounts (backend ticket #76) ─────────────────────────
+    listMetaAccounts:      ()                       => get('/api/users/me/meta-accounts'),
+    connectMetaAccount:    (externalId, label = null) =>
+      post('/api/users/me/meta-accounts', { meta_ads_account_id: externalId, label }),
+    disconnectMetaAccount: (id)                     => del(`/api/users/me/meta-accounts/${id}`),
   }
 }
