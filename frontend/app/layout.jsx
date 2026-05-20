@@ -1,6 +1,7 @@
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import AppShell from '@/components/AppShell'
+import Web3Provider from '@/components/Web3Provider'
 import './globals.css'
 
 const font = Plus_Jakarta_Sans({
@@ -23,9 +24,8 @@ export const metadata = {
 const hasClerk = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 
 export default function RootLayout({ children }) {
-  const shell = hasClerk
-    ? <ClerkProvider><AppShell>{children}</AppShell></ClerkProvider>
-    : <AppShell>{children}</AppShell>
+  const inner = <Web3Provider><AppShell>{children}</AppShell></Web3Provider>
+  const shell = hasClerk ? <ClerkProvider>{inner}</ClerkProvider> : inner
 
   return (
     <html lang="en">

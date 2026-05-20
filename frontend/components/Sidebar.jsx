@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Logo from '@/components/Logo'
 import { useTheme } from '@/components/AppShell'
 import { generateSessionId } from '@/lib/workspaceSessions'
+import { useWalletConnect } from '@/hooks/useWalletConnect'
 import { Icon, PanelClose, PanelOpen } from './sidebar/icons'
 import EscrowProtect from './sidebar/EscrowProtect'
 import UserProfile from './sidebar/UserProfile'
@@ -224,7 +225,7 @@ function LogoWithTheme({ size }) {
 
 // ─── SIDEBAR CONTENT ─────────────────────────────────────────────────────────
 function SidebarContent({ activeItem, collapsed, onToggle, onNavigate }) {
-  const [walletConnected, setWalletConnected] = useState(false)
+  const { address, isConnected, isConnecting, error, connectAndLink, disconnect } = useWalletConnect()
 
   return (
     <>
@@ -256,12 +257,19 @@ function SidebarContent({ activeItem, collapsed, onToggle, onNavigate }) {
         {!collapsed && <WorkspaceList />}
       </div>
 
-      <EscrowProtect collapsed={collapsed} walletConnected={walletConnected} onConnect={() => setWalletConnected(true)} />
+      <EscrowProtect
+        collapsed={collapsed}
+        walletConnected={isConnected}
+        isConnecting={isConnecting}
+        error={error}
+        onConnect={connectAndLink}
+      />
 
       <UserProfile
         collapsed={collapsed}
-        connected={walletConnected}
-        onDisconnect={() => setWalletConnected(false)}
+        connected={isConnected}
+        address={address}
+        onDisconnect={disconnect}
       />
     </>
   )

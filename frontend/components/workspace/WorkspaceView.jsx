@@ -6,10 +6,13 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAuth } from '@clerk/nextjs'
 import AgentInputBar from '@/components/AgentInputBar'
+import EscrowFundButton from '@/components/EscrowFundButton'
+import AcceptOfferCard from '@/components/AcceptOfferCard'
 import { useMessages } from '@/hooks/useMessages'
 import { useActionApprovals } from '@/hooks/useActionApprovals'
 import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
+import { normalizeStatus, isAwaitingFund, isLive, isResolved, canFund, awaitingOfferAcceptance } from '@/lib/contractStatus'
 import ThinkingBlock from './ThinkingBlock'
 import WorkspaceHeader from './WorkspaceHeader'
 import { C, font } from './constants'
@@ -144,8 +147,30 @@ function ThinkingDots() {
 }
 
 // ─── RIGHT PANEL ATOMS ────────────────────────────────────────────────────────
-const STATUS_LABEL  = { active: 'Active', created: 'Ready to Fund', pending_funding: 'Awaiting Escrow', success: 'Success', failure: 'Refunded', negotiating: 'Negotiating' }
-const STATUS_COLORS = { active: { color: C.indigo, bg: C.indigoBg }, created: { color: C.amber, bg: C.amberBg }, pending_funding: { color: C.amber, bg: C.amberBg }, success: { color: C.green, bg: C.greenBg }, failure: { color: C.muted, bg: C.bg }, negotiating: { color: C.indigo, bg: C.indigoBg } }
+const STATUS_LABEL  = {
+  negotiating:     'Negotiating',
+  created:         'Ready to Fund',
+  underwriting:    'Underwriting',
+  offered:         'Reviewing Offer',
+  pending_funding: 'Ready to Fund',
+  funded:          'Funded',
+  active:          'Active',
+  settled:         'Settled',
+  success:         'Success',
+  failure:         'Refunded',
+}
+const STATUS_COLORS = {
+  negotiating:     { color: C.indigo, bg: C.indigoBg },
+  created:         { color: C.amber,  bg: C.amberBg  },
+  underwriting:    { color: C.indigo, bg: C.indigoBg },
+  offered:         { color: C.amber,  bg: C.amberBg  },
+  pending_funding: { color: C.amber,  bg: C.amberBg  },
+  funded:          { color: C.indigo, bg: C.indigoBg },
+  active:          { color: C.indigo, bg: C.indigoBg },
+  settled:         { color: C.green,  bg: C.greenBg  },
+  success:         { color: C.green,  bg: C.greenBg  },
+  failure:         { color: C.muted,  bg: C.bg       },
+}
 
 function SectionRow({ num, title, subtitle }) {
   return (
@@ -190,11 +215,11 @@ function RoasChart({ data, target, color }) {
   )
 }
 
-function PanelContent({ c }) {
+function PanelContent({ c, refetchContract }) {
   const rows = [['Target', `ROAS ≥ ${c.targetRoas}×`], ['Min spend', `$${Number(c.minSpend || 0).toLocaleString()}`], ['Window', `${c.windowDays} days`], ['Fee', `${c.fee} USDC`]]
 
   const StatusSection = () => {
-    if (c.status === 'active') {
+    if (isLive(c.status)) {
       const pct = Math.min(100, (c.currentRoas / c.targetRoas) * 100)
       const color = pct >= 100 ? C.green : pct >= 80 ? C.amber : C.indigo
       return (
@@ -215,21 +240,45 @@ function PanelContent({ c }) {
         </InnerCard>
       )
     }
-    if (c.status === 'pending_funding' || c.status === 'created') {
+    if (awaitingOfferAcceptance(c.status)) {
       return (
         <InnerCard>
           <div style={{ padding: '16px' }}>
-            <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.65, margin: '0 0 14px', fontFamily: font }}>Fund the escrow to launch your campaign.{c.prob != null && <> The agent is ready — <strong style={{ fontWeight: 700 }}>{c.prob}% probability</strong> of hitting your target.</>}</p>
-            <button style={{ width: '100%', padding: '12px', borderRadius: '9px', border: 'none', background: C.indigo, color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: font, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px', transition: 'opacity 0.15s' }} onMouseEnter={e => e.currentTarget.style.opacity = '0.88'} onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-              Lock {c.fee} USDC in Escrow
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </button>
-            <p style={{ fontSize: '11px', color: C.faint, textAlign: 'center', margin: '8px 0 0', fontFamily: font }}>Settlement enforced by Arc — not by OutcomeX.</p>
+            <AcceptOfferCard contractId={c.id} onAccepted={refetchContract} />
           </div>
         </InnerCard>
       )
     }
+    if (canFund(c.status)) {
+      return (
+        <InnerCard>
+          <div style={{ padding: '16px' }}>
+            <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.65, margin: '0 0 14px', fontFamily: font }}>Fund the escrow to launch your campaign.{c.prob != null && <> The agent is ready — <strong style={{ fontWeight: 700 }}>{c.prob}% probability</strong> of hitting your target.</>}</p>
+            <EscrowFundButton contractId={c.id} feeUsdc={c.fee} termsLoaded={true} onFunded={refetchContract} />
+          </div>
+        </InnerCard>
+      )
+    }
+    if (isAwaitingFund(c.status)) {
+      // Created / Underwriting — agent is still working, no merchant action available yet.
+      return (
+        <InnerCard>
+          <div style={{ padding: '16px' }}>
+            <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.65, margin: 0, fontFamily: font }}>
+              {c.status === 'underwriting'
+                ? 'The agent is evaluating your contract. The offer will appear in chat shortly.'
+                : 'The agent is preparing your contract. Watch the chat for the next step.'}
+            </p>
+          </div>
+        </InnerCard>
+      )
+    }
+    // Resolved branch — distinguishes success / failure when frontend knows the outcome.
+    // Plain `settled` (no outcome yet) shows a neutral "Resolved" state until the
+    // backend exposes resolution_outcome on ContractResponse (see ticket).
     const isSuccess = c.status === 'success'
+    const isFailure = c.status === 'failure'
+    const outcomeKnown = isSuccess || isFailure
     const accent = isSuccess ? C.green : C.muted
     const txHash = isSuccess ? c.settleTxHash : c.refundTxHash
     return (
@@ -237,16 +286,27 @@ function PanelContent({ c }) {
         <div style={{ padding: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: isSuccess ? C.greenBg : C.bg, borderRadius: '8px', border: `1px solid ${isSuccess ? C.greenBorder : C.border}`, marginBottom: '14px' }}>
             <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: isSuccess ? C.greenLight : 'var(--c-bar-track)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {isSuccess ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
+              {isSuccess ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> : isFailure ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
             </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '26px', fontWeight: 800, color: accent, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{c.finalRoas}×</div>
-              <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px', fontFamily: font }}>target was {c.targetRoas}×</div>
+              {outcomeKnown ? (
+                <>
+                  <div style={{ fontSize: '26px', fontWeight: 800, color: accent, letterSpacing: '-0.04em', lineHeight: 1, fontFamily: font }}>{c.finalRoas}×</div>
+                  <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px', fontFamily: font }}>target was {c.targetRoas}×</div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: C.sub, lineHeight: 1.3, fontFamily: font }}>Contract resolved</div>
+                  <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px', fontFamily: font }}>Settlement complete</div>
+                </>
+              )}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: isSuccess ? C.green : C.sub, fontFamily: font }}>{c.fee} USDC</div>
-              <div style={{ fontSize: '11px', color: C.faint, fontFamily: font }}>{isSuccess ? 'released' : 'refunded'}</div>
-            </div>
+            {outcomeKnown && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: isSuccess ? C.green : C.sub, fontFamily: font }}>{c.fee} USDC</div>
+                <div style={{ fontSize: '11px', color: C.faint, fontFamily: font }}>{isSuccess ? 'released' : 'refunded'}</div>
+              </div>
+            )}
           </div>
           {c.roasHistory?.length > 2 && <div style={{ marginBottom: '10px' }}><RoasChart data={c.roasHistory} target={c.targetRoas} color={accent}/></div>}
           {txHash && <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontFamily: font }}><span style={{ color: C.faint }}>Settlement tx</span><span style={{ color: C.indigo, fontWeight: 600 }}>{txHash}</span></div>}
@@ -256,14 +316,27 @@ function PanelContent({ c }) {
   }
 
   function buildStages(c) {
-    const idx = { created: 3, pending_funding: 3, active: 4, success: 7, failure: 7 }[c.status] ?? 0
+    // Stage indices: 0 Contract created, 1 ML underwriting, 2 Agent decision,
+    // 3 Escrow funded, 4 Campaign running, 5 Outcome resolved, 6 Settlement.
+    // idx = the stage that is currently active (everything before is done).
+    const idx = {
+      created:         3, // mock convention: "just finalized, awaiting fund"
+      underwriting:    2,
+      offered:         3,
+      pending_funding: 3,
+      funded:          4,
+      active:          4,
+      settled:         7,
+      success:         7,
+      failure:         7,
+    }[c.status] ?? 0
     const note = c.prob != null && c.expectedRange != null ? `${c.prob}% probability · ${c.risk} risk · expected ${c.expectedRange[0]}–${c.expectedRange[1]}×` : null
     const raw = [
       { label: 'Contract created', note: c.createdAt },
       { label: 'ML underwriting', note },
       { label: c.agentDecision === 'counteroffer' ? 'Agent countered → accepted' : 'Agent accepted', note: null },
       { label: 'Escrow funded', note: c.fundedAt ? `${c.fee} USDC locked · ${c.fundedAt}` : null },
-      { label: 'Campaign running', note: c.status === 'active' ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
+      { label: 'Campaign running', note: isLive(c.status) && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
       { label: 'Outcome resolved', note: c.status === 'success' ? `ROAS ${c.finalRoas}× ✓` : c.status === 'failure' ? `ROAS ${c.finalRoas}× — missed` : null },
       { label: 'Settlement', note: c.status === 'success' ? `${c.fee} USDC released · ${c.settledAt}` : c.status === 'failure' ? `${c.fee} USDC refunded · ${c.settledAt}` : null },
     ]
@@ -274,7 +347,17 @@ function PanelContent({ c }) {
 
   return (
     <>
-      <SectionRow num={1} title={c.status === 'active' ? 'Live Performance' : c.status === 'pending_funding' || c.status === 'created' ? 'Fund Escrow' : 'Outcome'} subtitle={c.status === 'active' ? 'Real-time ROAS and spend tracking' : c.status === 'pending_funding' || c.status === 'created' ? 'Lock funds to launch the campaign' : c.status === 'success' ? 'Contract settled — target met' : 'Contract closed — target missed'} />
+      <SectionRow
+        num={1}
+        title={isLive(c.status) ? 'Live Performance' : isAwaitingFund(c.status) ? 'Fund Escrow' : 'Outcome'}
+        subtitle={
+          isLive(c.status) ? 'Real-time ROAS and spend tracking'
+          : isAwaitingFund(c.status) ? 'Lock funds to launch the campaign'
+          : c.status === 'success' ? 'Contract settled — target met'
+          : c.status === 'failure' ? 'Contract closed — target missed'
+          : 'Contract resolved'
+        }
+      />
       <StatusSection />
 
       <SectionRow num={2} title="Lifecycle" subtitle="Contract stages and milestones" />
@@ -334,7 +417,7 @@ function PanelContent({ c }) {
 // ─── WORKSPACE RIGHT PANEL ────────────────────────────────────────────────────
 // Standalone panel used by WorkspacePage when NegotiationView stays mounted.
 // Accepts the raw contract object returned by onFinalized / getContract.
-export function WorkspaceRightPanel({ contract, id }) {
+export function WorkspaceRightPanel({ contract, id, refetchContract }) {
   const [isMobile, setIsMobile] = React.useState(false)
   const [showPanel, setShowPanel] = React.useState(false)
 
@@ -347,11 +430,16 @@ export function WorkspaceRightPanel({ contract, id }) {
 
   const c = React.useMemo(() => {
     if (!contract) return null
+    // If the backend says Settled with a known outcome, collapse to the
+    // outcome-specific frontend slug so the existing success/failure UI fires.
+    const rawStatus = normalizeStatus(contract.status)
+    const outcome   = contract.resolution_outcome ?? contract.resolutionOutcome ?? null
+    const status    = rawStatus === 'settled' && (outcome === 'success' || outcome === 'failure') ? outcome : rawStatus
     return {
       id:          contract.id,
       name:        contract.campaign_goal || contract.name || 'Campaign',
       title:       contract.title || null,
-      status:      (contract.status || '').toLowerCase(),
+      status,
       targetRoas:  contract.target_roas  ?? contract.targetRoas,
       minSpend:    contract.min_spend_usd ?? contract.minSpend,
       windowDays:  contract.time_window_days ?? contract.windowDays,
@@ -363,8 +451,10 @@ export function WorkspaceRightPanel({ contract, id }) {
       currentRoas: contract.currentRoas ?? null, spend: contract.spend ?? null,
       daysLeft: contract.daysLeft ?? null, roasHistory: contract.roasHistory ?? null,
       fundedAt: contract.fundedAt ?? null, strategy: contract.strategy ?? null,
-      finalRoas: contract.finalRoas ?? null, settledAt: contract.settledAt ?? null,
-      settleTxHash: contract.settleTxHash ?? null, refundTxHash: contract.refundTxHash ?? null,
+      finalRoas:    contract.final_roas    ?? contract.finalRoas    ?? null,
+      settledAt:    contract.settled_at    ? new Date(contract.settled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : contract.settledAt ?? null,
+      settleTxHash: contract.settle_tx_hash ?? contract.settleTxHash ?? null,
+      refundTxHash: contract.refund_tx_hash ?? contract.refundTxHash ?? null,
     }
   }, [contract])
 
@@ -398,7 +488,7 @@ export function WorkspaceRightPanel({ contract, id }) {
               onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
-            <PanelContent c={c} />
+            <PanelContent c={c} refetchContract={refetchContract} />
           </div>
         </div>
       </div>
@@ -407,7 +497,7 @@ export function WorkspaceRightPanel({ contract, id }) {
 }
 
 // ─── WORKSPACE VIEW ───────────────────────────────────────────────────────────
-export default function WorkspaceView({ id, contract }) {
+export default function WorkspaceView({ id, contract, refetchContract }) {
   const router = useRouter()
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
@@ -452,11 +542,14 @@ export default function WorkspaceView({ id, contract }) {
   // Build display contract — API shape normalized
   const c = React.useMemo(() => {
     if (!contract) return null
+    const rawStatus = normalizeStatus(contract.status)
+    const outcome   = contract.resolution_outcome ?? contract.resolutionOutcome ?? null
+    const status    = rawStatus === 'settled' && (outcome === 'success' || outcome === 'failure') ? outcome : rawStatus
     return {
       id:          contract.id,
       name:        contract.campaign_goal || contract.name || 'Campaign',
       title:       contract.title || generatedTitle || null,
-      status:      (contract.status || '').toLowerCase(),
+      status,
       targetRoas:  contract.target_roas  ?? contract.targetRoas,
       minSpend:    contract.min_spend_usd ?? contract.minSpend,
       windowDays:  contract.time_window_days ?? contract.windowDays,
@@ -469,8 +562,10 @@ export default function WorkspaceView({ id, contract }) {
       currentRoas: contract.currentRoas ?? null, spend: contract.spend ?? null,
       daysLeft: contract.daysLeft ?? null, roasHistory: contract.roasHistory ?? null,
       fundedAt: contract.fundedAt ?? null, strategy: contract.strategy ?? null,
-      finalRoas: contract.finalRoas ?? null, settledAt: contract.settledAt ?? null,
-      settleTxHash: contract.settleTxHash ?? null, refundTxHash: contract.refundTxHash ?? null,
+      finalRoas:    contract.final_roas    ?? contract.finalRoas    ?? null,
+      settledAt:    contract.settled_at    ? new Date(contract.settled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : contract.settledAt ?? null,
+      settleTxHash: contract.settle_tx_hash ?? contract.settleTxHash ?? null,
+      refundTxHash: contract.refund_tx_hash ?? contract.refundTxHash ?? null,
     }
   }, [contract, generatedTitle])
 
@@ -634,7 +729,7 @@ export default function WorkspaceView({ id, contract }) {
                 onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
-              <PanelContent c={c} />
+              <PanelContent c={c} refetchContract={refetchContract} />
             </div>
           </div>
         </div>

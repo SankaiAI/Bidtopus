@@ -3,6 +3,7 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useOpenMobileSidebar } from '@/components/AppShell'
+import EscrowFundButton from '@/components/EscrowFundButton'
 
 const C = {
   bg:      'var(--c-bg)',
@@ -250,17 +251,12 @@ function FundEscrowPanel({ c }) {
           ))}
         </div>
 
-        {/* CTA */}
-        <button style={{ width: '100%', padding: '13px', borderRadius: '9px', border: 'none', background: C.indigo, color: '#fff', fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: font, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'opacity 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-        >
-          Lock {c.fee} USDC in Arc Escrow
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        </button>
-        <p style={{ fontSize: '11px', color: C.faint, textAlign: 'center', margin: '10px 0 0', fontFamily: font, lineHeight: 1.6 }}>
-          Settlement is enforced by a smart contract on Arc — not by OutcomeX. Neither party can override it.
-        </p>
+        {/* CTA — real Arc fund-escrow transaction via wallet (Circle App Kit / wagmi) */}
+        <EscrowFundButton
+          contractId={c.id}
+          feeUsdc={c.fee}
+          termsLoaded={true}
+        />
       </div>
     </Card>
   )

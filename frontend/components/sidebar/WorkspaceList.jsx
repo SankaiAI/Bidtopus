@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { getAllSessions, subscribeToSessions, deleteSession } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
+import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
 import { Icon } from './icons'
 
 const ACCENT = 'var(--c-indigo)'
@@ -18,16 +19,20 @@ const MOCK_CONTRACTS = [
 
 const WS_FILTERS = [
   { id: 'all',      label: 'All',      match: () => true },
-  { id: 'active',   label: 'Active',   match: s => s.status === 'active' },
-  { id: 'pending',  label: 'Pending',  match: s => s.status === 'negotiating' || s.status === 'pending_funding' || s.status === 'created' },
-  { id: 'resolved', label: 'Resolved', match: s => s.status === 'success' || s.status === 'failure' },
+  { id: 'active',   label: 'Active',   match: s => isLive(s.status) },
+  { id: 'pending',  label: 'Pending',  match: s => s.status === 'negotiating' || isAwaitingFund(s.status) },
+  { id: 'resolved', label: 'Resolved', match: s => isResolved(s.status) },
 ]
 
 const DOT_COLOR = {
   created:         { bg: '#F59E0B', pulse: false },
+  underwriting:    { bg: ACCENT,    pulse: true  },
+  offered:         { bg: '#F59E0B', pulse: false },
+  pending_funding: { bg: '#F59E0B', pulse: false },
+  funded:          { bg: ACCENT,    pulse: true  },
   active:          { bg: ACCENT,    pulse: true  },
   negotiating:     { bg: '#F59E0B', pulse: false },
-  pending_funding: { bg: '#F59E0B', pulse: false },
+  settled:         { bg: '#10B981', pulse: false },
   success:         { bg: '#10B981', pulse: false },
   failure:         { bg: '#a8a5b8', pulse: false },
 }
@@ -104,17 +109,17 @@ export default function WorkspaceList() {
   const sessionMap = new Map(sessions.map(s => [s.id, s]))
 
   const serverNegotiating = contracts
-    .filter(c => c.status?.toLowerCase() === 'negotiating')
+    .filter(c => normalizeStatus(c.status) === 'negotiating')
     .map(c => {
       const local = sessionMap.get(c.id)
       return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New negotiation', status: 'negotiating', sub: relativeTime(c.created_at), href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at }
     })
 
   const serverFunded = contracts
-    .filter(c => { const s = c.status?.toLowerCase(); return s === 'created' || s === 'pending_funding' })
+    .filter(c => isAwaitingFund(c.status))
     .map(c => {
       const local = sessionMap.get(c.id)
-      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign', status: c.status?.toLowerCase(), sub: 'Ready to fund', href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at }
+      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign', status: normalizeStatus(c.status), sub: 'Ready to fund', href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at }
     })
 
   const serverIds = new Set([...serverNegotiating, ...serverFunded].map(c => c.id))

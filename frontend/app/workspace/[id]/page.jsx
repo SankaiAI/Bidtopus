@@ -30,6 +30,19 @@ export default function WorkspacePage() {
   // true when a UUID deep-link points to an already-finalized contract
   const [startInWorkspace, setStartInWorkspace] = React.useState(false)
 
+  // Refetch from /api/contracts/:id after the merchant accepts an offer or funds escrow,
+  // so the right-panel UI updates to reflect the new server-side status.
+  const refetchContract = React.useCallback(async () => {
+    if (!isUUID(id) || !isSignedIn) return null
+    try {
+      const c = await createApiClient(getToken).getContract(id)
+      setContract(c)
+      return c
+    } catch {
+      return null
+    }
+  }, [id, isSignedIn, getToken])
+
   React.useEffect(() => {
     if (!isUUID(id)) return
     if (!isLoaded) return
@@ -49,7 +62,7 @@ export default function WorkspacePage() {
   if (isCheckingStatus) return <LoadingDots />
 
   // UUID deep-link to an already-finalized contract: go straight to WorkspaceView.
-  if (startInWorkspace) return <WorkspaceView id={id} contract={contract} />
+  if (startInWorkspace) return <WorkspaceView id={id} contract={contract} refetchContract={refetchContract} />
 
   // NegotiationView stays mounted for the life of the page; WorkspaceRightPanel
   // slides in alongside it when onFinalized fires. This avoids a component swap
@@ -62,7 +75,7 @@ export default function WorkspacePage() {
         onFinalized={c => setContract(c)}
         finalized={!!contract}
       />
-      {contract && <WorkspaceRightPanel contract={contract} id={id} />}
+      {contract && <WorkspaceRightPanel contract={contract} id={id} refetchContract={refetchContract} />}
     </div>
   )
 }

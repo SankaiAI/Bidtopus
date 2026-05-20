@@ -8,13 +8,13 @@ import { Icon } from './icons'
 const GREEN  = 'var(--c-green)'
 const THEMES = ['Light', 'Dark']
 
-export default function UserProfile({ collapsed, connected, onDisconnect }) {
+export default function UserProfile({ collapsed, connected, address, onDisconnect }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const { isDark, toggleTheme } = useTheme()
   const { signOut, openSignIn } = useClerk()
   const { user, isSignedIn } = useUser()
   const containerRef = React.useRef(null)
-  const addr = '0x742d...4a8F'
+  const addr = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : '0x…'
 
   const displayName = isSignedIn
     ? (user.fullName || user.firstName || user.primaryEmailAddress?.emailAddress || 'Account')
@@ -121,6 +121,18 @@ export default function UserProfile({ collapsed, connected, onDisconnect }) {
           </div>
 
           <div style={{ height: '1px', background: '#eceaf4' }} />
+
+          {connected && (
+            <button
+              onClick={() => { setPanelOpen(false); onDisconnect() }}
+              style={panelRowStyle}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-border-s)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <span style={{ color: 'var(--c-sidebar-muted)', display: 'flex' }}><Icon.Shield /></span>
+              Disconnect wallet
+            </button>
+          )}
 
           <Link
             href="/settings"

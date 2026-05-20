@@ -8,7 +8,7 @@ const GREEN  = 'var(--c-green)'
 
 const ESCROW_TOOLTIP = 'Your ad budget is locked in a tamper-proof smart contract on Arc. Funds are only released when your agreed performance target (e.g. ROAS) is met — if the campaign underperforms, unspent funds are returned to you.'
 
-export default function EscrowProtect({ collapsed, walletConnected, onConnect }) {
+export default function EscrowProtect({ collapsed, walletConnected, isConnecting, error, onConnect }) {
   const active = walletConnected
   const [tooltipPos, setTooltipPos] = useState(null)
   const qBtnRef = React.useRef(null)
@@ -56,14 +56,22 @@ export default function EscrowProtect({ collapsed, walletConnected, onConnect })
         </div>
       </div>
       {!active && (
-        <button
-          onClick={onConnect}
-          style={{ width: '100%', marginTop: '6px', padding: '8px', borderRadius: '8px', border: '1px solid var(--c-border)', background: 'var(--c-indigo-subtle)', color: ACCENT, fontSize: '14px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background = 'var(--c-indigo-bg)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'var(--c-indigo-subtle)'}
-        >
-          Connect Wallet
-        </button>
+        <>
+          <button
+            onClick={onConnect}
+            disabled={isConnecting}
+            style={{ width: '100%', marginTop: '6px', padding: '8px', borderRadius: '8px', border: '1px solid var(--c-border)', background: 'var(--c-indigo-subtle)', color: ACCENT, fontSize: '14px', fontWeight: 700, cursor: isConnecting ? 'wait' : 'pointer', opacity: isConnecting ? 0.6 : 1, fontFamily: 'Plus Jakarta Sans, sans-serif', transition: 'background 0.15s' }}
+            onMouseEnter={e => { if (!isConnecting) e.currentTarget.style.background = 'var(--c-indigo-bg)' }}
+            onMouseLeave={e => { if (!isConnecting) e.currentTarget.style.background = 'var(--c-indigo-subtle)' }}
+          >
+            {isConnecting ? 'Connecting…' : 'Connect Wallet'}
+          </button>
+          {error && (
+            <div style={{ marginTop: '6px', padding: '6px 8px', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '11px', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.4 }}>
+              {error}
+            </div>
+          )}
+        </>
       )}
       {tooltipPos && createPortal(
         <div style={{ position: 'fixed', bottom: tooltipPos.bottom, left: tooltipPos.left, width: '220px', background: '#1a192e', color: '#f0eff8', fontSize: '12px', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.55, padding: '10px 13px', borderRadius: '9px', boxShadow: '0 6px 20px rgba(0,0,0,0.22)', zIndex: 9999, pointerEvents: 'none' }}>
