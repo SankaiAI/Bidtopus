@@ -59,5 +59,11 @@ pip-log.txt
 .pytest_cache/
 backend/tests/test.db
 
+# Backend ops / dev scripts (per-component tools — track locally, not in repo)
+backend/scripts/*.py
+# Temp file the backend /submit-ticket and /resolve-ticket skills write while
+# composing a ticket body; rm'd after success. Ignore in case a crash leaves one.
+backend/.ticket_body.md
+
 # Research (internal only, not for repo)
 research/
