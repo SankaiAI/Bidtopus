@@ -121,6 +121,18 @@ def _backfill_meta_accounts():
 if settings.environment != "test":
     _backfill_meta_accounts()
 
+# Startup guard: prevent non-dev/test environments from serving with the localhost
+# CORS default. Catches the common misconfig of forgetting to set ALLOWED_ORIGINS on
+# a real deploy. "development" and "test" are whitelisted; everything else (staging,
+# production, etc.) must have explicit non-localhost origins.
+if settings.environment not in ("development", "test"):
+    _bad = [o for o in settings.origins if "localhost" in o or "127.0.0.1" in o or o == "*"]
+    if _bad:
+        raise RuntimeError(
+            f"Refusing to start in environment={settings.environment!r} with insecure "
+            f"CORS origins {_bad!r}. Set ALLOWED_ORIGINS to your real frontend host(s)."
+        )
+
 _expose_docs = settings.environment == "development"
 app = FastAPI(
     title="OutcomeX API",

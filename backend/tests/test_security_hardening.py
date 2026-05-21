@@ -71,3 +71,84 @@ def test_resolve_route_has_rate_limit_decorator():
     # The limiter attaches its hooks in __wrapped__ chain; the simplest detect is to
     # check that slowapi knows about it.
     assert any("resolve" in name for name in (limiter._route_limits or {}))
+
+
+# ── L-2: extra-metadata sanitization ───────────────────────────────────────
+
+def test_sanitize_obj_strips_html_recursively():
+    from services.contract_service import _sanitize_obj
+    payload = {
+        "summary": "<script>alert(1)</script>OK",
+        "actions": [{"name": "<b>boldname</b>", "params": {"reason": "<i>oops</i>"}}],
+        "count": 3,
+        "tag": None,
+    }
+    cleaned = _sanitize_obj(payload)
+    assert cleaned["summary"] == "alert(1)OK"
+    assert cleaned["actions"][0]["name"] == "boldname"
+    assert cleaned["actions"][0]["params"]["reason"] == "oops"
+    assert cleaned["count"] == 3        # non-strings pass through
+    assert cleaned["tag"] is None
+
+
+# ── L-4: dev-mock-fund refuses non-dev ─────────────────────────────────────
+
+def test_dev_mock_fund_refuses_outside_development():
+    """Smoke test by invoking the script as a subprocess with ENVIRONMENT=test."""
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "ENVIRONMENT": "test"}
+    proc = subprocess.run(
+        [sys.executable, "scripts/dev_mock_fund.py", "00000000-0000-0000-0000-000000000000"],
+        capture_output=True, text=True, env=env,
+    )
+    assert proc.returncode == 2
+    assert "dev-only" in proc.stderr
+
+
+# ── H-3: rate-limit key prefers user from JWT ──────────────────────────────
+
+def test_rate_limit_key_uses_jwt_sub_when_bearer_present():
+    from limiter import _user_or_ip
+    import base64
+    import json
+
+    class FakeRequest:
+        def __init__(self, headers):
+            self.headers = headers
+            self.client = type("Client", (), {"host": "1.2.3.4"})()
+
+    # Build a fake JWT with sub=user_xyz (no signature — limiter doesn't verify)
+    payload = base64.urlsafe_b64encode(json.dumps({"sub": "user_xyz"}).encode()).rstrip(b"=").decode()
+    fake_jwt = f"eyJ0.{payload}.sig"
+    req = FakeRequest({"Authorization": f"Bearer {fake_jwt}"})
+
+    key = _user_or_ip(req)
+    assert key == "user:user_xyz"
+
+
+def test_rate_limit_key_falls_back_to_ip_when_no_bearer():
+    from limiter import _user_or_ip
+
+    class FakeRequest:
+        def __init__(self):
+            self.headers = {}
+            self.client = type("Client", (), {"host": "9.9.9.9"})()
+
+    key = _user_or_ip(FakeRequest())
+    assert key.startswith("ip:")
+
+
+def test_rate_limit_key_falls_back_to_ip_on_malformed_token():
+    from limiter import _user_or_ip
+
+    class FakeRequest:
+        def __init__(self, headers):
+            self.headers = headers
+            self.client = type("Client", (), {"host": "1.1.1.1"})()
+
+    req = FakeRequest({"Authorization": "Bearer not-a-jwt"})
+    key = _user_or_ip(req)
+    assert key.startswith("ip:")

@@ -33,6 +33,14 @@ def main():
                         help="Skip the synchronous strategy-generation kick after mocking")
     args = parser.parse_args()
 
+    # Refuse to run outside development. This script bypasses every state gate
+    # and would let anyone with shell access fake a fund event on any contract.
+    from config import settings
+    if settings.environment != "development":
+        print(f"error: refusing to run in environment={settings.environment!r}; "
+              f"this script is dev-only", file=sys.stderr)
+        sys.exit(2)
+
     db = SessionLocal()
     try:
         contract = repo.get_contract(db, args.contract_id)

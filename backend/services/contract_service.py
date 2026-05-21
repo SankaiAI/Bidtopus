@@ -220,6 +220,24 @@ def _sanitize(text: str) -> str:
     return bleach.clean(text, tags=[], strip=True)
 
 
+def _sanitize_obj(obj):
+    """Recursively strip HTML tags from any string inside a JSON-shaped value.
+
+    Defense in depth — even though we sanitize the `content` field everywhere, the
+    `extra` JSON column historically stored raw LLM output verbatim (planned_actions
+    descriptions, execution receipts, etc.). If the frontend ever renders any of
+    those fields without its own sanitization, prompt injection becomes XSS.
+    Sanitizing at write time is cheap and the right defense layer.
+    """
+    if isinstance(obj, str):
+        return bleach.clean(obj, tags=[], strip=True)
+    if isinstance(obj, list):
+        return [_sanitize_obj(v) for v in obj]
+    if isinstance(obj, dict):
+        return {k: _sanitize_obj(v) for k, v in obj.items()}
+    return obj
+
+
 def _require_status(contract: PerformanceContract, expected: str) -> None:
     if contract.status != expected:
         log.warning(
@@ -423,11 +441,12 @@ def generate_strategy(db: Session, contract: PerformanceContract, on_reasoning=N
 
     result = agent_client.generate_strategy(contract.id, on_reasoning=on_reasoning)
 
+    safe_actions = _sanitize_obj(result["planned_actions"])
     plan = repo.save_strategy_plan(
         db,
         contract_id=contract.id,
         summary=_sanitize(result["summary"]),
-        planned_actions=result["planned_actions"],
+        planned_actions=safe_actions,
         approval_status="pending",
     )
     log.info("Strategy plan generated contract=%s plan=%s", contract.id, plan.id)
@@ -435,7 +454,7 @@ def generate_strategy(db: Session, contract: PerformanceContract, on_reasoning=N
     messages_repo.append(
         db, contract.id, "agent", "approval_request",
         content=_sanitize(result["summary"]),
-        extra={"plan_id": str(plan.id), "planned_actions": result["planned_actions"]},
+        extra={"plan_id": str(plan.id), "planned_actions": safe_actions},
         status="pending",
     )
     return {"plan_id": plan.id, **result}
@@ -523,7 +542,7 @@ def execute_ads_actions(db: Session, contract: PerformanceContract) -> dict:
     messages_repo.append(
         db, contract.id, "agent", "message",
         content=_sanitize(result.get("summary", "Ad actions executed")),
-        extra=result,
+        extra=_sanitize_obj(result),
     )
     return result
 
