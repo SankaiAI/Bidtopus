@@ -27,7 +27,6 @@ function Navbar() {
           <Logo color={C.text} size={18} />
         </Link>
         <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
-          <a href="#features" className="nav-link">How it works</a>
           <a href="#comparison" className="nav-link">Why Bidtopus</a>
           <a href="#" className="nav-link">Docs</a>
         </div>
@@ -49,7 +48,6 @@ function Navbar() {
       </div>
       {menuOpen && (
         <div style={{ background: C.surface, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <a href="#features" className="nav-link" onClick={() => setMenuOpen(false)}>How it works</a>
           <a href="#comparison" className="nav-link" onClick={() => setMenuOpen(false)}>Why Bidtopus</a>
           <Link href="/dashboard" onClick={() => setMenuOpen(false)}
             style={{ fontSize: '14px', fontWeight: 700, color: '#fff', background: C.indigo, padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', textAlign: 'center' }}>
@@ -89,13 +87,9 @@ function Hero() {
               Create a performance contract
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </Link>
-            <a href="#features" style={{ color: C.muted, fontSize: '14px', fontWeight: 600, textDecoration: 'none', transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.muted}
-            >See how it works →</a>
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 0 }}>
+        <div className="hero-mascot" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 0 }}>
           <img
             src="/icon-512.png"
             alt="Bidtopus mascot"

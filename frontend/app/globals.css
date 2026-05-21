@@ -247,7 +247,11 @@ body:has(.app-shell) { height: 100%; overflow: hidden; }
   .footer-cols   { flex-direction: column !important; gap: 40px !important; }
   .hero-ctas     { flex-direction: column !important; align-items: stretch !important; }
   .hero-ctas a   { text-align: center !important; justify-content: center !important; }
-  .hero-grid            { grid-template-columns: 1fr !important; gap: 48px !important; }
+  .hero-grid            { grid-template-columns: 1fr !important; gap: 28px !important; }
+  /* Move the mascot above the heading on mobile — quick visual hook before
+     the value prop. Also shrink it so it doesn't dominate the viewport. */
+  .hero-mascot          { order: -1; }
+  .hero-mascot img      { width: 160px !important; }
   .feature-grid         { grid-template-columns: 1fr !important; gap: 48px !important; }
   .feature-grid-reverse { direction: ltr !important; }
   .decision-grid { grid-template-columns: 1fr !important; }
