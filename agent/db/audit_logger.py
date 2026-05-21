@@ -17,15 +17,40 @@ from db.orm_models import AuditEventORM
 
 _log = logging.getLogger(__name__)
 
-SENSITIVE_KEYS = {"account_id", "pixel_id", "access_token", "wallet_address", "private_key"}
+SENSITIVE_KEYS = {
+    "account_id",
+    "pixel_id",
+    "access_token",
+    "wallet_address",
+    "private_key",
+    "entity_secret",
+    "anthropic_api_key",
+    "circle_api_key",
+    "agent_service_token",
+    "x_service_token",
+    "authorization",
+}
 
 
-def _redact(payload: dict) -> dict:
-    """Truncate sensitive field values before writing to DB."""
-    return {
-        k: (v[:8] + "***" if k in SENSITIVE_KEYS and isinstance(v, str) else v)
-        for k, v in payload.items()
-    }
+def _redact(payload):
+    """Recursively redact sensitive fields anywhere in a nested dict/list.
+
+    Earlier versions only walked top-level keys, which let `account_id` slip
+    through when it lived inside `inputs.account_context.account_id`. We now
+    walk dicts AND lists at any depth.
+    """
+    if isinstance(payload, dict):
+        return {
+            k: (
+                (v[:8] + "***" if isinstance(v, str) else "***")
+                if k.lower() in SENSITIVE_KEYS
+                else _redact(v)
+            )
+            for k, v in payload.items()
+        }
+    if isinstance(payload, list):
+        return [_redact(item) for item in payload]
+    return payload
 
 
 class AuditLogger:

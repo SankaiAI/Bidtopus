@@ -68,9 +68,26 @@ class Settings(BaseSettings):
     # ── Backend push (agent → backend) ────────────────────────────────────────
     BACKEND_BASE_URL: str = "http://localhost:8000"
     AGENT_SERVICE_TOKEN: str = ""
+    # When AGENT_SERVICE_TOKEN is unset, accept all /agent/* calls instead of 503.
+    # Default False = fail-closed = production-safe. Set True only for local dev
+    # before the secret is configured.
+    AGENT_SERVICE_TOKEN_FAIL_OPEN: bool = False
 
     # ── Monitoring scheduler ──────────────────────────────────────────────────
     MONITORING_TICK_MINUTES: int = 15
+
+    # ── HTTP / deployment ─────────────────────────────────────────────────────
+    # Comma-separated allowed origins for CORS. Empty → localhost dev defaults.
+    # Production must set this to the backend's origin only (e.g.
+    # "https://outcomex-backend.up.railway.app").
+    ALLOWED_ORIGINS: str = ""
+    # Expose FastAPI's /docs and /redoc UIs. Default False — public docs are a
+    # free attack-surface map. Flip to True only for local development.
+    ENABLE_DOCS: bool = False
+    # Allow /agent/resolve to bypass the evaluation_window_complete check.
+    # Default False — server-side guard against premature settlement. Set True
+    # only in test/staging where you need to force-resolve mid-window.
+    RESOLVE_ALLOW_PREMATURE: bool = False
 
 
 @lru_cache

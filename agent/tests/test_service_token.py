@@ -20,10 +20,17 @@ from agent.auth import service_token
 
 @pytest.fixture
 def client_factory(monkeypatch):
-    """Build a TestClient whose protected endpoint enforces verify_service_token."""
+    """Build a TestClient whose protected endpoint enforces verify_service_token.
 
-    def _build(token_value: str = "") -> TestClient:
+    Default posture mirrors production: fail-closed (503) when the token is unset.
+    Pass fail_open=True to opt into the local-dev grace.
+    """
+
+    def _build(token_value: str = "", fail_open: bool = False) -> TestClient:
         monkeypatch.setattr(service_token.settings, "AGENT_SERVICE_TOKEN", token_value)
+        monkeypatch.setattr(
+            service_token.settings, "AGENT_SERVICE_TOKEN_FAIL_OPEN", fail_open
+        )
 
         app = FastAPI()
 
@@ -36,16 +43,16 @@ def client_factory(monkeypatch):
     return _build
 
 
-def test_unset_token_fails_open(client_factory):
-    """Rollout grace: when AGENT_SERVICE_TOKEN is empty, all requests pass."""
-    client = client_factory(token_value="")
+def test_unset_token_with_fail_open_passes(client_factory):
+    """Dev grace: AGENT_SERVICE_TOKEN_FAIL_OPEN=True + empty token → request passes."""
+    client = client_factory(token_value="", fail_open=True)
     res = client.get("/protected")
     assert res.status_code == 200
     assert res.json() == {"ok": True}
 
 
-def test_unset_token_ignores_supplied_header(client_factory):
-    client = client_factory(token_value="")
+def test_unset_token_with_fail_open_ignores_header(client_factory):
+    client = client_factory(token_value="", fail_open=True)
     res = client.get("/protected", headers={"X-Service-Token": "anything"})
     assert res.status_code == 200
 
@@ -70,10 +77,9 @@ def test_set_token_matching_header_passes(client_factory):
     assert res.status_code == 200
 
 
-def test_fail_open_disabled_returns_503(client_factory, monkeypatch):
-    """When _FAIL_OPEN_WHEN_UNSET is flipped to False, unset token closes the door."""
-    monkeypatch.setattr(service_token, "_FAIL_OPEN_WHEN_UNSET", False)
-    client = client_factory(token_value="")
+def test_unset_token_without_fail_open_returns_503(client_factory):
+    """Production default: token unset + fail-open False → 503."""
+    client = client_factory(token_value="", fail_open=False)
     res = client.get("/protected")
     assert res.status_code == 503
     assert "Service token not configured" in res.json()["detail"]

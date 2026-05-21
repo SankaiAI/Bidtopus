@@ -70,15 +70,26 @@ app = FastAPI(
     description="Autonomous economic agent for Meta Ads performance contracts.",
     version="1.0.0",
     lifespan=lifespan,
-    # Agent is an internal service — disable public docs in production.
-    docs_url="/docs" if not settings.META_ADS_MOCK else "/docs",
+    # Public docs are an attack-surface map. Default off; flip ENABLE_DOCS=True for dev.
+    docs_url="/docs" if settings.ENABLE_DOCS else None,
+    redoc_url="/redoc" if settings.ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
 )
+
+
+def _resolve_allowed_origins() -> list[str]:
+    """Comma-separated env var → list. Empty → safe localhost defaults."""
+    raw = settings.ALLOWED_ORIGINS.strip()
+    if not raw:
+        return ["http://localhost:3000", "http://localhost:8000"]
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # Backend → agent traffic only; tighten in prod to backend origin.
+    allow_origins=_resolve_allowed_origins(),
     allow_methods=["POST", "GET"],
-    allow_headers=["*"],
+    allow_headers=["X-Service-Token", "Content-Type", "Authorization"],
 )
 
 app.include_router(router)

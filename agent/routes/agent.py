@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from auth.service_token import verify_service_token
+from config import settings
 from db.backend_models import PerformanceContractORM
 from db.session import get_db
 from exceptions import AdapterError, SafeAgentError
@@ -162,13 +163,54 @@ def _to_account_context(c: PerformanceContractORM) -> AccountContext:
     )
 
 
+_GENERIC_ERROR_DETAIL = {
+    422: "Invalid agent state or input. See agent logs for correlation_id.",
+    502: "Upstream adapter error. See agent logs for correlation_id.",
+    500: "Unexpected agent error. See agent logs for correlation_id.",
+}
+
+
 def _handle_agent_error(e: Exception, contract_id: str) -> None:
-    logger.error("agent_endpoint_error", contract_id=contract_id, error=str(e))
+    """Log full exception internally; return generic message + correlation_id to client.
+
+    The full str(e) often carries Circle API response bodies, transaction IDs,
+    or internal contract state — fine for our logs, not fine for HTTP responses.
+    """
+    correlation_id = uuid.uuid4().hex[:12]
+    logger.error(
+        "agent_endpoint_error",
+        contract_id=contract_id,
+        correlation_id=correlation_id,
+        error=str(e),
+        error_type=type(e).__name__,
+    )
     if isinstance(e, SafeAgentError):
-        raise HTTPException(status_code=422, detail=str(e))
-    if isinstance(e, AdapterError):
-        raise HTTPException(status_code=502, detail=str(e))
-    raise HTTPException(status_code=500, detail="Unexpected agent error")
+        status = 422
+    elif isinstance(e, AdapterError):
+        status = 502
+    else:
+        status = 500
+    raise HTTPException(
+        status_code=status,
+        detail={"message": _GENERIC_ERROR_DETAIL[status], "correlation_id": correlation_id},
+    )
+
+
+def _sse_error_payload(exc: Exception, contract_id: str) -> str:
+    """Generate a generic SSE error event with a correlation_id; log details."""
+    correlation_id = uuid.uuid4().hex[:12]
+    logger.error(
+        "agent_sse_error",
+        contract_id=contract_id,
+        correlation_id=correlation_id,
+        error=str(exc),
+        error_type=type(exc).__name__,
+    )
+    payload = json.dumps({
+        "detail": "Agent stream error. See agent logs for correlation_id.",
+        "correlation_id": correlation_id,
+    })
+    return f"event: error\ndata: {payload}\n\n"
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -542,13 +584,13 @@ _SSE_HEADERS = {
 }
 
 
-def _sse_stream(gen: Generator[str, None, None]) -> StreamingResponse:
+def _sse_stream(gen: Generator[str, None, None], contract_id: str = "") -> StreamingResponse:
     """Wrap a SSE string generator in a StreamingResponse with correct headers."""
     def safe_gen():
         try:
             yield from gen
         except Exception as e:
-            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            yield _sse_error_payload(e, contract_id)
 
     return StreamingResponse(safe_gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
@@ -579,7 +621,7 @@ def underwrite_stream(body: ContractRequest, db: Session = Depends(get_db)):
             )
             yield f"event: result\ndata: {payload.model_dump_json()}\n\n"
         except Exception as e:
-            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            yield _sse_error_payload(e, body.contract_id)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
@@ -655,7 +697,7 @@ def execute_ads_stream(body: ContractRequest, db: Session = Depends(get_db)):
             )
             yield f"event: result\ndata: {payload.model_dump_json()}\n\n"
         except Exception as e:
-            yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
+            yield _sse_error_payload(e, body.contract_id)
 
     return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
@@ -682,6 +724,22 @@ def resolve(body: ContractRequest, db: Session = Depends(get_db)):
     window_complete = False
     if contract.window_end:
         window_complete = datetime.now(timezone.utc) >= contract.window_end.replace(tzinfo=timezone.utc)
+
+    # Server-side guard against premature settlement. Backend's resolve_contract
+    # has the same check (rejects on `Evaluation window has not yet closed`),
+    # but anyone who can reach the agent directly was previously able to bypass
+    # it. Now we duplicate the check here. RESOLVE_ALLOW_PREMATURE=True lets
+    # staging/test bypass for force-resolve scenarios.
+    if not window_complete and not settings.RESOLVE_ALLOW_PREMATURE:
+        logger.warning(
+            "resolve_blocked_premature",
+            contract_id=body.contract_id,
+            window_end=str(contract.window_end),
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="Evaluation window has not yet closed. Resolve is blocked.",
+        )
 
     logger.info(
         "state_handoff",

@@ -57,10 +57,13 @@ class ChatAgent:
         self,
         contract_id: str,
         user_message: str,
-        prior_messages: list[dict] | None = None,
     ) -> tuple[str, list[str]]:
-        """Return (response_text, tools_called). Blocks until complete."""
-        messages = list(prior_messages or [])
+        """Return (response_text, tools_called). Blocks until complete.
+
+        History is re-derived server-side from contract_messages — the caller
+        cannot inject prior conversation turns (prompt-injection defense).
+        """
+        messages = self._load_history(contract_id)
         messages.append({"role": "user", "content": user_message})
         tools_called: list[str] = []
         response = None
@@ -104,10 +107,9 @@ class ChatAgent:
         self,
         contract_id: str,
         user_message: str,
-        prior_messages: list[dict] | None = None,
     ) -> Generator[str, None, None]:
         """Yield SSE strings: tool_call events then streamed text_delta events."""
-        messages = list(prior_messages or [])
+        messages = self._load_history(contract_id)
         messages.append({"role": "user", "content": user_message})
 
         # Tool use rounds (sync, fast DB reads)
@@ -157,6 +159,38 @@ class ChatAgent:
         yield f"event: done\ndata: {{}}\n\n"
 
     # ── Private ───────────────────────────────────────────────────────────────
+
+    # Max history turns we replay back to the LLM. Cap keeps token cost bounded
+    # and avoids replaying the entire timeline for long-running contracts.
+    _HISTORY_LIMIT = 20
+
+    def _load_history(self, contract_id: str) -> list[dict]:
+        """Pull the recent merchant ↔ agent dialogue from contract_messages.
+
+        Only `message` and `merchant_chat` types are replayed (not system_event /
+        approval_request / daily_update — those are timeline noise, not turns).
+        Backed by a server-side DB read so the caller can't forge turns.
+        """
+        from db.messages_repo import MessagesRepo
+
+        repo = MessagesRepo(self._db)
+        all_msgs = repo.get_all(contract_id)
+
+        turns: list[dict] = []
+        for m in all_msgs:
+            if m.type not in {"message", "merchant_chat"}:
+                continue
+            role = "assistant" if m.role == "agent" else "user"
+            turns.append({"role": role, "content": m.content})
+
+        # Keep the last N turns. If the most recent turn is also a "user" turn
+        # (the merchant's previous message), drop it — the caller passes the
+        # current user_message separately and Anthropic's API rejects two
+        # consecutive user roles.
+        trimmed = turns[-self._HISTORY_LIMIT:]
+        if trimmed and trimmed[-1]["role"] == "user":
+            trimmed = trimmed[:-1]
+        return trimmed
 
     def _execute_tool(self, name: str, input_data: dict, contract_id: str) -> dict:
         if name == "get_contract_context":

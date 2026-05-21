@@ -10,19 +10,61 @@ Usage:
 
 Session files:
     Call attach_session(contract_id) at the start of each route handler.
-    This opens logs/YYYY-MM-DD/<contract_id_short>.log and routes all agent
-    logs for that request into it. Multiple requests for the same contract
-    append to the same file.
+    Per-contract files at logs/YYYY-MM-DD/<contract_id_short>.log get
+    rotated at 5 MB with 3 backups kept (so disk usage stays bounded).
+
+Redaction:
+    A `_SensitiveFieldFilter` masks any log extra whose key matches the
+    `_SENSITIVE_KEYS` set — so `logger.info("...", access_token=x)` writes
+    `access_token=***` to stdout AND to the session file. The audit logger
+    in db/audit_logger.py has a separate recursive redactor for DB payloads.
 """
 from __future__ import annotations
 
 import logging
 import sys
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 _LOGS_BASE = Path(__file__).parent.parent / "logs"
 _LOGS_BASE.mkdir(exist_ok=True)
+
+# Per-contract log file rotation
+_LOG_MAX_BYTES = 5 * 1024 * 1024     # 5 MB
+_LOG_BACKUP_COUNT = 3
+
+# Sensitive keys redacted from log record extras. Lower-case for case-insensitive
+# matching against kwarg names. Mirrors db/audit_logger.SENSITIVE_KEYS.
+_SENSITIVE_KEYS = frozenset({
+    "access_token",
+    "private_key",
+    "entity_secret",
+    "anthropic_api_key",
+    "circle_api_key",
+    "agent_service_token",
+    "x_service_token",
+    "authorization",
+    "wallet_address",
+    "pixel_id",
+})
+
+
+class _SensitiveFieldFilter(logging.Filter):
+    """Mask sensitive keys in LogRecord extras before any handler formats them."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key in list(record.__dict__):
+            if key.lower() in _SENSITIVE_KEYS:
+                value = record.__dict__[key]
+                if isinstance(value, str) and value:
+                    record.__dict__[key] = value[:4] + "***" if len(value) > 4 else "***"
+                else:
+                    record.__dict__[key] = "***"
+        return True
+
+
+_REDACTION_FILTER = _SensitiveFieldFilter()
 
 _formatter = None   # initialised once below, after class definition
 
@@ -116,8 +158,14 @@ def attach_session(contract_id: str) -> None:
     date_dir.mkdir(parents=True, exist_ok=True)
     session_file = date_dir / f"{contract_id[:8]}.log"
 
-    handler = logging.FileHandler(session_file, encoding="utf-8", mode="a")
+    handler = RotatingFileHandler(
+        session_file,
+        encoding="utf-8",
+        maxBytes=_LOG_MAX_BYTES,
+        backupCount=_LOG_BACKUP_COUNT,
+    )
     handler.setFormatter(_formatter)
+    handler.addFilter(_REDACTION_FILTER)
     _session_handlers[contract_id] = handler
 
     for name in _known_loggers:
@@ -129,6 +177,7 @@ def get_logger(name: str) -> AgentLogger:
     if not inner.handlers:
         console = logging.StreamHandler(sys.stdout)
         console.setFormatter(_formatter)
+        console.addFilter(_REDACTION_FILTER)
         inner.addHandler(console)
         inner.setLevel(logging.INFO)
         inner.propagate = False
