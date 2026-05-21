@@ -105,6 +105,11 @@ async def stream_chat(
     async def generate():
         full_response = ""
         try:
+            # M-3 — send service token on backend→agent calls.
+            _service_headers = (
+                {"X-Service-Token": settings.agent_service_token}
+                if settings.agent_service_token else {}
+            )
             async with httpx.AsyncClient(timeout=60.0) as client:
                 async with client.stream(
                     "POST",
@@ -114,6 +119,7 @@ async def stream_chat(
                         "message": clean_message,
                         "prior_messages": prior_messages,
                     },
+                    headers=_service_headers,
                 ) as agent_resp:
                     agent_resp.raise_for_status()
                     buffer = ""

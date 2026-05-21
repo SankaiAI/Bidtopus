@@ -18,11 +18,26 @@ _TIMEOUT = 120.0  # agent calls can be slow (LLM + Meta Ads API)
 log = logging.getLogger(__name__)
 
 
+def _service_headers() -> dict[str, str]:
+    """Headers for backend→agent service-to-service calls (issue M-3 from security review).
+
+    Sends X-Service-Token when AGENT_SERVICE_TOKEN is configured. The agent
+    treats this as the authoritative auth for inter-service calls — if the
+    agent enforces it, requests without the header are 401/403. While the
+    agent rollout is in progress, leaving AGENT_SERVICE_TOKEN unset on
+    backend means we send no header and the agent (if not yet enforcing)
+    keeps accepting us. Safe both-ways during the rollout window.
+    """
+    if settings.agent_service_token:
+        return {"X-Service-Token": settings.agent_service_token}
+    return {}
+
+
 def _post(path: str, contract_id: str, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     url = f"{settings.agent_base_url}{path}"
     log.debug("agent call → %s contract=%s", path, contract_id)
     body = {"contract_id": str(contract_id), **(extra or {})}
-    resp = httpx.post(url, json=body, timeout=_TIMEOUT)
+    resp = httpx.post(url, json=body, headers=_service_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     result = resp.json()
     log.debug("agent result ← %s:\n%s", path, json.dumps(result, indent=2, default=str))
@@ -31,7 +46,7 @@ def _post(path: str, contract_id: str, extra: dict[str, Any] | None = None) -> d
 
 def _get(path: str, **params) -> dict[str, Any]:
     url = f"{settings.agent_base_url}{path}"
-    resp = httpx.get(url, params=params, timeout=_TIMEOUT)
+    resp = httpx.get(url, params=params, headers=_service_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     return resp.json()
 
@@ -42,7 +57,8 @@ def _stream_sse(path: str, contract_id: str, on_reasoning: Callable[[str], None]
     result: dict[str, Any] = {}
     current_event: str | None = None
     log.debug("agent stream → %s contract=%s", path, contract_id)
-    with httpx.stream("POST", url, json={"contract_id": str(contract_id)}, timeout=_TIMEOUT) as resp:
+    with httpx.stream("POST", url, json={"contract_id": str(contract_id)},
+                      headers=_service_headers(), timeout=_TIMEOUT) as resp:
         resp.raise_for_status()
         for line in resp.iter_lines():
             if line.startswith("event: "):
@@ -105,7 +121,7 @@ def generate_agent_offer(
         log.debug("agent stream → /agent/agent-offer/stream contract=%s", contract_id)
         result: dict[str, Any] = {}
         current_event: str | None = None
-        with httpx.stream("POST", url, json=body, timeout=_TIMEOUT) as resp:
+        with httpx.stream("POST", url, json=body, headers=_service_headers(), timeout=_TIMEOUT) as resp:
             resp.raise_for_status()
             for line in resp.iter_lines():
                 if line.startswith("event: "):
@@ -206,7 +222,7 @@ def generate_plan(
         "contract_id": str(contract_id),
         "user_id": str(user_id),
         "meta_ads_account_id": meta_ads_account_id,
-    }, timeout=_TIMEOUT)
+    }, headers=_service_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     result = resp.json()
     log.debug("agent result ← /agent/generate-plan:\n%s", json.dumps(result, indent=2, default=str))
