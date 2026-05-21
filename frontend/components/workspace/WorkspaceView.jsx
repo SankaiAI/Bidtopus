@@ -13,7 +13,7 @@ import { useMessages } from '@/hooks/useMessages'
 import { useActionApprovals } from '@/hooks/useActionApprovals'
 import { getSession, upsertSession, generateSessionId } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
-import { normalizeStatus, isAwaitingFund, isLive, isResolved, canFund, awaitingOfferAcceptance } from '@/lib/contractStatus'
+import { normalizeStatus, isAwaitingFund, isLive, isResolved, isNegotiating, canFund, awaitingOfferAcceptance } from '@/lib/contractStatus'
 import ThinkingBlock from './ThinkingBlock'
 import WorkspaceHeader from './WorkspaceHeader'
 import { C, font } from './constants'
@@ -613,7 +613,11 @@ export function WorkspaceRightPanel({ contract, id, refetchContract }) {
     }
   }, [contract])
 
+  // Hide entirely when there's no contract OR when terms haven't been
+  // finalized yet (negotiating phase). Nothing meaningful to render here
+  // until the offer is locked in.
   if (!c) return null
+  if (isNegotiating(c.status) || c.targetRoas == null) return null
 
   const badge      = STATUS_COLORS[c.status] || STATUS_COLORS.failure
   const badgeLabel = STATUS_LABEL[c.status]  || c.status
@@ -638,9 +642,11 @@ export function WorkspaceRightPanel({ contract, id, refetchContract }) {
               <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.title || c.name}</span>
               <span style={{ fontSize: '10px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>{badgeLabel}</span>
             </div>
-            <Link href={`/contracts/${c.id}`} style={{ fontSize: '11px', fontWeight: 600, color: C.muted, border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0, transition: 'color 0.15s, border-color 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.color = C.indigo; e.currentTarget.style.borderColor = C.indigo }}
-              onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
+            {!isNegotiating(c.status) && (
+              <Link href={`/contracts/${c.id}`} style={{ fontSize: '11px', fontWeight: 600, color: C.muted, border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0, transition: 'color 0.15s, border-color 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = C.indigo; e.currentTarget.style.borderColor = C.indigo }}
+                onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
+            )}
           </div>
           <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
             <PanelContent c={c} refetchContract={refetchContract} />
@@ -801,6 +807,11 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
   const isResolved = c?.status === 'success' || c?.status === 'failure'
   const badge      = STATUS_COLORS[c?.status] || STATUS_COLORS.failure
   const badgeLabel = STATUS_LABEL[c?.status]  || c?.status
+  // Hide the right detail panel entirely while the merchant and agent are
+  // still negotiating terms — there's nothing meaningful to display until
+  // the offer is finalized (status moves past 'negotiating' and targetRoas
+  // is set).
+  const hasContractDetails = c && !isNegotiating(c.status) && c.targetRoas != null
 
   if (!c) return (
     <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
@@ -822,10 +833,12 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
       {/* Mobile header */}
       <div className="app-mobile-header">
         <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
-        <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
-          Details
-        </button>
+        {hasContractDetails && (
+          <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
+            Details
+          </button>
+        )}
       </div>
 
       {approvalMode === 'manual' && c.status === 'active' && (
@@ -879,24 +892,26 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
           </div>
         </div>
 
-        {/* Right panel */}
-        <div style={isMobile ? { position: 'fixed', inset: 0, zIndex: 50, display: showPanel ? 'flex' : 'none', flexDirection: 'column', background: C.surface } : { width: '420px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.surface, padding: '8px 8px 8px 0', animation: 'panel-slide-in 0.32s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: isMobile ? '0' : '12px', background: 'var(--c-panel-bg)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', flexShrink: 0, gap: '8px', borderBottom: '1px solid var(--c-inner-border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                {isMobile && <button onClick={() => setShowPanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: '2px', display: 'flex', marginRight: '2px', flexShrink: 0 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>}
-                <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>{badgeLabel}</span>
+        {/* Right panel — hidden until contract terms are finalized */}
+        {hasContractDetails && (
+          <div style={isMobile ? { position: 'fixed', inset: 0, zIndex: 50, display: showPanel ? 'flex' : 'none', flexDirection: 'column', background: C.surface } : { width: '420px', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.surface, padding: '8px 8px 8px 0', animation: 'panel-slide-in 0.32s cubic-bezier(0.4, 0, 0.2, 1)' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: isMobile ? '0' : '12px', background: 'var(--c-panel-bg)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', flexShrink: 0, gap: '8px', borderBottom: '1px solid var(--c-inner-border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                  {isMobile && <button onClick={() => setShowPanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.muted, padding: '2px', display: 'flex', marginRight: '2px', flexShrink: 0 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>}
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: badge.color, background: badge.bg, padding: '2px 8px', borderRadius: '20px', whiteSpace: 'nowrap', flexShrink: 0 }}>{badgeLabel}</span>
+                </div>
+                <Link href={`/contracts/${c.id}`} style={{ fontSize: '11px', fontWeight: 600, color: C.muted, border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0, transition: 'color 0.15s, border-color 0.15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = C.indigo; e.currentTarget.style.borderColor = C.indigo }}
+                  onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
               </div>
-              <Link href={`/contracts/${c.id}`} style={{ fontSize: '11px', fontWeight: 600, color: C.muted, border: `1px solid ${C.border}`, borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', textDecoration: 'none', flexShrink: 0, transition: 'color 0.15s, border-color 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.color = C.indigo; e.currentTarget.style.borderColor = C.indigo }}
-                onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Full detail →</Link>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
-              <PanelContent c={c} refetchContract={refetchContract} />
+              <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '12px' }}>
+                <PanelContent c={c} refetchContract={refetchContract} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

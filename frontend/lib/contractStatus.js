@@ -55,3 +55,10 @@ export function isResolved(status) {
   const s = normalizeStatus(status)
   return s === 'settled' || s === 'success' || s === 'failure'
 }
+
+/** Pre-contract negotiation — terms not yet agreed. The right panel should
+ *  show a "negotiation in progress" placeholder, not lifecycle/strategy
+ *  panels filled with undefined values. */
+export function isNegotiating(status) {
+  return normalizeStatus(status) === 'negotiating'
+}
