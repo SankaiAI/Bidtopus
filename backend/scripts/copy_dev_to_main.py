@@ -1,28 +1,29 @@
 """
 One-shot data migration: copy DEV Neon branch → MAIN Neon branch.
 
-Creates the schema on MAIN via SQLAlchemy create_all (matches the ORM model
-definitions exactly), then copies every row in FK-safe order. Verifies row
-counts at the end.
+Creates the schema on MAIN by reflecting DEV's actual schema (which has UUID
+types that the ORM declares as String(36) — DEV is the source of truth), then
+copies every row in FK-safe order. Verifies row counts at the end.
 
-Uses connection strings inline so the caller's environment .env (which points
-at DEV) doesn't accidentally affect the target. After this runs, the two
-branches are independent — schema changes won't propagate.
+Reads connection strings from env vars NEON_DEV_URL and NEON_MAIN_URL so no
+credentials ever land in source. Get them via:
+    neonctl connection-string --project-id <id> --branch dev  --pooled
+    neonctl connection-string --project-id <id> --branch main --pooled
 
 Run from backend/ with the venv active:
-    python scripts/copy_dev_to_main.py [--apply]
+    NEON_DEV_URL=... NEON_MAIN_URL=... python scripts/copy_dev_to_main.py [--apply]
 
 Without --apply, runs in dry-run mode: shows row counts on both sides and
 what would be copied, without writing anything.
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import create_engine, MetaData, Table, text
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 # Import all ORM models so Base.metadata knows every table
 from db.session import Base
@@ -32,8 +33,15 @@ from db.models import (  # noqa: F401 — side-effect: registers tables
     ContractMessage, AuditEvent, WalletConnectNonce,
 )
 
-DEV = "postgresql://neondb_owner:npg_jufpNb69xTlq@ep-plain-band-ajxf5b08-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require"
-MAIN = "postgresql://neondb_owner:npg_jufpNb69xTlq@ep-old-hill-ajp821gw-pooler.c-3.us-east-2.aws.neon.tech/neondb?sslmode=require"
+DEV = os.environ.get("NEON_DEV_URL")
+MAIN = os.environ.get("NEON_MAIN_URL")
+if not DEV or not MAIN:
+    print(
+        "error: set NEON_DEV_URL and NEON_MAIN_URL env vars before running.\n"
+        "  fetch with:  neonctl connection-string --project-id <id> --branch <dev|main> --pooled",
+        file=sys.stderr,
+    )
+    sys.exit(2)
 
 # FK-safe insertion order. Parents before children.
 ORDER = [
