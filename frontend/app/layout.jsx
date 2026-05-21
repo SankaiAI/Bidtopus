@@ -25,9 +25,9 @@ export const metadata = {
   description: 'Bidtopus connects merchants with AI agents that only earn their fee when they deliver the contracted marketing outcome. Powered by USDC escrow.',
   // PWA manifest (Android Chrome, Edge, Samsung Internet, Google search).
   manifest: '/manifest.webmanifest',
-  // Explicit icon set. Next.js auto-detects app/icon.svg + app/apple-icon.png
-  // + app/favicon.ico, but listing every variant makes the <link> tags
-  // deterministic and gives Google's crawler the sized PNGs it indexes.
+  // Explicit icon set. Next.js auto-detects app/favicon.ico + app/apple-icon.png
+  // but listing every variant makes the <link> tags deterministic and gives
+  // Google's crawler the sized PNGs it indexes.
   icons: {
     icon: [
       { url: '/favicon.ico', sizes: '32x32', type: 'image/x-icon' },
