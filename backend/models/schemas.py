@@ -5,9 +5,18 @@ from pydantic import BaseModel, field_validator
 
 # ── Users ─────────────────────────────────────────────────────────────────────
 
+class WalletNonceResponse(BaseModel):
+    nonce: str
+    issued_at: datetime
+    ttl_seconds: int
+
+
 class WalletConnectRequest(BaseModel):
+    """SIWE-shaped (issue #84). Legacy {wallet_address, signature} requests
+    now return 400 — frontend must send the full structured message."""
     wallet_address: str
     signature: str
+    message: str   # the full SIWE message text that was signed
 
 
 class UserResponse(BaseModel):

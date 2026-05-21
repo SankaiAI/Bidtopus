@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from db.models import (
     User, PerformanceContract, UnderwritingResult, AgentOffer,
     EscrowRecord, StrategyPlan, PerformanceSnapshot, ResolutionRecord,
-    AuditEvent, MetaAdsAccount,
+    AuditEvent, MetaAdsAccount, WalletConnectNonce,
 )
 
 
@@ -35,6 +35,27 @@ def update_wallet_address(db: Session, user_id: str, wallet_address: str) -> Use
     db.commit()
     db.refresh(user)
     return user
+
+
+# ── SIWE wallet-connect nonces (issue #84) ────────────────────────────────────
+
+def create_wallet_nonce(db: Session, clerk_user_id: str, nonce: str) -> WalletConnectNonce:
+    row = WalletConnectNonce(clerk_user_id=clerk_user_id, nonce=nonce)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_wallet_nonce(db: Session, nonce: str) -> Optional[WalletConnectNonce]:
+    return db.query(WalletConnectNonce).filter(WalletConnectNonce.nonce == nonce).first()
+
+
+def consume_wallet_nonce(db: Session, nonce_id: str, used_at: datetime) -> None:
+    db.query(WalletConnectNonce).filter(WalletConnectNonce.id == nonce_id).update(
+        {"used_at": used_at}
+    )
+    db.commit()
 
 
 def update_user_settings(db: Session, user_id: str, **kwargs) -> User:

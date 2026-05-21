@@ -42,6 +42,17 @@ class User(Base):
     meta_accounts = relationship("MetaAdsAccount", back_populates="merchant")
 
 
+class WalletConnectNonce(Base):
+    """Single-use nonce for SIWE wallet-connect (issue #84)."""
+    __tablename__ = "wallet_connect_nonces"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    clerk_user_id = Column(String, nullable=False, index=True)
+    nonce = Column(String, unique=True, nullable=False, index=True)
+    issued_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+
+
 class MetaAdsAccount(Base):
     __tablename__ = "meta_ads_accounts"
 

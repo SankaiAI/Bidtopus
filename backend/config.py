@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     # Shared secret for agent → backend service-to-service calls (e.g. perf ingest, issue #79)
     agent_service_token: str = ""
 
+    # SIWE wallet-connect (issue #84). Domain the SIWE message must declare —
+    # frontend signs with this host so a leaked signature from one deploy can't
+    # be replayed against another.
+    siwe_domain: str = "localhost:3000"
+    # Arc chain id the SIWE message must declare. Testnet = 5042002.
+    arc_chain_id: int = 5042002
+    # SIWE nonce lifetime in seconds.
+    siwe_nonce_ttl_seconds: int = 300
+
     model_config = {"env_file": ".env", "case_sensitive": False, "extra": "ignore"}
 
     @property
