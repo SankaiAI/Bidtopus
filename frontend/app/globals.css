@@ -252,6 +252,12 @@ body:has(.app-shell) { height: 100%; overflow: hidden; }
      the value prop. Also shrink it so it doesn't dominate the viewport. */
   .hero-mascot          { order: -1; }
   .hero-mascot img      { width: 160px !important; }
+  /* Center the hero text column so it aligns with the centered mascot
+     above it (avoids an awkward left-aligned-text-under-centered-image
+     split axis). `:first-child` targets the text column by DOM order
+     regardless of the mascot's visual `order: -1`. */
+  .hero-grid > div:first-child   { text-align: center; }
+  .hero-grid > div:first-child p { margin-left: auto !important; margin-right: auto !important; }
   .feature-grid         { grid-template-columns: 1fr !important; gap: 48px !important; }
   .feature-grid-reverse { direction: ltr !important; }
   .decision-grid { grid-template-columns: 1fr !important; }
