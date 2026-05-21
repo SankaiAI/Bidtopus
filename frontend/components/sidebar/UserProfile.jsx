@@ -136,6 +136,7 @@ export default function UserProfile({ collapsed, connected, address, onDisconnec
 
           <Link
             href="/settings"
+            prefetch={false}
             onClick={() => setPanelOpen(false)}
             style={{ ...panelRowStyle, display: 'flex' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-border-s)'}

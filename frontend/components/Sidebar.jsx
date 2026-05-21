@@ -12,9 +12,11 @@ import EscrowProtect from './sidebar/EscrowProtect'
 import UserProfile from './sidebar/UserProfile'
 import WorkspaceList from './sidebar/WorkspaceList'
 
+// `protected: true` disables prefetch so unauthenticated visits don't trigger
+// a cross-origin prefetch to Clerk's sign-in (would trip CORS).
 const PRODUCTS = [
   { id: 'dashboard',    label: 'Dashboard',    href: '/dashboard',     Icon: Icon.Home },
-  { id: 'contracts',    label: 'My Contracts', href: '/contracts',     Icon: Icon.Contract },
+  { id: 'contracts',    label: 'My Contracts', href: '/contracts',     Icon: Icon.Contract, protected: true },
   { id: 'new-contract', label: 'New Workspace', href: '/workspace/new', Icon: Icon.Plus, isAction: true },
 ]
 
@@ -208,10 +210,12 @@ function NavItem({ item, active, collapsed, onNavigate }) {
     )
   }
 
+  const prefetch = item.protected ? false : undefined
+
   if (collapsed) {
     return (
       <Link
-        href={item.href} title={item.label} onClick={onNavigate}
+        href={item.href} title={item.label} onClick={onNavigate} prefetch={prefetch}
         style={{ ...baseStyle, width: '56px', justifyContent: 'center', padding: '9px 0' }}
         onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--c-sidebar-hover)'; zoomIn(e) }}
         onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; zoomOut(e) }}
@@ -223,7 +227,7 @@ function NavItem({ item, active, collapsed, onNavigate }) {
 
   return (
     <Link
-      href={item.href} onClick={onNavigate}
+      href={item.href} onClick={onNavigate} prefetch={prefetch}
       style={{ ...baseStyle, gap: '10px', padding: '8px 10px' }}
       onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--c-sidebar-hover)'; zoomIn(e) }}
       onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = bgColor; zoomOut(e) }}
