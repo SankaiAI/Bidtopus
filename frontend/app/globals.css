@@ -197,8 +197,11 @@ body:has(.app-shell) { height: 100%; overflow: hidden; }
 }
 
 /* ─── LANDING PAGE ─────────────────────────────────────────────────────────── */
-.hero-grid            { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
-.feature-grid         { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+/* minmax(0, 1fr) instead of 1fr so grid items can shrink below content width
+   without breaking the layout — without this, a long heading can blow out
+   its column and force the grid to collapse oddly. */
+.hero-grid            { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 56px; align-items: center; }
+.feature-grid         { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 80px; align-items: center; }
 .feature-grid-reverse { direction: rtl; }
 .feature-grid-reverse > * { direction: ltr; }
 .decision-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

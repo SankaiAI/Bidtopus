@@ -1,7 +1,9 @@
 'use client'
 import React from 'react'
 import Link from 'next/link'
+import { SiMeta } from 'react-icons/si'
 import Logo from '@/components/Logo'
+
 
 const C = {
   bg:     '#f7f6f3',   // warm off-white — not pure white
@@ -30,13 +32,13 @@ function Navbar() {
           <a href="#" className="nav-link">Docs</a>
         </div>
         <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/workspace/new" style={{
+          <Link href="/dashboard" style={{
             fontSize: '13px', fontWeight: 700, color: '#fff', background: C.indigo,
             padding: '8px 18px', borderRadius: '8px', textDecoration: 'none', transition: 'opacity 0.15s',
           }}
             onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
             onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-          >Create a contract</Link>
+          >Dashboard</Link>
         </div>
         <button className="nav-hamburger" onClick={() => setMenuOpen(v => !v)}
           style={{ display: 'none', background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px' }}>
@@ -49,9 +51,9 @@ function Navbar() {
         <div style={{ background: C.surface, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <a href="#features" className="nav-link" onClick={() => setMenuOpen(false)}>How it works</a>
           <a href="#comparison" className="nav-link" onClick={() => setMenuOpen(false)}>Why Bidtopus</a>
-          <Link href="/workspace/new" onClick={() => setMenuOpen(false)}
+          <Link href="/dashboard" onClick={() => setMenuOpen(false)}
             style={{ fontSize: '14px', fontWeight: 700, color: '#fff', background: C.indigo, padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', textAlign: 'center' }}>
-            Create a contract
+            Dashboard
           </Link>
         </div>
       )}
@@ -64,10 +66,10 @@ function Hero() {
   return (
     <section style={{ padding: '96px 24px 88px', maxWidth: '1100px', margin: '0 auto' }}>
       <div className="hero-grid">
-        <div>
-          <h1 style={{ fontSize: 'clamp(38px, 4.8vw, 58px)', fontWeight: 800, color: C.text, lineHeight: 1.07, letterSpacing: '-0.035em', margin: '0 0 20px' }}>
-            Your Meta Ads agent.<br />
-            <span style={{ color: C.indigo }}>Paid only when it delivers.</span>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 'clamp(34px, 4vw, 52px)', fontWeight: 800, color: C.text, lineHeight: 1.07, letterSpacing: '-0.035em', margin: '0 0 20px' }}>
+            Your AI agent for Meta Ads<br />
+            <span style={{ color: C.indigo }}>Paid only when it delivers</span>
           </h1>
           <p style={{ fontSize: '18px', color: C.muted, lineHeight: 1.7, margin: '0 0 10px', maxWidth: '420px', fontWeight: 400 }}>
             Set a ROAS target. The agent evaluates if it can hit it, runs your campaign, and collects its fee only after the result is verified.
@@ -93,14 +95,14 @@ function Hero() {
             >See how it works →</a>
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minWidth: 0 }}>
           <img
             src="/icon-512.png"
             alt="Bidtopus mascot"
-            width={420}
-            height={420}
+            width={360}
+            height={360}
             style={{
-              maxWidth: '100%',
+              width: 'clamp(220px, 32vw, 360px)',
               height: 'auto',
               filter: 'drop-shadow(0 24px 60px rgba(37,99,235,0.22))',
             }}
@@ -112,14 +114,69 @@ function Hero() {
 }
 
 // ─── BUILT-WITH STRIP ─────────────────────────────────────────────────────────
+// Official brand logos:
+//   - Meta:   react-icons/SiMeta (Simple Icons, CC0)
+//   - Circle: /logos/circle.avif from circle.com (wordmark stands alone — no label)
+//   - Arc:    inlined from arc.io's official SVG (uses currentColor so we can
+//             dynamically swap from grayscale to brand color on hover)
+function ArcLogo({ size = 20 }) {
+  // Path verbatim from arc.io's footer icon SVG. fill="currentColor" so we
+  // control the color from React rather than baking white into the asset.
+  return (
+    <svg width={size} height={size * (32/31)} viewBox="0 0 31 32" fill="none" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M0 32C0.260374 24.166 1.59328 16.8547 3.82135 11.1696C6.64316 3.96673 10.728 0 15.3227 0C19.9174 0 24.0016 3.96673 26.824 11.1696C28.292 14.9157 29.372 19.3668 30.0119 24.2089C30.0691 24.6414 30.1178 25.0809 30.1678 25.5195C30.184 25.5466 30.1938 25.5718 30.1905 25.5923C30.1905 25.5923 30.5666 27.9326 30.6465 32H30.604C30.0462 31.5439 23.4681 26.3931 12.5636 27.8845C12.7282 26.0457 12.9544 24.2565 13.2467 22.5415C13.2617 22.4538 13.2789 22.3692 13.2942 22.2821C17.5711 22.1536 21.3146 22.6486 24.1853 23.2972C24.1746 23.2293 24.1657 23.1594 24.1547 23.0918C23.5647 19.4302 22.6941 16.0779 21.5717 13.2131C19.7364 8.52888 17.3416 5.61852 15.3227 5.61852C13.3038 5.61852 10.909 8.52888 9.07379 13.2131C8.62954 14.3462 8.22512 15.5545 7.86244 16.8291C7.35258 18.615 6.92424 20.5296 6.58214 22.5413C6.0758 25.5124 5.75944 28.6987 5.64292 32H0Z"
+      />
+    </svg>
+  )
+}
+
+// Grayscale at rest, brand-color on hover — the standard "Powered by" pattern.
+function BuiltWithItem({ children, label, href }) {
+  const [hover, setHover] = React.useState(false)
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '10px',
+        textDecoration: 'none',
+        color: hover ? C.text : C.sub,
+        filter: hover ? 'none' : 'grayscale(1) opacity(0.6)',
+        transition: 'color 0.2s, filter 0.2s',
+      }}
+    >
+      {children}
+      {label && <span style={{ fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em' }}>{label}</span>}
+    </a>
+  )
+}
+
 function BuiltWith() {
   return (
     <div style={{ padding: '18px 24px' }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '32px', flexWrap: 'wrap' }}>
+      <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '36px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '11px', fontWeight: 600, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Built with</span>
-        {['Meta Ads', 'Circle USDC', 'Arc Chain'].map(name => (
-          <span key={name} style={{ fontSize: '13px', fontWeight: 700, color: C.sub, letterSpacing: '-0.01em' }}>{name}</span>
-        ))}
+
+        <BuiltWithItem label="Meta Ads" href="https://www.facebook.com/business/ads">
+          <SiMeta size={20} color="#0866FF" />
+        </BuiltWithItem>
+
+        <BuiltWithItem href="https://www.circle.com/">
+          <img
+            src="/logos/circle.avif"
+            alt="Circle"
+            style={{ display: 'block', height: '20px', width: 'auto' }}
+          />
+        </BuiltWithItem>
+
+        <BuiltWithItem label="Arc Chain" href="https://www.arc.io/">
+          <ArcLogo size={20} />
+        </BuiltWithItem>
       </div>
     </div>
   )
