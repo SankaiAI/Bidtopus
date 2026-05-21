@@ -85,7 +85,7 @@ export default function UserProfile({ collapsed, connected, address, onDisconnec
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--c-text)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{displayName}</div>
           <div style={{ fontSize: '11px', fontWeight: 500, color: connected ? GREEN : 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
-            {connected ? addr : 'Not connected'}
+            {connected ? addr : 'Wallet not connected'}
           </div>
         </div>
         <span style={{ color: '#a8a5b8', display: 'flex', transform: panelOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
