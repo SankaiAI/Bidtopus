@@ -123,8 +123,19 @@ def _execute_ads_bg(contract_id: str) -> None:
         db.close()
 
 
-def _verify_fund_tx_onchain(tx_hash: str, contract_id: str, amount_usdc: float) -> None:
-    """Verify tx_hash emitted Funded(contractId, _, _, amount, _) on Arc.
+def _verify_fund_tx_onchain(
+    tx_hash: str,
+    contract_id: str,
+    amount_usdc: float,
+    expected_merchant_address: str,
+) -> None:
+    """Verify tx_hash emitted Funded(contractId, merchant, _, amount, _) on Arc.
+
+    `expected_merchant_address` is the merchant's registered wallet (per SIWE).
+    The on-chain Funded event's `merchant` parameter must match it — otherwise
+    the merchant funded from a wallet other than the one bound to their backend
+    record (e.g. swapped wallets in MetaMask after the initial connect), which
+    breaks refund routing and the audit trail. See #88.
 
     No-ops with a warning when ARC_RPC_URL or ESCROW_CONTRACT_ADDRESS are not configured.
     Raises HTTPException on any verification failure.
@@ -207,6 +218,23 @@ def _verify_fund_tx_onchain(tx_hash: str, contract_id: str, amount_usdc: float) 
                 raise HTTPException(
                     status_code=400,
                     detail=f"Amount mismatch: on-chain {amount_on_chain}, expected ~{expected_amount}",
+                )
+            # Merchant address is the last 20 bytes of the first 32-byte slot
+            # (addresses are left-padded with 12 zero bytes = 24 hex chars).
+            merchant_on_chain = "0x" + data_hex[24:64]
+            if merchant_on_chain.lower() != expected_merchant_address.lower():
+                log.warning(
+                    "Funder mismatch contract=%s on_chain=%s registered=%s tx=%s",
+                    contract_id, merchant_on_chain, expected_merchant_address, tx_hash,
+                )
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Funded by {merchant_on_chain} but your registered wallet "
+                        f"is {expected_merchant_address}. Reconnect the registered "
+                        f"wallet in MetaMask, or re-register the new wallet via "
+                        f"the wallet-connect flow first."
+                    ),
                 )
             return  # verified
 
@@ -402,7 +430,21 @@ def fund_escrow(
     if not current_user.wallet_address:
         raise HTTPException(status_code=400, detail="Wallet address required for escrow funding")
 
-    _verify_fund_tx_onchain(tx_hash, str(contract.id), amount_usdc)
+    try:
+        _verify_fund_tx_onchain(
+            tx_hash, str(contract.id), amount_usdc, current_user.wallet_address,
+        )
+    except HTTPException as exc:
+        # Audit-log the failed verification (especially the funder-mismatch case
+        # from #88) so support can trace user complaints about refund routing.
+        repo.log_audit_event(db, contract.id, "arc_escrow", "verification_failed", {
+            "tx_hash": tx_hash,
+            "amount_usdc": amount_usdc,
+            "registered_wallet": current_user.wallet_address,
+            "status_code": exc.status_code,
+            "detail": exc.detail,
+        })
+        raise
 
     record = repo.create_escrow_record(
         db,

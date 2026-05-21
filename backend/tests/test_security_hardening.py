@@ -15,8 +15,8 @@ def test_verify_fund_tx_skips_silently_in_development(monkeypatch, caplog):
     monkeypatch.setattr("config.settings.arc_rpc_url", "")
     monkeypatch.setattr("config.settings.escrow_contract_address", "")
     monkeypatch.setattr("config.settings.environment", "development")
-    # No exception, no return value
-    assert _verify_fund_tx_onchain("0xabc", "contract-id", 100.0) is None
+    # No exception, no return value — and the merchant_address arg is still required
+    assert _verify_fund_tx_onchain("0xabc", "contract-id", 100.0, "0xMERCHANT") is None
 
 
 def test_verify_fund_tx_fails_closed_in_test_env(monkeypatch):
@@ -26,7 +26,7 @@ def test_verify_fund_tx_fails_closed_in_test_env(monkeypatch):
     import pytest
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        _verify_fund_tx_onchain("0xabc", "contract-id", 100.0)
+        _verify_fund_tx_onchain("0xabc", "contract-id", 100.0, "0xMERCHANT")
     assert exc.value.status_code == 503
     assert "not configured" in exc.value.detail.lower()
 
@@ -38,8 +38,87 @@ def test_verify_fund_tx_fails_closed_in_production(monkeypatch):
     import pytest
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
-        _verify_fund_tx_onchain("0xabc", "contract-id", 100.0)
+        _verify_fund_tx_onchain("0xabc", "contract-id", 100.0, "0xMERCHANT")
     assert exc.value.status_code == 503
+
+
+# ── #88: funder address verification ─────────────────────────────────────────
+
+def _funded_event_log(*, contract_addr: str, contract_id: str, merchant: str, amount: int):
+    """Build a JSON-RPC-shaped Funded log entry for monkeypatching the RPC response."""
+    from eth_hash.auto import keccak
+
+    cid_topic = "0x" + keccak(contract_id.encode("utf-8")).hex()
+    funded_topic = "0x" + keccak(b"Funded(bytes32,address,address,uint256,uint256)").hex()
+    # 4 non-indexed 32-byte slots: merchant, agent, amount, timestamp
+    merchant_hex = merchant.lower().removeprefix("0x").rjust(64, "0")
+    agent_hex = "0x" + "00" * 32          # placeholder
+    amount_hex = f"{amount:064x}"
+    timestamp_hex = f"{0:064x}"
+    data = "0x" + merchant_hex + agent_hex.removeprefix("0x") + amount_hex + timestamp_hex
+    return {
+        "address": contract_addr,
+        "topics": [funded_topic, cid_topic],
+        "data": data,
+    }
+
+
+def _stub_receipt(*, contract_addr: str, contract_id: str, merchant: str, amount: int):
+    """Returns a fake successful receipt dict for monkeypatching httpx.post."""
+    log_entry = _funded_event_log(
+        contract_addr=contract_addr, contract_id=contract_id,
+        merchant=merchant, amount=amount,
+    )
+    return {"result": {"status": "0x1", "to": contract_addr, "logs": [log_entry]}}
+
+
+def test_verify_fund_tx_passes_when_merchant_matches(monkeypatch):
+    contract_addr = "0xABCDEF0000000000000000000000000000000000"
+    contract_id = "11111111-1111-1111-1111-111111111111"
+    merchant = "0x982D86F474dCFEB50A4Ae6cB65841713613bB9E5"
+
+    monkeypatch.setattr("config.settings.arc_rpc_url", "https://rpc.test")
+    monkeypatch.setattr("config.settings.escrow_contract_address", contract_addr)
+    monkeypatch.setattr("config.settings.environment", "test")
+
+    class FakeResp:
+        def raise_for_status(self): pass
+        def json(self): return _stub_receipt(
+            contract_addr=contract_addr, contract_id=contract_id,
+            merchant=merchant, amount=100 * 1_000_000,
+        )
+
+    monkeypatch.setattr("httpx.post", lambda *a, **kw: FakeResp())
+
+    _verify_fund_tx_onchain("0xtx", contract_id, 100.0, merchant)
+
+
+def test_verify_fund_tx_rejects_when_merchant_mismatches(monkeypatch):
+    contract_addr = "0xABCDEF0000000000000000000000000000000000"
+    contract_id = "22222222-2222-2222-2222-222222222222"
+    on_chain = "0xFFffFFffFFFFFFffFFFfFfFFFFffFFFFffFFffFF"
+    registered = "0x982D86F474dCFEB50A4Ae6cB65841713613bB9E5"
+
+    monkeypatch.setattr("config.settings.arc_rpc_url", "https://rpc.test")
+    monkeypatch.setattr("config.settings.escrow_contract_address", contract_addr)
+    monkeypatch.setattr("config.settings.environment", "test")
+
+    class FakeResp:
+        def raise_for_status(self): pass
+        def json(self): return _stub_receipt(
+            contract_addr=contract_addr, contract_id=contract_id,
+            merchant=on_chain, amount=100 * 1_000_000,
+        )
+
+    monkeypatch.setattr("httpx.post", lambda *a, **kw: FakeResp())
+
+    import pytest
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        _verify_fund_tx_onchain("0xtx", contract_id, 100.0, registered)
+    assert exc.value.status_code == 400
+    assert on_chain.lower() in exc.value.detail.lower()
+    assert registered.lower() in exc.value.detail.lower()
 
 
 # ── H-1 ─────────────────────────────────────────────────────────────────────
