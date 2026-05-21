@@ -19,15 +19,42 @@ import WorkspaceHeader from './WorkspaceHeader'
 import { C, font } from './constants'
 
 // ─── MARKDOWN ─────────────────────────────────────────────────────────────────
+// Wrap every text node in word-spans so streaming text can fade in per-token.
+// During streaming, the parent has `.agent-stream-text` which fires the
+// per-word animation. React reconciles spans by key (position-based), so
+// previously-rendered words keep their mount and don't re-animate — only
+// freshly-appended tokens fire the fade-in.
+function W({ children }) {
+  // children is what ReactMarkdown passes — usually a string or an array
+  // mixing strings with inline elements (<strong>, <em>, etc.).
+  const arr = Array.isArray(children) ? children : [children]
+  const out = []
+  let k = 0
+  for (const child of arr) {
+    if (typeof child === 'string') {
+      const tokens = child.split(/(\s+)/)  // split keeps whitespace as separate items
+      for (const t of tokens) {
+        if (t === '') continue
+        out.push(<span key={k++} className="agent-word">{t}</span>)
+      }
+    } else if (React.isValidElement(child)) {
+      // For inline elements like <strong>, render as a single animated span
+      out.push(<span key={k++} className="agent-word">{child}</span>)
+    } else if (child != null) {
+      out.push(<span key={k++} className="agent-word">{child}</span>)
+    }
+  }
+  return out
+}
 const MD = {
   html:   () => null,
-  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}><W>{children}</W></p>,
   ul:     ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ul>,
   ol:     ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ol>,
-  li:     ({ children }) => <li style={{ marginBottom: '3px' }}>{children}</li>,
+  li:     ({ children }) => <li style={{ marginBottom: '3px' }}><W>{children}</W></li>,
   strong: ({ children }) => <strong style={{ fontWeight: 700 }}>{children}</strong>,
   hr:     () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />,
-  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}>{children}</p>,
+  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}><W>{children}</W></p>,
   code:   ({ inline, children }) => inline
     ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
     : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
@@ -51,15 +78,24 @@ function UserBubble({ msg }) {
   )
 }
 
-function AgentBubble({ msg }) {
+function AgentBubble({ msg, streaming }) {
+  // Streaming UX (Claude/ChatGPT style): each new word fades in via the
+  // `.agent-stream-text .agent-word` animation in globals.css (the W helper
+  // above wraps every token in a span). A blinking caret pinned to the end
+  // signals active streaming. The timestamp is hidden mid-stream.
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
       <div style={{ width: 26, height: 26, borderRadius: 8, background: C.indigoBg, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
       </div>
-      <div style={{ flex: 1, fontSize: '13px', lineHeight: 1.65, color: C.text, fontFamily: font, paddingTop: '3px' }}>
+      <div
+        className={streaming ? 'agent-stream-text' : undefined}
+        style={{ flex: 1, fontSize: '13px', lineHeight: 1.65, color: C.text, fontFamily: font, paddingTop: '3px' }}
+      >
         <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{msg.text || ''}</ReactMarkdown>
-        <div style={{ fontSize: '11px', color: C.faint, marginTop: '6px' }}>{msg.time}</div>
+        {streaming
+          ? <span className="agent-stream-caret" aria-hidden="true" />
+          : <div style={{ fontSize: '11px', color: C.faint, marginTop: '6px' }}>{msg.time}</div>}
       </div>
     </div>
   )
@@ -863,16 +899,22 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
             maskImage: 'linear-gradient(to bottom, transparent 0, black 24px, black 100%)',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, black 24px, black 100%)',
           }}>
-            {processedMessages.map((msg, i) => (
-              <div key={i} style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 14px' }}>
-                {msg._type === 'thinking-block' && <ThinkingBlock thinking={{ steps: msg.steps, isComplete: true, isOpen: openSeqs.has(msg.seqId) }} activeStepId={null} liveDetail="" onToggle={() => toggleSeq(msg.seqId)} />}
-                {msg.role === 'user'         && <UserBubble msg={msg} />}
-                {msg.role === 'agent'        && <AgentBubble msg={msg} />}
-                {msg.role === 'agent-update' && <AgentUpdate msg={msg} />}
-                {msg.role === 'agent-action' && <AgentActionCard msg={msg} effectiveStatus={approvalMode === 'auto' && getStatus(msg.id, msg.status) === 'pending' ? 'auto' : getStatus(msg.id, msg.status)} onApprove={() => approve(msg.id, msg.plan_id)} error={getError(msg.id)} />}
-                {msg.role === 'system'       && <SystemEvent msg={msg} />}
-              </div>
-            ))}
+            {processedMessages.map((msg, i) => {
+              // The streaming bubble is always the last agent message while SSE
+              // is open — pass `streaming` so AgentBubble fires the per-word
+              // fade-in animation and renders the blinking caret.
+              const isLastAgent = isStreaming && msg.role === 'agent' && i === processedMessages.length - 1
+              return (
+                <div key={i} style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 14px' }}>
+                  {msg._type === 'thinking-block' && <ThinkingBlock thinking={{ steps: msg.steps, isComplete: true, isOpen: openSeqs.has(msg.seqId) }} activeStepId={null} liveDetail="" onToggle={() => toggleSeq(msg.seqId)} />}
+                  {msg.role === 'user'         && <UserBubble msg={msg} />}
+                  {msg.role === 'agent'        && <AgentBubble msg={msg} streaming={isLastAgent} />}
+                  {msg.role === 'agent-update' && <AgentUpdate msg={msg} />}
+                  {msg.role === 'agent-action' && <AgentActionCard msg={msg} effectiveStatus={approvalMode === 'auto' && getStatus(msg.id, msg.status) === 'pending' ? 'auto' : getStatus(msg.id, msg.status)} onApprove={() => approve(msg.id, msg.plan_id)} error={getError(msg.id)} />}
+                  {msg.role === 'system'       && <SystemEvent msg={msg} />}
+                </div>
+              )
+            })}
             {thinking.steps.length > 0 && (
               <div style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 4px' }}>
                 <ThinkingBlock thinking={thinking} activeStepId={activeStepId} liveDetail={liveDetail} onToggle={toggleThinking} />

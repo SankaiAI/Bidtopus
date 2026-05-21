@@ -83,14 +83,36 @@ function WelcomeScreen({ onQuickAction, onStart }) {
 }
 
 // ─── MESSAGE BUBBLES ──────────────────────────────────────────────────────────
+// Wrap each text token in a span so the streaming-fade CSS (`.agent-word`
+// inside `.agent-stream-text` — see globals.css) can fire per-word as React
+// mounts new tokens during SSE streaming. Position-based keys mean
+// previously-rendered words don't re-animate on subsequent chunks.
+function W({ children }) {
+  const arr = Array.isArray(children) ? children : [children]
+  const out = []
+  let k = 0
+  for (const child of arr) {
+    if (typeof child === 'string') {
+      for (const t of child.split(/(\s+)/)) {
+        if (t === '') continue
+        out.push(<span key={k++} className="agent-word">{t}</span>)
+      }
+    } else if (React.isValidElement(child)) {
+      out.push(<span key={k++} className="agent-word">{child}</span>)
+    } else if (child != null) {
+      out.push(<span key={k++} className="agent-word">{child}</span>)
+    }
+  }
+  return out
+}
 const MD_COMPONENTS = {
-  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}>{children}</p>,
+  p:      ({ children }) => <p style={{ margin: '0 0 8px' }}><W>{children}</W></p>,
   ul:     ({ children }) => <ul style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ul>,
   ol:     ({ children }) => <ol style={{ margin: '4px 0 8px', paddingLeft: '18px' }}>{children}</ol>,
-  li:     ({ children }) => <li style={{ marginBottom: '3px' }}>{children}</li>,
+  li:     ({ children }) => <li style={{ marginBottom: '3px' }}><W>{children}</W></li>,
   strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'inherit' }}>{children}</strong>,
   hr:     () => <hr style={{ border: 'none', borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />,
-  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}>{children}</p>,
+  h3:     ({ children }) => <p style={{ margin: '0 0 6px', fontWeight: 700 }}><W>{children}</W></p>,
   code:   ({ inline, children }) => inline
     ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
     : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
@@ -119,7 +141,10 @@ const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgInde
           <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
         </svg>
       </div>
-      <div style={{ flex: 1, color: C.text, fontSize: '13px', lineHeight: 1.65 }}>
+      <div
+        className={isLastMsg && isGenerating ? 'agent-stream-text' : undefined}
+        style={{ flex: 1, color: C.text, fontSize: '13px', lineHeight: 1.65 }}
+      >
         {msg.acknowledgment && <p style={{ margin: '0 0 8px' }}>{msg.acknowledgment}</p>}
         {msg.ackDone !== false && (() => {
           const segs = msg.segments ?? (msg.content ? [{ type: 'text', content: msg.content }] : [])

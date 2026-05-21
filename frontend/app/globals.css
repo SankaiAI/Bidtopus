@@ -138,6 +138,37 @@
   50%      { transform: scale(1.18); }
 }
 
+/* Per-word fade-in for streaming agent text. Every word in the markdown
+   output is wrapped in a `.agent-word` span (see WorkspaceView's W helper).
+   When the parent bubble has `.agent-stream-text`, each span animates as it
+   mounts. React keys the spans by their position, so previously-rendered
+   words don't re-animate when new ones append — only the freshly-mounted
+   tokens fade in. */
+@keyframes agentTokenFadeIn {
+  from { opacity: 0; filter: blur(4px); }
+  to   { opacity: 1; filter: blur(0); }
+}
+.agent-stream-text .agent-word {
+  animation: agentTokenFadeIn 0.7s ease-out both;
+}
+
+/* Blinking caret pinned to the end of a streaming agent bubble. The
+   universally-understood "still typing" signal. */
+@keyframes agentCaretBlink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+.agent-stream-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--c-indigo);
+  border-radius: 1px;
+  animation: agentCaretBlink 1s steps(2, end) infinite;
+}
+
 /* ─── AGENT CHAT INPUT ─────────────────────────────────────────────────────── */
 .agent-input::-webkit-scrollbar { width: 5px; }
 .agent-input::-webkit-scrollbar-button { display: none; }
