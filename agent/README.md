@@ -1,7 +1,7 @@
-# OutcomeX — Agent
+# Bidtopus — Agent
 
 ## Purpose
-The agent is the core of OutcomeX. It underwrites performance contracts (ML), negotiates terms (LLM), executes Meta Ads strategies, monitors campaign performance, and triggers USDC settlement on Arc. It runs as a standalone FastAPI service called by the backend over HTTP.
+The agent is the core of Bidtopus. It underwrites performance contracts (ML), negotiates terms (LLM), executes Meta Ads strategies, monitors campaign performance, and triggers USDC settlement on Arc. It runs as a standalone FastAPI service called by the backend over HTTP.
 
 **The agent decides. The backend routes and persists. The frontend renders.**
 
@@ -303,7 +303,7 @@ messages_repo.append(contract_id,
 > `llm_negotiation` to `audit_logger`. The backend persists the offer message
 > to `contract_messages` after the agent's HTTP response returns (so it can
 > attach the `offer_id` it just minted). Writing here too produces duplicate
-> bubbles on workspace restore — see [issue #83](https://github.com/SankaiAI/outcomeX/issues/83).
+> bubbles on workspace restore — see [issue #83](https://github.com/SankaiAI/Bidtopus/issues/83).
 
 What each component writes to `contract_messages`:
 

@@ -1,4 +1,4 @@
-# OutcomeX — Frontend Sub-PRD
+# Bidtopus — Frontend Sub-PRD
 **Version 1.1 | Hackathon MVP**
 
 ---
@@ -77,12 +77,12 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 ---
 
 ### 4.1 Landing Page
-**Purpose:** Explain the OutcomeX model to first-time visitors.
+**Purpose:** Explain the Bidtopus model to first-time visitors.
 
 **Must show:**
 - Core value proposition: pay only when the agent delivers the contracted outcome
 - How USDC escrow works in plain language
-- Old model vs. OutcomeX model comparison
+- Old model vs. Bidtopus model comparison
 - Clear CTA: "Create a performance contract"
 
 ---

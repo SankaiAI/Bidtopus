@@ -1,4 +1,4 @@
-# OutcomeX — Backend
+# Bidtopus — Backend
 
 ## Quickstart
 
@@ -282,7 +282,7 @@ async def stream_chat(contract_id: str, body: ChatRequest, db: Session = Depends
         full_response = ""
         with client.messages.stream(
             model="claude-sonnet-4-6",
-            system="You are the OutcomeX agent. Answer the merchant's question. Do not execute any actions.",
+            system="You are the Bidtopus agent. Answer the merchant's question. Do not execute any actions.",
             messages=[{
                 "role": "user",
                 "content": f"Contract: {state}\nRecent activity: {context}\n\nMerchant: {body.message}"
@@ -424,7 +424,7 @@ async def get_current_user(token=Depends(bearer), db=Depends(get_db)):
 ```python
 @router.post("/users/me/wallet")
 def connect_wallet(body: WalletConnectRequest, current_user=Depends(get_current_user), db=Depends(get_db)):
-    msg       = encode_defunct(text=f"Connect wallet to OutcomeX {current_user.clerk_user_id}")
+    msg       = encode_defunct(text=f"Connect wallet to Bidtopus {current_user.clerk_user_id}")
     recovered = Account.recover_message(msg, signature=body.signature)
     if recovered.lower() != body.wallet_address.lower():
         raise HTTPException(400, "Wallet signature verification failed")

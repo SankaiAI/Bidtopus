@@ -11,7 +11,7 @@ const C = {
   text:   '#0e0d1a',
   muted:  '#6b6880',
   sub:    '#a09daf',
-  indigo: '#4F46E5',
+  indigo: '#2563EB',
   green:  '#10B981',
 }
 
@@ -26,11 +26,10 @@ function Navbar() {
         </Link>
         <div className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
           <a href="#features" className="nav-link">How it works</a>
-          <a href="#comparison" className="nav-link">Why OutcomeX</a>
+          <a href="#comparison" className="nav-link">Why Bidtopus</a>
           <a href="#" className="nav-link">Docs</a>
         </div>
         <div className="nav-cta" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link href="/dashboard" style={{ fontSize: '13px', fontWeight: 600, color: C.muted, textDecoration: 'none' }}>Sign in</Link>
           <Link href="/workspace/new" style={{
             fontSize: '13px', fontWeight: 700, color: '#fff', background: C.indigo,
             padding: '8px 18px', borderRadius: '8px', textDecoration: 'none', transition: 'opacity 0.15s',
@@ -49,7 +48,7 @@ function Navbar() {
       {menuOpen && (
         <div style={{ background: C.surface, padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <a href="#features" className="nav-link" onClick={() => setMenuOpen(false)}>How it works</a>
-          <a href="#comparison" className="nav-link" onClick={() => setMenuOpen(false)}>Why OutcomeX</a>
+          <a href="#comparison" className="nav-link" onClick={() => setMenuOpen(false)}>Why Bidtopus</a>
           <Link href="/workspace/new" onClick={() => setMenuOpen(false)}
             style={{ fontSize: '14px', fontWeight: 700, color: '#fff', background: C.indigo, padding: '10px 18px', borderRadius: '8px', textDecoration: 'none', textAlign: 'center' }}>
             Create a contract
@@ -61,40 +60,6 @@ function Navbar() {
 }
 
 // ─── HERO ─────────────────────────────────────────────────────────────────────
-function ContractCard() {
-  return (
-    <div style={{ background: C.card, borderRadius: '16px', boxShadow: '0 4px 40px rgba(79,70,229,0.10), 0 1px 6px rgba(0,0,0,0.06)', overflow: 'hidden', maxWidth: '340px', width: '100%' }}>
-      <div style={{ padding: '14px 20px', background: C.surface, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: '10px', fontFamily: 'monospace', color: C.sub, letterSpacing: '0.05em', marginBottom: '3px' }}>CONTRACT #4821</div>
-          <div style={{ fontSize: '14px', fontWeight: 700, color: C.text }}>Product X · Meta Ads</div>
-        </div>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: C.green, background: '#dcfce7', padding: '3px 10px', borderRadius: '20px' }}>Funded</span>
-      </div>
-      <div style={{ padding: '16px 20px 14px' }}>
-        <div style={{ fontSize: '10px', fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Contract Terms</div>
-        {[['Target', 'ROAS ≥ 2.0'], ['Window', '7 days'], ['Min. spend', '$500'], ['Success fee', '100 USDC']].map(([k, v], i, arr) => (
-          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: i < arr.length - 1 ? `1px solid ${C.border}` : 'none' }}>
-            <span style={{ fontSize: '13px', color: C.muted }}>{k}</span>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: C.text }}>{v}</span>
-          </div>
-        ))}
-      </div>
-      <div style={{ margin: '0 20px 20px', background: C.surface, borderRadius: '10px', padding: '12px 16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-          <span style={{ fontSize: '12px', color: C.muted }}>Success probability</span>
-          <span style={{ fontSize: '16px', fontWeight: 800, color: C.indigo }}>68%</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: C.green }}>Contract accepted</span>
-          <span style={{ fontSize: '12px', color: C.sub, marginLeft: 'auto' }}>100 USDC escrowed</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function Hero() {
   return (
     <section style={{ padding: '96px 24px 88px', maxWidth: '1100px', margin: '0 auto' }}>
@@ -128,8 +93,18 @@ function Hero() {
             >See how it works →</a>
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <ContractCard />
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          <img
+            src="/icon-512.png"
+            alt="Bidtopus mascot"
+            width={420}
+            height={420}
+            style={{
+              maxWidth: '100%',
+              height: 'auto',
+              filter: 'drop-shadow(0 24px 60px rgba(37,99,235,0.22))',
+            }}
+          />
         </div>
       </div>
     </section>
@@ -333,10 +308,10 @@ function Comparison() {
         <div style={{ marginBottom: '48px' }}>
           <div style={{ fontSize: '12px', fontWeight: 700, color: C.indigo, letterSpacing: '0.06em', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ display: 'inline-block', width: '20px', height: '2px', background: C.indigo, borderRadius: '2px' }} />
-            Why OutcomeX
+            Why Bidtopus
           </div>
           <h2 style={{ fontSize: 'clamp(26px, 3.5vw, 36px)', fontWeight: 800, color: C.text, letterSpacing: '-0.025em', margin: '0 0 12px' }}>
-            Most AI ad tools sell access.<br />OutcomeX sells a result.
+            Most AI ad tools sell access.<br />Bidtopus sells a result.
           </h2>
           <p style={{ fontSize: '15px', color: C.muted, maxWidth: '420px', lineHeight: 1.7, margin: 0 }}>
             The difference is who bears the risk when the campaign doesn't perform.
@@ -350,7 +325,7 @@ function Comparison() {
               <span style={{ fontSize: '11px', fontWeight: 700, color: C.sub, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Traditional AI ad tools</span>
             </div>
             <div style={{ padding: '13px 20px', borderLeft: `1px solid ${C.border}` }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, textTransform: 'uppercase', letterSpacing: '0.06em' }}>OutcomeX</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, color: C.indigo, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Bidtopus</span>
             </div>
           </div>
           {rows.map((r, i) => (
@@ -442,7 +417,7 @@ function Footer() {
           </div>
         </div>
         <div style={{ marginTop: '36px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-          <span style={{ fontSize: '12px', color: C.sub }}>© 2026 OutcomeX. Built for the Agora Hackathon.</span>
+          <span style={{ fontSize: '12px', color: C.sub }}>© 2026 Bidtopus. Built for the Agora Hackathon.</span>
           <span style={{ fontSize: '12px', color: C.sub }}>Powered by Circle · Arc Chain</span>
         </div>
       </div>
@@ -491,7 +466,7 @@ export default function LandingPage() {
       <FeatureSection
         label="Step 03 — Settle"
         headline="Settlement is automatic. Neither party can override it."
-        description="When the evaluation window closes, the result is checked against the contract. ROAS hit → USDC released to the agent. ROAS missed → full refund to you. Enforced by a smart contract on Arc — not by OutcomeX."
+        description="When the evaluation window closes, the result is checked against the contract. ROAS hit → USDC released to the agent. ROAS missed → full refund to you. Enforced by a smart contract on Arc — not by Bidtopus."
         bullets={[
           'No invoices, no disputes — outcome is deterministic',
           'Every settlement is recorded on Arc chain with a transaction proof',

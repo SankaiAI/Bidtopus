@@ -1,4 +1,4 @@
-# OutcomeX — Problem Statement
+# Bidtopus — Problem Statement
 
 ---
 
@@ -33,11 +33,11 @@ A brand can run a perfectly optimized Advantage+ campaign and still get a 0.8x R
 
 This is structural: Meta's revenue model is ad spend, not merchant outcomes. Tying their earnings to ROAS would destroy their P&L. The gap is permanent.
 
-**OutcomeX doesn't compete with Advantage+. It sits on top of it.**
+**Bidtopus doesn't compete with Advantage+. It sits on top of it.**
 
-The agent uses Meta's MCP to read the brand's existing campaigns, pixel events, and audience performance before generating strategy. Advantage+ is the execution engine. OutcomeX adds the one layer Meta will never offer: *a financial guarantee backed by USDC escrow.*
+The agent uses Meta's MCP to read the brand's existing campaigns, pixel events, and audience performance before generating strategy. Advantage+ is the execution engine. Bidtopus adds the one layer Meta will never offer: *a financial guarantee backed by USDC escrow.*
 
-> The pitch is not "we optimize better than Meta." It's "Meta optimizes the ads. OutcomeX guarantees the result or you don't pay."
+> The pitch is not "we optimize better than Meta." It's "Meta optimizes the ads. Bidtopus guarantees the result or you don't pay."
 
 > Sources: Meta Advantage+ product page; Meta Q4 2024 earnings ($20B+ run-rate for Advantage+ shopping);
 > Meta for Business blog (iOS 14.5 and ATT as the driver for on-platform AI shift, 2021).
@@ -125,7 +125,7 @@ not on any single threshold being crossed.
 
 ---
 
-## Act 7 — Why Each Piece of OutcomeX Is Necessary
+## Act 7 — Why Each Piece of Bidtopus Is Necessary
 
 ### Why USDC Escrow on Arc
 The trust problem cannot be solved with a promise. It requires a third party that neither
@@ -175,7 +175,7 @@ in plain language, with extended thinking to reason about fee vs. risk vs. windo
 
 ## The One-Sentence Version
 
-> **OutcomeX is the first AI marketing agent that puts its own USDC at risk — it underwrites
+> **Bidtopus is the first AI marketing agent that puts its own USDC at risk — it underwrites
 > your Meta Ads contract using ML, reads your existing campaigns via MCP to build a
 > data-driven strategy, executes it autonomously, and only earns its fee when it delivers
 > your target ROAS.**
@@ -184,7 +184,7 @@ in plain language, with extended thinking to reason about fee vs. risk vs. windo
 
 ## The Comparison That Lands
 
-| | Traditional agency | AI subscription tool | OutcomeX |
+| | Traditional agency | AI subscription tool | Bidtopus |
 |---|---|---|---|
 | **Incentive** | Earn more when you spend more | Earn regardless of outcome | Earn only when merchant succeeds |
 | **Guarantee** | None | None | USDC locked in smart contract |
@@ -207,9 +207,9 @@ Three forces converging:
 
 2. **Meta's own AI (Advantage+) is now mature — and that's a tailwind, not a threat.**
    Post-iOS 14.5, Meta had to shift from cross-app tracking to on-platform AI. That forced
-   them to build Advantage+, which is genuinely good at execution. OutcomeX builds on top of
+   them to build Advantage+, which is genuinely good at execution. Bidtopus builds on top of
    it via MCP — the strategy layer reads real campaign data before making a single decision.
-   Meta did the hard AI work. OutcomeX adds the guarantee layer Meta will never offer.
+   Meta did the hard AI work. Bidtopus adds the guarantee layer Meta will never offer.
 
 3. **The market is already moving to performance models.** 58% of mobile ad budgets globally
    shifted to performance contracts in 2024. Performance marketing grew **+49.8% from 2021–2024**

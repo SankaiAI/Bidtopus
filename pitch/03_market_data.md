@@ -1,4 +1,4 @@
-# OutcomeX — Market Data & Sources
+# Bidtopus — Market Data & Sources
 
 ---
 
@@ -100,7 +100,7 @@
 | AdAmigo | Flat subscription | $99/month | "30% improvement in 30 days or no charge" (trial period only) | https://www.adamigo.ai/pricing |
 | Leadzai | Pay-per-result | Custom | Yes — no escrow, no ML underwriting | https://www.leadzai.com/pricing |
 | Uniscrow | Protocol fee on settled amounts | Custom | Yes (escrow) — no AI agent, no ad management | https://uniscrow.com |
-| **OutcomeX** | **Success fee (USDC), escrowed** | **~$100 USDC per contract** | **Yes — USDC locked in Arc smart contract** | — |
+| **Bidtopus** | **Success fee (USDC), escrowed** | **~$100 USDC per contract** | **Yes — USDC locked in Arc smart contract** | — |
 
 ---
 
@@ -121,7 +121,7 @@
 
 ### TAM — Total Addressable Market
 - Meta ecommerce ad spend: ~$40–50B/year (Advantage+ alone = $20B+)
-- OutcomeX success fee at ~5% of managed spend
+- Bidtopus success fee at ~5% of managed spend
 - **TAM = ~$2 billion**
 - Source: Meta Q4 2024 earnings — https://investor.atmeta.com/investor-news/press-release-details/2025/Meta-Reports-Fourth-Quarter-and-Full-Year-2024-Results/
 
@@ -144,6 +144,6 @@ Year 1 target = 0.1% of SAM. Distribution problem, not market size problem.
 
 ### Pricing vs. Alternatives
 Traditional performance agencies charge 10–20% of ad spend.
-OutcomeX at ~5% of spend as a success fee is **2–4x cheaper**, with a stronger
+Bidtopus at ~5% of spend as a success fee is **2–4x cheaper**, with a stronger
 guarantee (pay-on-success vs. pay-on-effort).
 Reference: https://admiral.media/facebook-ads-agency-pricing/

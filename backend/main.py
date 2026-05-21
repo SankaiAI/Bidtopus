@@ -135,7 +135,7 @@ if settings.environment not in ("development", "test"):
 
 _expose_docs = settings.environment == "development"
 app = FastAPI(
-    title="OutcomeX API",
+    title="Bidtopus API",
     version="1.0.0",
     # Disable interactive docs outside development — full API enumeration is recon for attackers
     docs_url="/docs" if _expose_docs else None,

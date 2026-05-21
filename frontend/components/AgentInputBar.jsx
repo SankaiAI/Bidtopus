@@ -1,7 +1,7 @@
 'use client'
 import React from 'react'
 
-const ACCENT   = '#4F46E5'
+const ACCENT   = '#2563EB'
 const BORDER   = '#e4e3ed'
 const BG       = '#f0f0f5'
 const TEXT     = '#0e0d1a'

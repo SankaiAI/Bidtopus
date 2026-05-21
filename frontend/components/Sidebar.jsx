@@ -329,7 +329,7 @@ export default function Sidebar({ activeItem, onClose }) {
         setCollapsed(true)
       } else {
         if (_collapsedCache === null) {
-          const saved = localStorage.getItem('outcomex-sidebar-collapsed')
+          const saved = localStorage.getItem('bidtopus-sidebar-collapsed')
           _collapsedCache = saved !== null ? saved === 'true' : false
         }
         setCollapsed(_collapsedCache)
@@ -350,7 +350,7 @@ export default function Sidebar({ activeItem, onClose }) {
     setCollapsed(next)
     if (!isMobile) {
       _collapsedCache = next
-      localStorage.setItem('outcomex-sidebar-collapsed', String(next))
+      localStorage.setItem('bidtopus-sidebar-collapsed', String(next))
     }
   }
 

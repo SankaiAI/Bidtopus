@@ -1,4 +1,4 @@
-# OutcomeX — Contracts
+# Bidtopus — Contracts
 
 ## How the Contract Fits Into the App
 
@@ -67,7 +67,7 @@ sequenceDiagram
 ---
 
 ## Purpose
-The contracts folder contains the on-chain smart contract that powers the escrow and settlement mechanics. This is what makes OutcomeX trustless: neither the merchant nor the agent can move funds unilaterally — the contract enforces the agreed terms, immutably, on Arc.
+The contracts folder contains the on-chain smart contract that powers the escrow and settlement mechanics. This is what makes Bidtopus trustless: neither the merchant nor the agent can move funds unilaterally — the contract enforces the agreed terms, immutably, on Arc.
 
 ---
 
@@ -113,7 +113,7 @@ Set this in `contracts/.env`, `agent/.env`, and `backend/.env`.
 
 1. Go to **https://console.circle.com** → sign in
 2. Left sidebar → **Keys** → **API Keys** → **Create API Key**
-3. Type: **API Key** | Access: **Standard Key** | Name: `OutcomeX Agent`
+3. Type: **API Key** | Access: **Standard Key** | Name: `Bidtopus Agent`
 4. Make sure the **Testnet** toggle (top-left) is active
 5. Copy the key (format: `TEST_API_KEY:xxx:yyy`)
 
@@ -397,7 +397,7 @@ After deploy, copy `out/abi.json` and `out/address.json` to `contracts/out/`. Th
 
 Arc is Circle's purpose-built L1 blockchain. These properties directly affect the contract design:
 
-| Arc property | Impact on OutcomeX |
+| Arc property | Impact on Bidtopus |
 |---|---|
 | Sub-second finality | No polling loop needed — settlement confirms immediately after tx |
 | ~$0.01 fees in USDC | No native gas token required; fees predictable and stablecoin-denominated |

@@ -18,16 +18,16 @@
   --c-muted: #6b6880;
   --c-faint: #a8a5b8;
 
-  --c-indigo:     #4F46E5;
-  --c-indigo-mid: #6366F1;
+  --c-indigo:     #2563EB;
+  --c-indigo-mid: #3B82F6;
   --c-green:      #10B981;
   --c-amber:      #F59E0B;
   --c-red:        #EF4444;
 
-  --c-indigo-bg:     #eef2ff;
-  --c-indigo-subtle: #f5f3ff;
-  --c-indigo-border: #e0e7ff;
-  --c-indigo-glow:   rgba(79, 70, 229, 0.07);
+  --c-indigo-bg:     #EFF6FF;
+  --c-indigo-subtle: #F5F9FF;
+  --c-indigo-border: #DBEAFE;
+  --c-indigo-glow:   rgba(37, 99, 235, 0.07);
   --c-amber-bg:      #fffbeb;
   --c-green-bg:      #f0fdf4;
   --c-green-light:   #dcfce7;
@@ -44,8 +44,8 @@
   --c-sidebar:          #ffffff;
   --c-sidebar-border:   #ebebf0;
   --c-sidebar-border-s: #f0eef8;
-  --c-sidebar-hover:    #f5f3ff;
-  --c-sidebar-active:   #eef2ff;
+  --c-sidebar-hover:    #F5F9FF;
+  --c-sidebar-active:   #EFF6FF;
   --c-sidebar-text:     #3d3c54;
   --c-sidebar-muted:    #6b6880;
   --c-sidebar-section:  #a8a5b8;
@@ -65,16 +65,16 @@
   --c-muted: #8a88a8;
   --c-faint: #5c5a78;
 
-  --c-indigo:     #6366F1;
-  --c-indigo-mid: #818cf8;
+  --c-indigo:     #3B82F6;
+  --c-indigo-mid: #60A5FA;
   --c-green:      #10B981;
   --c-amber:      #F59E0B;
   --c-red:        #EF4444;
 
-  --c-indigo-bg:     #1e1c45;
-  --c-indigo-subtle: #1a1835;
-  --c-indigo-border: #2d2b58;
-  --c-indigo-glow:   rgba(99, 102, 241, 0.12);
+  --c-indigo-bg:     #0F1E40;
+  --c-indigo-subtle: #0F1A2E;
+  --c-indigo-border: #1E3A5F;
+  --c-indigo-glow:   rgba(59, 130, 246, 0.12);
   --c-amber-bg:      #2a2410;
   --c-green-bg:      #0d2a1a;
   --c-green-light:   #0d3320;
@@ -84,15 +84,15 @@
 
   --c-user-bg:      #1e1d35;
 
-  --c-panel-bg:     #1a1835;
+  --c-panel-bg:     #0F1A2E;
   --c-inner-card:   #201e38;
   --c-inner-border: #2d2b4a;
 
   --c-sidebar:          #16152a;
   --c-sidebar-border:   #2a2845;
   --c-sidebar-border-s: #221f3a;
-  --c-sidebar-hover:    #1e1c3a;
-  --c-sidebar-active:   #1e1c45;
+  --c-sidebar-hover:    #13243A;
+  --c-sidebar-active:   #0F1E40;
   --c-sidebar-text:     #c8c6e0;
   --c-sidebar-muted:    #8a88a8;
   --c-sidebar-section:  #5c5a78;

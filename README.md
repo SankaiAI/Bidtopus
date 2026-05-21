@@ -1,4 +1,4 @@
-# OutcomeX
+# Bidtopus
 
 **Performance-paid AI agent for Meta Ads. Brands pay only when the agent delivers the contracted ROAS. Settled in USDC on Arc.**
 
@@ -20,7 +20,7 @@ A merchant offers a USDC success fee for a measurable marketing target (e.g. ROA
 flowchart LR
     M["🏪 Merchant\n'Hit ROAS 2.0x\nin 7 days or I don't pay'"]
 
-    subgraph Agent["OutcomeX Agent"]
+    subgraph Agent["Bidtopus Agent"]
         direction LR
         ML["ML\nUnderwrites risk\n→ 68% prob of success"]
         LLM1["LLM\nNegotiates terms\n→ 'Accept at 2.0x ROAS'"]
@@ -38,46 +38,46 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     actor Merchant
-    participant OutcomeX
+    participant Bidtopus
     participant Arc/Meta
 
-    Note over Merchant,OutcomeX: 1. NEGOTIATE
-    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"
-    OutcomeX->>OutcomeX: Claude negotiates & locks terms
-    Note right of OutcomeX: Contract created
+    Note over Merchant,Bidtopus: 1. NEGOTIATE
+    Merchant->>Bidtopus: "Hit ROAS 2.0x in 7 days"
+    Bidtopus->>Bidtopus: Claude negotiates & locks terms
+    Note right of Bidtopus: Contract created
 
-    Note over Merchant,OutcomeX: 2. UNDERWRITE
-    Merchant->>OutcomeX: Click "Underwrite"
-    OutcomeX->>OutcomeX: ML evaluates historical ROAS,<br/>spend, target, time window, AOV
-    Note right of OutcomeX: prob: 0.68 · risk: medium · rec: accept
+    Note over Merchant,Bidtopus: 2. UNDERWRITE
+    Merchant->>Bidtopus: Click "Underwrite"
+    Bidtopus->>Bidtopus: ML evaluates historical ROAS,<br/>spend, target, time window, AOV
+    Note right of Bidtopus: prob: 0.68 · risk: medium · rec: accept
 
-    Note over Merchant,OutcomeX: 3. AGENT OFFER
-    OutcomeX-->>Merchant: accept / counteroffer / reject<br/>+ plain-language explanation
+    Note over Merchant,Bidtopus: 3. AGENT OFFER
+    Bidtopus-->>Merchant: accept / counteroffer / reject<br/>+ plain-language explanation
 
     Note over Merchant,Arc/Meta: 4. ACCEPT + FUND ESCROW
     Merchant->>Arc/Meta: Accept offer (Circle App Kit)
     Arc/Meta->>Arc/Meta: USDC locked on Arc
     Note right of Arc/Meta: fund tx_hash [on-chain ✓]
 
-    Note over Merchant,OutcomeX: 5. STRATEGY GENERATION
-    OutcomeX-->>Merchant: Strategy plan<br/>(campaign structure, audiences, budget)
-    Note over Merchant,OutcomeX: 6. MERCHANT APPROVES
-    Merchant->>OutcomeX: Approve strategy
+    Note over Merchant,Bidtopus: 5. STRATEGY GENERATION
+    Bidtopus-->>Merchant: Strategy plan<br/>(campaign structure, audiences, budget)
+    Note over Merchant,Bidtopus: 6. MERCHANT APPROVES
+    Merchant->>Bidtopus: Approve strategy
 
-    Note over OutcomeX,Arc/Meta: 7. EXECUTE ADS
-    OutcomeX->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_ad_set · set_budget
-    Arc/Meta-->>OutcomeX: Campaign live on Meta
+    Note over Bidtopus,Arc/Meta: 7. EXECUTE ADS
+    Bidtopus->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_ad_set · set_budget
+    Arc/Meta-->>Bidtopus: Campaign live on Meta
 
     Note over Merchant,Arc/Meta: 8. LIVE MONITORING (every 24h)
     loop Every 24h while Active
-        Arc/Meta-->>OutcomeX: Real spend / revenue data
-        OutcomeX->>OutcomeX: ML forecast: predicted ROAS,<br/>success probability, on_track / at_risk
-        OutcomeX-->>Merchant: Live dashboard update
+        Arc/Meta-->>Bidtopus: Real spend / revenue data
+        Bidtopus->>Bidtopus: ML forecast: predicted ROAS,<br/>success probability, on_track / at_risk
+        Bidtopus-->>Merchant: Live dashboard update
     end
 
-    Note over OutcomeX,Arc/Meta: 9. RESOLUTION & SETTLEMENT
-    OutcomeX->>OutcomeX: spend ≥ min AND roas ≥ target AND window elapsed
-    OutcomeX->>Arc/Meta: Circle Wallets signs release() or refund()
+    Note over Bidtopus,Arc/Meta: 9. RESOLUTION & SETTLEMENT
+    Bidtopus->>Bidtopus: spend ≥ min AND roas ≥ target AND window elapsed
+    Bidtopus->>Arc/Meta: Circle Wallets signs release() or refund()
     Note right of Arc/Meta: settlement tx_hash [on-chain ✓]
 ```
 
@@ -159,11 +159,11 @@ USDC is the answer to all three. It is the leading regulated digital dollar — 
 
 Arc is Circle's purpose-built L1 blockchain. USDC is Arc's native currency — every transaction (funding, release, refund) is denominated in USDC, including gas fees via Paymaster. There is no volatile token in the system. A merchant who funds a $200 USDC escrow on Monday will see exactly $200 USDC released or refunded at settlement — no slippage, no gas surprises, no exchange rate risk.
 
-This is why OutcomeX is built on Circle infrastructure rather than a general-purpose chain: the entire stack — stablecoin, wallets, gas, escrow — is unified under one regulated, dollar-denominated system that any ecommerce merchant can understand.
+This is why Bidtopus is built on Circle infrastructure rather than a general-purpose chain: the entire stack — stablecoin, wallets, gas, escrow — is unified under one regulated, dollar-denominated system that any ecommerce merchant can understand.
 
 ### Circle Stack
 
-| Circle Product | How OutcomeX Uses It | Lifecycle Step |
+| Circle Product | How Bidtopus Uses It | Lifecycle Step |
 |---|---|---|
 | **Arc Escrow** | USDC locked at contract signing. Released on success, refunded on failure. Code enforces the guarantee — not the agent's word. | Step 4: Fund · Step 9: Settle |
 | **Circle Wallets** | Agent's receiving wallet. Funded by Arc escrow on success. Automated HSM-backed key management — agent never touches raw keys. | Step 9: Success path |
@@ -203,7 +203,7 @@ flowchart LR
 ## Repo Structure
 
 ```
-outcomeX/
+Bidtopus/
 ├── frontend/     Next.js web app — the merchant-facing UI
 ├── backend/      FastAPI API + database — routes and persists contract state
 ├── agent/        AI agent — ML underwriting, LLM negotiation, ads execution, settlement
@@ -317,8 +317,8 @@ Everything you need after cloning the repo.
 ### 1. Clone and open your component
 
 ```bash
-git clone https://github.com/SankaiAI/outcomeX.git
-cd outcomeX
+git clone https://github.com/SankaiAI/Bidtopus.git
+cd Bidtopus
 ```
 
 Open **only your component folder** in VS Code — Claude Code reads the `CLAUDE.md` in your working directory to know what you own and how to behave.

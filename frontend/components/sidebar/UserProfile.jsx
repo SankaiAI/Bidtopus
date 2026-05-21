@@ -45,7 +45,7 @@ export default function UserProfile({ collapsed, connected, address, onDisconnec
   const avatar = user?.imageUrl
     ? <img src={user.imageUrl} alt={displayName} style={{ width: '30px', height: '30px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
     : (
-      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'linear-gradient(135deg, #4F46E5, #6366F1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'linear-gradient(135deg, #2563EB, #3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff' }}>{initial}</span>
       </div>
     )
@@ -56,7 +56,7 @@ export default function UserProfile({ collapsed, connected, address, onDisconnec
         title="Profile"
         onClick={() => setPanelOpen(v => !v)}
         style={{ width: '56px', height: '54px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', borderTop: '1px solid #f0eef8', transition: 'background 0.15s' }}
-        onMouseEnter={e => e.currentTarget.style.background = '#f5f3ff'}
+        onMouseEnter={e => e.currentTarget.style.background = '#F5F9FF'}
         onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
       >
         {avatar}

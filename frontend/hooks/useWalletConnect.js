@@ -8,7 +8,7 @@ import { WALLET_SIGN_MESSAGE } from '@/lib/wallet'
 /**
  * One-call wallet connect flow:
  *   1. wagmi connect (injected — MetaMask, etc.)
- *   2. EIP-191 sign of "Connect wallet to OutcomeX {clerkUserId}"
+ *   2. EIP-191 sign of "Connect wallet to Bidtopus {clerkUserId}"
  *   3. POST /api/users/me/wallet with the address + signature
  *
  * The backend stores the wallet on the User row so fund-escrow can verify

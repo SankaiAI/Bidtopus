@@ -1,4 +1,4 @@
-# OutcomeX — Frontend
+# Bidtopus — Frontend
 
 ## Purpose
 The frontend is the merchant-facing web app. It guides the merchant through the full lifecycle of a performance contract: creating it, reviewing the agent's decision, funding escrow, approving the strategy, monitoring the campaign, and seeing the final settlement.
@@ -252,7 +252,7 @@ frontend/
 ## What Needs to Be Built
 
 ### 1. Landing Page
-Core message: merchants pay only when the AI agent delivers the contracted outcome. Old model vs. OutcomeX model comparison. CTA to create a contract.
+Core message: merchants pay only when the AI agent delivers the contracted outcome. Old model vs. Bidtopus model comparison. CTA to create a contract.
 
 ### 2. Contract Builder
 Form: target ROAS threshold, minimum spend, time window (days), success fee (USDC), campaign mode, ad account context. On submit: `POST /contracts` → navigate to Agent Evaluation.

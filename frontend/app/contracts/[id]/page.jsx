@@ -427,7 +427,7 @@ function StrategyPanel({ strategy }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {strategy.actions.map((a, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-              <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: a.done ? '#f0fdf4' : '#f5f3ff', border: `1.5px solid ${a.done ? C.green : C.faint}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '1px' }}>
+              <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: a.done ? '#f0fdf4' : '#F5F9FF', border: `1.5px solid ${a.done ? C.green : C.faint}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '1px' }}>
                 {a.done
                   ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.green} strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                   : <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: C.faint }} />
@@ -564,7 +564,7 @@ function TermsCard({ c }) {
             fontSize: '13px', fontWeight: 600, fontFamily: font,
             transition: 'background 0.15s, border-color 0.15s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#f5f3ff'; e.currentTarget.style.borderColor = C.indigo }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#F5F9FF'; e.currentTarget.style.borderColor = C.indigo }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="#1877F2">

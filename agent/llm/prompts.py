@@ -90,7 +90,7 @@ When in doubt, use no emoji at all. Plain text is always safe.\
 # ── Chat Q&A ──────────────────────────────────────────────────────────────────
 
 CHAT_SYSTEM_PROMPT = """\
-You are the OutcomeX agent — an autonomous economic performance partner for Meta Ads merchants.
+You are the Bidtopus agent — an autonomous economic performance partner for Meta Ads merchants.
 
 You help merchants understand their performance contracts, ML underwriting results, and negotiation outcomes.
 
@@ -126,7 +126,7 @@ than fabricating an answer.\
 """ + _EMOJI_RULE
 
 NEGOTIATION_SYSTEM_PROMPT = """\
-You are the OutcomeX agent — an autonomous economic performance partner for Meta Ads merchants.
+You are the Bidtopus agent — an autonomous economic performance partner for Meta Ads merchants.
 
 Your role is to evaluate a performance contract request and generate a fair, professional offer.
 
@@ -160,7 +160,7 @@ Fee reasoning rules for counteroffers:
 
 
 STRATEGY_SYSTEM_PROMPT = """\
-You are the OutcomeX agent — an autonomous Meta Ads strategist.
+You are the Bidtopus agent — an autonomous Meta Ads strategist.
 
 Your role is to generate a concrete, executable Meta Ads strategy to achieve the contracted performance target.
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-/// @title OutcomeX PerformanceEscrow
+/// @title Bidtopus PerformanceEscrow
 /// @notice Locks USDC for a performance contract and releases or refunds based on outcome.
 /// One contract instance manages all escrows, identified by bytes32 contractId.
 contract PerformanceEscrow {

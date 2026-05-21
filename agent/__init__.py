@@ -1,1 +1,1 @@
-"""OutcomeX Agent — autonomous economic agent for performance contracts."""
+"""Bidtopus Agent — autonomous economic agent for performance contracts."""

@@ -79,12 +79,12 @@ export default function WorkspaceList() {
     if (!isLoaded) return
     if (!isSignedIn) {
       setContracts([])
-      try { localStorage.removeItem('outcomex_contracts') } catch {}
+      try { localStorage.removeItem('bidtopus_contracts') } catch {}
       clearLastViewed()
       return
     }
     try {
-      const cached = JSON.parse(localStorage.getItem('outcomex_contracts') || 'null')
+      const cached = JSON.parse(localStorage.getItem('bidtopus_contracts') || 'null')
       if (cached?.length > 0) setContracts(cached)
     } catch {}
   }, [isLoaded, isSignedIn])
@@ -105,7 +105,7 @@ export default function WorkspaceList() {
           if (cancelled) return
           const list = data || []
           setContracts(list)
-          try { localStorage.setItem('outcomex_contracts', JSON.stringify(list)) } catch {}
+          try { localStorage.setItem('bidtopus_contracts', JSON.stringify(list)) } catch {}
         })
         .catch(() => {})
     }
@@ -286,7 +286,7 @@ export default function WorkspaceList() {
             return (
               <div
                 key={item.id}
-                style={{ position: 'relative', borderRadius: '8px', background: isActive ? '#eef2ff' : showBtn ? '#f5f3ff' : 'transparent', transition: 'background 0.12s' }}
+                style={{ position: 'relative', borderRadius: '8px', background: isActive ? '#EFF6FF' : showBtn ? '#F5F9FF' : 'transparent', transition: 'background 0.12s' }}
                 onMouseEnter={() => setHoveredId(item.id)}
                 onMouseLeave={() => setHoveredId(null)}
               >

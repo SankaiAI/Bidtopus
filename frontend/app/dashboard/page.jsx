@@ -149,7 +149,7 @@ function AgentCard() {
         border: '1px solid #3730a3',
         borderRadius: '16px', padding: '24px 28px',
         position: 'relative', overflow: 'hidden',
-        boxShadow: '0 2px 12px rgba(79,70,229,0.15)',
+        boxShadow: '0 2px 12px rgba(37,99,235,0.15)',
       }}>
         <div style={{ position: 'absolute', right: '20px', top: '20px', width: '52px', height: '52px', borderRadius: '14px', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

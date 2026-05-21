@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'outcomex_workspaces'
-const UPDATE_EVENT = 'outcomex_workspaces_updated'
+const STORAGE_KEY = 'bidtopus_workspaces'
+const UPDATE_EVENT = 'bidtopus_workspaces_updated'
 
 function read() {
   if (typeof window === 'undefined') return []

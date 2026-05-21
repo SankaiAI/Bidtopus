@@ -24,12 +24,12 @@ If auth fails: **stop and tell the user** "gh auth failed — please run `gh aut
 
 If an issue number was passed:
 ```bash
-"$GH" issue view $ARGUMENTS --repo SankaiAI/outcomeX
+"$GH" issue view $ARGUMENTS --repo SankaiAI/Bidtopus
 ```
 
 If no number given, list open backend tickets first then ask which to work on:
 ```bash
-"$GH" issue list --label "needs: backend" --state open --repo SankaiAI/outcomeX
+"$GH" issue list --label "needs: backend" --state open --repo SankaiAI/Bidtopus
 ```
 
 Read the **full** issue body. Note the **Request** and **Definition of Done** sections.
@@ -46,8 +46,8 @@ Before claiming, confirm the work lives inside `backend/`. Ask:
 
 **If no — mislabeled:** redirect and stop:
 ```bash
-"$GH" issue comment NUMBER --body "This belongs to CORRECT_TEAM. Redirecting." --repo SankaiAI/outcomeX
-"$GH" issue edit NUMBER --remove-label "needs: backend" --add-label "needs: CORRECT_TEAM" --repo SankaiAI/outcomeX
+"$GH" issue comment NUMBER --body "This belongs to CORRECT_TEAM. Redirecting." --repo SankaiAI/Bidtopus
+"$GH" issue edit NUMBER --remove-label "needs: backend" --add-label "needs: CORRECT_TEAM" --repo SankaiAI/Bidtopus
 ```
 
 ---
@@ -55,8 +55,8 @@ Before claiming, confirm the work lives inside `backend/`. Ask:
 ## Step 4 — Claim and move to In Progress
 
 ```bash
-"$GH" issue comment NUMBER --body "Confirmed this is mine. Picking it up now." --repo SankaiAI/outcomeX
-"$GH" issue edit NUMBER --add-label "status: in-progress" --repo SankaiAI/outcomeX
+"$GH" issue comment NUMBER --body "Confirmed this is mine. Picking it up now." --repo SankaiAI/Bidtopus
+"$GH" issue edit NUMBER --add-label "status: in-progress" --repo SankaiAI/Bidtopus
 ```
 
 The label triggers the GitHub Projects automation rule that moves the card to the In Progress column.
@@ -72,8 +72,8 @@ Complete everything described in the **Request** section. When finished, continu
 ## Step 6 — Close and mark Done
 
 ```bash
-"$GH" issue comment NUMBER --body "Done. SUMMARY OF WHAT WAS BUILT" --repo SankaiAI/outcomeX
-"$GH" issue close NUMBER --repo SankaiAI/outcomeX
+"$GH" issue comment NUMBER --body "Done. SUMMARY OF WHAT WAS BUILT" --repo SankaiAI/Bidtopus
+"$GH" issue close NUMBER --repo SankaiAI/Bidtopus
 ```
 
 Closing the issue triggers the GitHub Projects automation rule that moves the card to the Done column.

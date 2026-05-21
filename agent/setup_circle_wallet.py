@@ -55,7 +55,7 @@ resp = httpx.post(
     headers=headers,
     json={
         "idempotencyKey": str(uuid.uuid4()),
-        "name": "OutcomeX Agent",
+        "name": "Bidtopus Agent",
         "entitySecretCiphertext": entity_secret_ciphertext,
     },
 )

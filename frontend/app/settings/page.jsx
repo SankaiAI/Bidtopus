@@ -134,7 +134,7 @@ export default function SettingsPage() {
   const [dataSaved, setDataSaved] = React.useState(false)
 
   React.useEffect(() => {
-    const stored = localStorage.getItem('outcomex-approval-mode')
+    const stored = localStorage.getItem('bidtopus-approval-mode')
     if (stored === 'auto' || stored === 'manual') setApprovalMode(stored)
   }, [])
 
@@ -160,7 +160,7 @@ export default function SettingsPage() {
 
   function handleApprovalChange(mode) {
     setApprovalMode(mode)
-    localStorage.setItem('outcomex-approval-mode', mode)
+    localStorage.setItem('bidtopus-approval-mode', mode)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
@@ -182,14 +182,14 @@ export default function SettingsPage() {
         }
       )
       if (res.status === 404) {
-        console.warn('[OutcomeX] PATCH /api/users/me/preferences not yet implemented — storing data_sharing_opt_in in localStorage')
+        console.warn('[Bidtopus] PATCH /api/users/me/preferences not yet implemented — storing data_sharing_opt_in in localStorage')
         localStorage.setItem('data_sharing_opt_in', String(next))
       } else if (!res.ok) {
         throw new Error(`HTTP ${res.status}`)
       }
     } catch (err) {
       if (!err.message?.startsWith('HTTP')) {
-        console.warn('[OutcomeX] data sharing preference fetch failed — storing in localStorage', err)
+        console.warn('[Bidtopus] data sharing preference fetch failed — storing in localStorage', err)
         localStorage.setItem('data_sharing_opt_in', String(next))
       }
     }
@@ -215,7 +215,7 @@ export default function SettingsPage() {
           {/* Page header */}
           <div style={{ marginBottom: '32px' }}>
             <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, fontFamily: font, margin: '0 0 6px', letterSpacing: '-0.02em' }}>Settings</h1>
-            <p style={{ fontSize: '13px', color: C.muted, fontFamily: font, margin: 0 }}>Configure how OutcomeX and your AI agent behave.</p>
+            <p style={{ fontSize: '13px', color: C.muted, fontFamily: font, margin: 0 }}>Configure how Bidtopus and your AI agent behave.</p>
           </div>
 
           {/* Agent execution section */}
@@ -306,7 +306,7 @@ export default function SettingsPage() {
           {/* Data & Privacy section */}
           <SettingsSection
             title="Data & Privacy"
-            description="Help improve OutcomeX for all merchants."
+            description="Help improve Bidtopus for all merchants."
           >
             <SettingsRow
               label="Allow anonymized outcome data to improve underwriting accuracy"
@@ -346,7 +346,7 @@ export default function SettingsPage() {
 
           {/* Footer */}
           <div style={{ paddingTop: '8px', borderTop: `1px solid ${C.borderS}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', color: C.faint, fontFamily: font }}>OutcomeX · Hackathon MVP</span>
+            <span style={{ fontSize: '11px', color: C.faint, fontFamily: font }}>Bidtopus · Hackathon MVP</span>
             <Link href="/contracts" style={{ fontSize: '12px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: font }}>← Back to contracts</Link>
           </div>
 

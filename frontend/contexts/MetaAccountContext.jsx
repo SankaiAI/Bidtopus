@@ -23,7 +23,7 @@ import { createApiClient } from '@/lib/api'
  *                  label (nullable string), created_at }
  */
 
-const STORAGE_KEY = 'outcomex-active-account-id'
+const STORAGE_KEY = 'bidtopus-active-account-id'
 
 const MetaAccountContext = createContext({
   accounts: [],

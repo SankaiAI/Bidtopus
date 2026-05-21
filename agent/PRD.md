@@ -1,11 +1,11 @@
-# OutcomeX — Agent Sub-PRD
+# Bidtopus — Agent Sub-PRD
 **Version 1.1 | Hackathon MVP**
 
 ---
 
 ## 1. Purpose
 
-The agent is the core of OutcomeX. It is an autonomous economic agent: it evaluates risk, makes decisions, executes marketing actions, monitors outcomes, and triggers financial settlement. It is not a chatbot or a text generator — it is an economic actor that shares outcome risk with the merchant and only earns when it delivers.
+The agent is the core of Bidtopus. It is an autonomous economic agent: it evaluates risk, makes decisions, executes marketing actions, monitors outcomes, and triggers financial settlement. It is not a chatbot or a text generator — it is an economic actor that shares outcome risk with the merchant and only earns when it delivers.
 
 The agent combines two complementary systems:
 - **ML models** — quantitative risk estimation (underwriting, live forecasting)
@@ -355,7 +355,7 @@ Merchant-controlled text (`campaign_goal`, `account_context`, chat messages) mus
 ```python
 # WRONG — merchant data interpolated into system prompt
 response = claude.messages.create(
-    system=f"You are the OutcomeX agent. Campaign goal: {contract.campaign_goal}",
+    system=f"You are the Bidtopus agent. Campaign goal: {contract.campaign_goal}",
     ...
 )
 

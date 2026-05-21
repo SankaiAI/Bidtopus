@@ -27,7 +27,7 @@ async function main() {
   const network = await hre.ethers.provider.getNetwork();
   const [deployer] = await hre.ethers.getSigners();
 
-  console.log("\nDeploying OutcomeX PerformanceEscrow contract");
+  console.log("\nDeploying Bidtopus PerformanceEscrow contract");
   console.log("=============================================");
   console.log(`  USDC token:  ${USDC_TOKEN_ADDRESS}`);
   console.log(`  Settler:     ${SETTLER_ADDRESS}`);

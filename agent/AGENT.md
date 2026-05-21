@@ -1,4 +1,4 @@
-# AGENT.md — OutcomeX Agent Knowledge Base
+# AGENT.md — Bidtopus Agent Knowledge Base
 
 This file is the table of contents (~100 lines). Read it first before touching any component file.
 For deep context on any topic, follow the link to the relevant docs/ file.
@@ -7,7 +7,7 @@ For deep context on any topic, follow the link to the relevant docs/ file.
 
 ## What This Agent Does
 
-OutcomeX agent is an autonomous economic agent that:
+Bidtopus agent is an autonomous economic agent that:
 1. Underwrites performance contracts (ML model)
 2. Negotiates terms with merchants (LLM + structured JSON)
 3. Executes Meta Ads strategies (adapter, merchant-approved)

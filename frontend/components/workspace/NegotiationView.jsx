@@ -65,7 +65,7 @@ function SetupCard({ icon, title, description, onClick, href }) {
 function WelcomeScreen({ onQuickAction, onStart }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%', maxWidth: '580px' }}>
-      <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 6px', color: C.text, fontFamily: font }}>Hi, I&apos;m the OutcomeX Agent</h2>
+      <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 6px', color: C.text, fontFamily: font }}>Hi, I&apos;m the Bidtopus Agent</h2>
       <p style={{ fontSize: '13px', color: C.muted, lineHeight: 1.7, margin: '0 0 24px', maxWidth: '360px', fontFamily: font }}>I underwrite performance contracts and run Meta Ads campaigns. Tell me your ROAS target — I&apos;ll evaluate the deal.</p>
       <div className="agent-setup-cards">
         <SetupCard onClick={onStart} title="New Contract" description="Set ROAS target, fee & time window" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>} />
@@ -286,7 +286,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
               <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
                 <button
                   onClick={() => handleSend('confirm')}
-                  style={{ background: C.indigo, color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, fontFamily: font, cursor: 'pointer', boxShadow: '0 2px 8px rgba(99,102,241,0.25)', transition: 'opacity 0.15s' }}
+                  style={{ background: C.indigo, color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, fontFamily: font, cursor: 'pointer', boxShadow: '0 2px 8px rgba(59,130,246,0.25)', transition: 'opacity 0.15s' }}
                   onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
                   onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
                 >

@@ -24,7 +24,7 @@ If auth fails: **stop and tell the user** "gh auth failed — please run `gh aut
 
 Extract 3–5 keywords from your description and search:
 ```bash
-"$GH" issue list --repo SankaiAI/outcomeX --state open --search "YOUR KEYWORDS"
+"$GH" issue list --repo SankaiAI/Bidtopus --state open --search "YOUR KEYWORDS"
 ```
 
 Read every result title.
@@ -54,7 +54,7 @@ Label map:
 "$GH" issue create \
   --title "[contracts → TARGET] SHORT DESCRIPTION" \
   --label "LABEL" \
-  --repo SankaiAI/outcomeX \
+  --repo SankaiAI/Bidtopus \
   --body "**From:** contracts
 **To:** TARGET
 **Blocking:** WHAT YOU CANNOT BUILD
@@ -73,7 +73,7 @@ WHAT THE RESPONSE MUST INCLUDE"
 "$GH" issue create \
   --title "[contracts → human] SHORT DESCRIPTION" \
   --label "needs: human" \
-  --repo SankaiAI/outcomeX \
+  --repo SankaiAI/Bidtopus \
   --body "**From:** contracts
 **Type:** spec-conflict OR prd-change-request
 **Blocking:** WHAT YOU CANNOT BUILD

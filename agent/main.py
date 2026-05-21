@@ -1,4 +1,4 @@
-"""OutcomeX Agent — FastAPI entry point.
+"""Bidtopus Agent — FastAPI entry point.
 
 Start locally (run from inside agent/):
     uvicorn main:app --reload --port 8001
@@ -66,7 +66,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="OutcomeX Agent",
+    title="Bidtopus Agent",
     description="Autonomous economic agent for Meta Ads performance contracts.",
     version="1.0.0",
     lifespan=lifespan,

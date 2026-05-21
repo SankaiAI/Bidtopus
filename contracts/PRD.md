@@ -1,13 +1,13 @@
-# OutcomeX — Contracts Sub-PRD
+# Bidtopus — Contracts Sub-PRD
 **Version 1.1 | Hackathon MVP**
 
 ---
 
 ## 1. Purpose
 
-The contracts folder contains the on-chain smart contract that makes OutcomeX trustless. Without it, the merchant and agent would have to trust each other — the merchant that the agent will refund if it fails, the agent that the merchant will pay if it succeeds. The escrow contract removes that trust requirement entirely: funds are locked on-chain, and the settlement rules are immutable and publicly verifiable.
+The contracts folder contains the on-chain smart contract that makes Bidtopus trustless. Without it, the merchant and agent would have to trust each other — the merchant that the agent will refund if it fails, the agent that the merchant will pay if it succeeds. The escrow contract removes that trust requirement entirely: funds are locked on-chain, and the settlement rules are immutable and publicly verifiable.
 
-This is what turns OutcomeX from a software product into a true economic protocol.
+This is what turns Bidtopus from a software product into a true economic protocol.
 
 ---
 
@@ -15,7 +15,7 @@ This is what turns OutcomeX from a software product into a true economic protoco
 
 Arc is **Circle's purpose-built L1 blockchain** — not a generic EVM testnet. It is designed specifically for stablecoin-native applications and autonomous agents.
 
-Key properties that directly benefit OutcomeX:
+Key properties that directly benefit Bidtopus:
 - **Sub-second deterministic finality** — escrow funding and settlement confirm instantly
 - **~$0.01 transaction fees paid in USDC** — not volatile gas tokens; fees are predictable and denominated in the same asset as the escrow
 - **Paymaster support** — transaction fees can be sponsored in USDC so merchants never need to hold a native gas token
@@ -48,13 +48,13 @@ Reference docs:
 The hackathon host provides an Arc escrow reference implementation:
 **Arc escrow — AI-powered work validation and USDC settlement**
 
-This is available in the Arc sample apps index and is directly relevant to OutcomeX. Start by reviewing and forking this reference implementation rather than building from scratch. It covers the core escrow pattern (lock → validate → release/refund) that OutcomeX needs.
+This is available in the Arc sample apps index and is directly relevant to Bidtopus. Start by reviewing and forking this reference implementation rather than building from scratch. It covers the core escrow pattern (lock → validate → release/refund) that Bidtopus needs.
 
 ---
 
 ## 5. The Role of USDC and Arc
 
-| Component | Role in OutcomeX |
+| Component | Role in Bidtopus |
 |---|---|
 | USDC | The escrowed success fee and settlement asset |
 | Arc | Circle's purpose-built L1 — the settlement environment for conditional payout or refund |

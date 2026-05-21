@@ -11,7 +11,7 @@
  */
 import { awaitingOfferAcceptance, canFund } from './contractStatus'
 
-const STORAGE_KEY = 'outcomex-last-viewed'
+const STORAGE_KEY = 'bidtopus-last-viewed'
 
 function readMap() {
   if (typeof window === 'undefined') return {}

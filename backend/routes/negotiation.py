@@ -116,7 +116,7 @@ async def _generate_title(user_message: str) -> str:
 # ── Prompts & tools ───────────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = (
-    "You are the OutcomeX performance-marketing agent. Help the merchant negotiate "
+    "You are the Bidtopus performance-marketing agent. Help the merchant negotiate "
     "the terms of a new performance contract.\n\n"
     "Negotiate these fields:\n"
     "- target_roas: ROAS threshold (e.g. 2.5 = 2.5× return on ad spend)\n"

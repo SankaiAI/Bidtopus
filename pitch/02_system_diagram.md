@@ -1,4 +1,4 @@
-# OutcomeX — System Diagram & Architecture
+# Bidtopus — System Diagram & Architecture
 
 ---
 
@@ -8,7 +8,7 @@
 flowchart LR
     M["🏪 Merchant\n'Hit ROAS 2.0x\nin 7 days or I don't pay'"]
 
-    subgraph Agent["OutcomeX Agent"]
+    subgraph Agent["Bidtopus Agent"]
         direction LR
         ML["ML\nUnderwrites risk\n→ 68% prob of success"]
         LLM1["LLM\nNegotiates terms\n→ 'Accept at 2.0x ROAS'"]
@@ -28,58 +28,58 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     actor Merchant
-    participant OutcomeX
+    participant Bidtopus
     participant Arc/Meta
 
-    Note over Merchant,OutcomeX: 1. NEGOTIATE
-    Merchant->>OutcomeX: "Hit ROAS 2.0x in 7 days"\n(Meta Ads account pre-connected via sidebar)
-    OutcomeX->>OutcomeX: Claude negotiates & locks terms
-    Note right of OutcomeX: Contract created
+    Note over Merchant,Bidtopus: 1. NEGOTIATE
+    Merchant->>Bidtopus: "Hit ROAS 2.0x in 7 days"\n(Meta Ads account pre-connected via sidebar)
+    Bidtopus->>Bidtopus: Claude negotiates & locks terms
+    Note right of Bidtopus: Contract created
 
-    Note over Merchant,OutcomeX: 2. UNDERWRITE
-    Merchant->>OutcomeX: Click "Underwrite"
-    OutcomeX->>OutcomeX: ML evaluates historical ROAS,<br/>spend, target, time window, AOV
-    Note right of OutcomeX: prob: 0.68 · risk: medium · rec: accept
+    Note over Merchant,Bidtopus: 2. UNDERWRITE
+    Merchant->>Bidtopus: Click "Underwrite"
+    Bidtopus->>Bidtopus: ML evaluates historical ROAS,<br/>spend, target, time window, AOV
+    Note right of Bidtopus: prob: 0.68 · risk: medium · rec: accept
 
-    Note over Merchant,OutcomeX: 3. AGENT OFFER
-    OutcomeX-->>Merchant: accept / counteroffer / reject<br/>+ plain-language explanation
+    Note over Merchant,Bidtopus: 3. AGENT OFFER
+    Bidtopus-->>Merchant: accept / counteroffer / reject<br/>+ plain-language explanation
 
     Note over Merchant,Arc/Meta: 4. ACCEPT + FUND ESCROW
     Merchant->>Arc/Meta: Accept offer (Circle App Kit)
     Arc/Meta->>Arc/Meta: USDC locked on Arc
     Note right of Arc/Meta: fund tx_hash [on-chain ✓]
 
-    Note over Merchant,OutcomeX: 5. STRATEGY GENERATION
-    OutcomeX->>Arc/Meta: Meta Ads MCP → read existing campaigns,<br/>pixel events, audience performance
-    Arc/Meta-->>OutcomeX: Real account data
-    OutcomeX-->>Merchant: 4 action cards — campaign · audience · budget · creative<br/>(each grounded in your actual account data)
-    Note over Merchant,OutcomeX: 6. MERCHANT APPROVES (per-action)
-    Merchant->>OutcomeX: Approve / decline each card independently
-    Note right of OutcomeX: All approved → Active
+    Note over Merchant,Bidtopus: 5. STRATEGY GENERATION
+    Bidtopus->>Arc/Meta: Meta Ads MCP → read existing campaigns,<br/>pixel events, audience performance
+    Arc/Meta-->>Bidtopus: Real account data
+    Bidtopus-->>Merchant: 4 action cards — campaign · audience · budget · creative<br/>(each grounded in your actual account data)
+    Note over Merchant,Bidtopus: 6. MERCHANT APPROVES (per-action)
+    Merchant->>Bidtopus: Approve / decline each card independently
+    Note right of Bidtopus: All approved → Active
 
-    Note over OutcomeX,Arc/Meta: 7. EXECUTE ADS
-    OutcomeX->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_adset · create_ad_creative · create_ad
-    Arc/Meta-->>OutcomeX: Campaign live · execution receipts stored<br/>(campaign_id · ad_set_ids · creative_ids)
+    Note over Bidtopus,Arc/Meta: 7. EXECUTE ADS
+    Bidtopus->>Arc/Meta: Meta Ads MCP (mcp.facebook.com/ads)<br/>create_campaign · create_adset · create_ad_creative · create_ad
+    Arc/Meta-->>Bidtopus: Campaign live · execution receipts stored<br/>(campaign_id · ad_set_ids · creative_ids)
 
     Note over Merchant,Arc/Meta: 8. LIVE MONITORING (every 24h)
     loop Every 24h while Active
-        OutcomeX->>Arc/Meta: Meta Ads MCP get_adset_insights → ad-set-level ROAS,<br/>spend, CTR, conversion events
-        Arc/Meta-->>OutcomeX: Real account performance data
-        OutcomeX->>OutcomeX: ML forecast: predicted ROAS, on_track / at_risk<br/>LLM decision: which ad_sets to scale · pause · swap
-        OutcomeX-->>Merchant: Daily update + suggested actions
+        Bidtopus->>Arc/Meta: Meta Ads MCP get_adset_insights → ad-set-level ROAS,<br/>spend, CTR, conversion events
+        Arc/Meta-->>Bidtopus: Real account performance data
+        Bidtopus->>Bidtopus: ML forecast: predicted ROAS, on_track / at_risk<br/>LLM decision: which ad_sets to scale · pause · swap
+        Bidtopus-->>Merchant: Daily update + suggested actions
         alt Manual approval mode
-            OutcomeX-->>Merchant: Approval cards per action (expires in 23h)
-            Merchant->>OutcomeX: Approve / decline each action
-            OutcomeX->>Arc/Meta: Execute only approved actions via MCP
+            Bidtopus-->>Merchant: Approval cards per action (expires in 23h)
+            Merchant->>Bidtopus: Approve / decline each action
+            Bidtopus->>Arc/Meta: Execute only approved actions via MCP
         else Auto mode
-            OutcomeX->>Arc/Meta: Execute all decisions immediately via MCP
+            Bidtopus->>Arc/Meta: Execute all decisions immediately via MCP
         end
-        Note right of OutcomeX: Unanswered cards expire at next tick
+        Note right of Bidtopus: Unanswered cards expire at next tick
     end
 
-    Note over OutcomeX,Arc/Meta: 9. RESOLUTION & SETTLEMENT
-    OutcomeX->>OutcomeX: spend ≥ min AND roas ≥ target AND window elapsed
-    OutcomeX->>Arc/Meta: Circle Wallets signs release() or refund()
+    Note over Bidtopus,Arc/Meta: 9. RESOLUTION & SETTLEMENT
+    Bidtopus->>Bidtopus: spend ≥ min AND roas ≥ target AND window elapsed
+    Bidtopus->>Arc/Meta: Circle Wallets signs release() or refund()
     Note right of Arc/Meta: settlement tx_hash [on-chain ✓]
 ```
 
@@ -87,7 +87,7 @@ sequenceDiagram
 
 ## The 5 Autonomous Decisions
 
-These are the five points where OutcomeX *decides*, not just *executes*:
+These are the five points where Bidtopus *decides*, not just *executes*:
 
 ```mermaid
 flowchart TD
@@ -112,7 +112,7 @@ flowchart TD
 
 ## Circle Stack
 
-| Circle Product | How OutcomeX Uses It | Lifecycle Step |
+| Circle Product | How Bidtopus Uses It | Lifecycle Step |
 |---|---|---|
 | **Arc Escrow** | USDC locked at contract signing. Released on success, refunded on failure. Code enforces the guarantee — not the agent's word. | Step 4: Fund · Step 9: Settle |
 | **Circle Wallets** | Agent's receiving wallet. Funded by Arc escrow on success. Automated HSM-backed key management — agent never touches raw keys. | Step 9: Success path |
@@ -229,6 +229,6 @@ stateDiagram-v2
 | Uniscrow | ✗ | ✓ | ✓ | ✗ |
 | Leadzai | Partial | ✗ | ✓ | ✗ |
 | Madgicx / Ryze | ✓ | ✗ | ✗ | ✗ |
-| **OutcomeX** | **✓** | **✓** | **✓** | **✓** |
+| **Bidtopus** | **✓** | **✓** | **✓** | **✓** |
 
 No existing platform sits at this intersection.

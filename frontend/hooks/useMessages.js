@@ -93,7 +93,7 @@ export function useMessages(contractId) {
           if (!cancelled) setMessages(data.map(mapMessage))
         }
       } catch (err) {
-        console.warn('[OutcomeX] failed to load message history', err)
+        console.warn('[Bidtopus] failed to load message history', err)
       }
 
       if (cancelled) return
@@ -184,7 +184,7 @@ export function useMessages(contractId) {
         }
       } catch (err) {
         if (!cancelled) {
-          console.warn('[OutcomeX] SSE /events disconnected', err)
+          console.warn('[Bidtopus] SSE /events disconnected', err)
           setIsConnected(false)
         }
       }
@@ -353,7 +353,7 @@ export function useMessages(contractId) {
         setIsStreaming(false)
         return
       }
-      console.error('[OutcomeX] chat stream error', err)
+      console.error('[Bidtopus] chat stream error', err)
       setIsThinking(false)
       appendMessage({
         role: 'agent',

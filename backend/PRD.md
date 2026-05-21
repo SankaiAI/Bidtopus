@@ -1,11 +1,11 @@
-# OutcomeX — Backend Sub-PRD
+# Bidtopus — Backend Sub-PRD
 **Version 1.1 | Hackathon MVP**
 
 ---
 
 ## 1. Purpose
 
-The backend is the API and data layer of OutcomeX. It sits between the frontend and the agent. Its job is to expose a clean REST API to the frontend, persist all contract lifecycle state to the database, route work to the agent at the right moments, and ensure every state transition is logged and auditable.
+The backend is the API and data layer of Bidtopus. It sits between the frontend and the agent. Its job is to expose a clean REST API to the frontend, persist all contract lifecycle state to the database, route work to the agent at the right moments, and ensure every state transition is logged and auditable.
 
 The backend contains no business logic of its own. It does not decide whether to accept a contract, generate a strategy, or settle a payment — those belong to the agent. The backend routes, persists, and exposes.
 
@@ -367,7 +367,7 @@ from eth_account.messages import encode_defunct
 
 @router.post("/users/me/wallet")
 def connect_wallet(body: WalletConnectRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    msg       = encode_defunct(text=f"Connect wallet to OutcomeX {current_user.clerk_user_id}")
+    msg       = encode_defunct(text=f"Connect wallet to Bidtopus {current_user.clerk_user_id}")
     recovered = Account.recover_message(msg, signature=body.signature)
     if recovered.lower() != body.wallet_address.lower():
         raise HTTPException(400, "Wallet signature verification failed")

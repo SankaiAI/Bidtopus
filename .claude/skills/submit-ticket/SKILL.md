@@ -24,7 +24,7 @@ If auth fails: **stop and tell the user** "gh auth failed — please run `gh aut
 
 Extract 3–5 keywords from your description and search:
 ```bash
-"$GH" issue list --repo SankaiAI/outcomeX --state open --search "YOUR KEYWORDS"
+"$GH" issue list --repo SankaiAI/Bidtopus --state open --search "YOUR KEYWORDS"
 ```
 
 Read every result title.
@@ -75,7 +75,7 @@ Label map:
 "$GH" issue create \
   --title "[human → TARGET] SHORT DESCRIPTION" \
   --label "LABEL" \
-  --repo SankaiAI/outcomeX \
+  --repo SankaiAI/Bidtopus \
   --body-file "$BODY_FILE"
 
 rm "$BODY_FILE"

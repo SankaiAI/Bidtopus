@@ -38,7 +38,7 @@ def _build_message(*, address: str, nonce: str, domain: str = SIWE_DOMAIN,
         f"{domain} wants you to sign in with your Ethereum account:\n"
         f"{address}\n"
         f"\n"
-        f"Connect wallet to OutcomeX.\n"
+        f"Connect wallet to Bidtopus.\n"
         f"\n"
         f"URI: https://{domain}\n"
         f"Version: 1\n"

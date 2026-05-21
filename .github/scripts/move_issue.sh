@@ -1,12 +1,12 @@
 #!/bin/bash
 # Usage: bash .github/scripts/move_issue.sh <issue-number> <"In Progress"|"Done">
-# Moves a GitHub issue to the specified column on the OutcomeX project board.
+# Moves a GitHub issue to the specified column on the Bidtopus project board.
 # Requires GH_TOKEN with project scope (PROJECT_TOKEN).
 
 ISSUE_NUMBER=$1
 STATUS=$2
 OWNER="SankaiAI"
-REPO="outcomeX"
+REPO="Bidtopus"
 PROJECT_NUMBER=2
 
 if [ -z "$ISSUE_NUMBER" ] || [ -z "$STATUS" ]; then

@@ -48,4 +48,4 @@ export const USDC_ADDRESS   = process.env.NEXT_PUBLIC_USDC_ADDRESS
 export const AGENT_ADDRESS  = process.env.NEXT_PUBLIC_AGENT_WALLET_ADDRESS
 
 export const WALLET_SIGN_MESSAGE = (clerkUserId) =>
-  `Connect wallet to OutcomeX ${clerkUserId}`
+  `Connect wallet to Bidtopus ${clerkUserId}`

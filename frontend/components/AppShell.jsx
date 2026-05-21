@@ -32,7 +32,7 @@ export default function AppShell({ children }) {
   }, [pathname])
 
   useEffect(() => {
-    const saved = localStorage.getItem('outcomex-theme')
+    const saved = localStorage.getItem('bidtopus-theme')
     if (saved === 'dark') {
       setIsDark(true)
       document.documentElement.dataset.theme = 'dark'
@@ -43,7 +43,7 @@ export default function AppShell({ children }) {
     setIsDark(d => {
       const next = !d
       document.documentElement.dataset.theme = next ? 'dark' : ''
-      localStorage.setItem('outcomex-theme', next ? 'dark' : 'light')
+      localStorage.setItem('bidtopus-theme', next ? 'dark' : 'light')
       return next
     })
   }, [])

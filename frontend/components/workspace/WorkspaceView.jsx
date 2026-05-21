@@ -622,7 +622,7 @@ export function WorkspaceRightPanel({ contract, id, refetchContract }) {
     <>
       {/* Mobile floating trigger */}
       {isMobile && !showPanel && (
-        <button onClick={() => setShowPanel(true)} style={{ position: 'fixed', bottom: '100px', right: '16px', zIndex: 40, background: C.indigo, color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, fontFamily: font, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 12px rgba(99,102,241,0.3)' }}>
+        <button onClick={() => setShowPanel(true)} style={{ position: 'fixed', bottom: '100px', right: '16px', zIndex: 40, background: C.indigo, color: '#fff', border: 'none', borderRadius: '20px', padding: '8px 14px', fontSize: '12px', fontWeight: 700, fontFamily: font, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 12px rgba(59,130,246,0.3)' }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
           Details
         </button>
@@ -731,7 +731,7 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
   }, [])
 
   React.useEffect(() => {
-    const saved = localStorage.getItem('outcomex-approval-mode')
+    const saved = localStorage.getItem('bidtopus-approval-mode')
     if (saved === 'auto' || saved === 'manual') setApprovalMode(saved)
   }, [])
 

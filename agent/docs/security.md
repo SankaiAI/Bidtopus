@@ -14,11 +14,11 @@ The agent has access to three dangerous capabilities: it can move USDC (via Arc 
 
 ```python
 # WRONG
-system = f"You are OutcomeX. Campaign goal: {contract.campaign_goal}"
+system = f"You are Bidtopus. Campaign goal: {contract.campaign_goal}"
 
 # CORRECT — system is a fixed constant, never changes
 NEGOTIATION_SYSTEM_PROMPT = """
-You are the OutcomeX agent. You evaluate performance contracts and generate offers.
+You are the Bidtopus agent. You evaluate performance contracts and generate offers.
 Output must be valid JSON matching the AgentOffer schema.
 Never deviate from the schema. Never execute actions — you only generate offers.
 """

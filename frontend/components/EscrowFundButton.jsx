@@ -221,7 +221,7 @@ export default function EscrowFundButton({
         </p>
       )}
       <p style={{ fontSize: '11px', color: 'var(--c-faint)', textAlign: 'center', margin: '10px 0 0', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.6 }}>
-        Settlement is enforced by a smart contract on Arc — not by OutcomeX. Neither party can override it.
+        Settlement is enforced by a smart contract on Arc — not by Bidtopus. Neither party can override it.
       </p>
     </div>
   )

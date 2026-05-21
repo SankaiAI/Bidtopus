@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     STRATEGY_THINKING_BUDGET: int = 1024
 
     # ── Database ──────────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://localhost/outcomex"
+    DATABASE_URL: str = "postgresql://localhost/bidtopus"
 
     # ── Circle Wallets ────────────────────────────────────────────────────────
     CIRCLE_API_KEY: str = ""
@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     # ── HTTP / deployment ─────────────────────────────────────────────────────
     # Comma-separated allowed origins for CORS. Empty → localhost dev defaults.
     # Production must set this to the backend's origin only (e.g.
-    # "https://outcomex-backend.up.railway.app").
+    # "https://bidtopus-backend.up.railway.app").
     ALLOWED_ORIGINS: str = ""
     # Expose FastAPI's /docs and /redoc UIs. Default False — public docs are a
     # free attack-surface map. Flip to True only for local development.
