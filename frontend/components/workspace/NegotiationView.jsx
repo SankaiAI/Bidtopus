@@ -65,10 +65,7 @@ function SetupCard({ icon, title, description, onClick, href }) {
 function WelcomeScreen({ onQuickAction, onStart }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%', maxWidth: '580px' }}>
-      <div style={{ width: '52px', height: '52px', borderRadius: '50%', background: C.indigoBg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill={C.indigo} /><circle cx="12" cy="12" r="5" stroke="white" strokeWidth="1.5" fill="none" /><circle cx="12" cy="12" r="1.5" fill="white" /></svg>
-      </div>
-      <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', margin: '14px 0 6px', color: C.text, fontFamily: font }}>Hi, I&apos;m the OutcomeX Agent</h2>
+      <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 6px', color: C.text, fontFamily: font }}>Hi, I&apos;m the OutcomeX Agent</h2>
       <p style={{ fontSize: '13px', color: C.muted, lineHeight: 1.7, margin: '0 0 24px', maxWidth: '360px', fontFamily: font }}>I underwrite performance contracts and run Meta Ads campaigns. Tell me your ROAS target — I&apos;ll evaluate the deal.</p>
       <div className="agent-setup-cards">
         <SetupCard onClick={onStart} title="New Contract" description="Set ROAS target, fee & time window" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>} />

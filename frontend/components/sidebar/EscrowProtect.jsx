@@ -32,7 +32,7 @@ export default function EscrowProtect({ collapsed, walletConnected, isConnecting
   }
 
   return (
-    <div style={{ padding: '10px 12px', borderTop: '1px solid var(--c-sidebar-border-s)' }}>
+    <div style={{ padding: '10px 12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '9px', padding: '9px 11px', borderRadius: '9px', background: active ? 'var(--c-green-bg)' : 'var(--c-bg)' }}>
         <span style={{ color: active ? GREEN : 'var(--c-sidebar-faint)', display: 'flex' }}><Icon.Shield /></span>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '5px', minWidth: 0 }}>

@@ -6,6 +6,7 @@ import { createApiClient } from '@/lib/api'
 import { isUUID } from '@/hooks/useNegotiationStream'
 import NegotiationView from '@/components/workspace/NegotiationView'
 import WorkspaceView, { WorkspaceRightPanel } from '@/components/workspace/WorkspaceView'
+import { markViewed } from '@/lib/contractActivity'
 import { C } from '@/components/workspace/constants'
 
 function LoadingDots() {
@@ -58,6 +59,12 @@ export default function WorkspacePage() {
       })
       .catch(() => setIsCheckingStatus(false))
   }, [id, isLoaded, isSignedIn])
+
+  // Stamp the workspace as viewed so the sidebar/list pages can clear the
+  // unread indicator. Real UUIDs only — local ws_xxx drafts don't need it.
+  React.useEffect(() => {
+    if (isUUID(id)) markViewed(id)
+  }, [id])
 
   if (isCheckingStatus) return <LoadingDots />
 

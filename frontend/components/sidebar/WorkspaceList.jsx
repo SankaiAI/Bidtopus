@@ -8,6 +8,8 @@ import { getAllSessions, subscribeToSessions, deleteSession } from '@/lib/worksp
 import { createApiClient } from '@/lib/api'
 import { useMetaAccount } from '@/contexts/MetaAccountContext'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
+import { isUnread, requiresAction, getViewedMap, clearLastViewed } from '@/lib/contractActivity'
+import { SidebarRowSkeleton } from '@/components/Skeleton'
 import { Icon } from './icons'
 
 // 30s belt-and-suspenders interval. Focus refetch handles "switched tabs and
@@ -31,18 +33,10 @@ const WS_FILTERS = [
   { id: 'resolved', label: 'Resolved', match: s => isResolved(s.status) },
 ]
 
-const DOT_COLOR = {
-  created:         { bg: '#F59E0B', pulse: false },
-  underwriting:    { bg: ACCENT,    pulse: true  },
-  offered:         { bg: '#F59E0B', pulse: false },
-  pending_funding: { bg: '#F59E0B', pulse: false },
-  funded:          { bg: ACCENT,    pulse: true  },
-  active:          { bg: ACCENT,    pulse: true  },
-  negotiating:     { bg: '#F59E0B', pulse: false },
-  settled:         { bg: '#10B981', pulse: false },
-  success:         { bg: '#10B981', pulse: false },
-  failure:         { bg: '#a8a5b8', pulse: false },
-}
+// Visual treatment lives in the row render itself — no per-status color map.
+// We only paint a leading dot when the agent is waiting on the merchant
+// (amber, pulsing); status is communicated through subtitle text + the right-
+// side badge instead of through dot color.
 
 function relativeTime(iso) {
   const diff = Date.now() - new Date(iso).getTime()
@@ -90,6 +84,7 @@ export default function WorkspaceList() {
     if (!isSignedIn) {
       setContracts([])
       try { localStorage.removeItem('outcomex_contracts') } catch {}
+      clearLastViewed()
       return
     }
     try {
@@ -153,14 +148,14 @@ export default function WorkspaceList() {
     .filter(c => normalizeStatus(c.status) === 'negotiating')
     .map(c => {
       const local = sessionMap.get(c.id)
-      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New negotiation', status: 'negotiating', sub: relativeTime(c.created_at), href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at }
+      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New negotiation', status: 'negotiating', sub: relativeTime(c.created_at), href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at, _raw: c }
     })
 
   const serverFunded = contracts
     .filter(c => isAwaitingFund(c.status))
     .map(c => {
       const local = sessionMap.get(c.id)
-      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign', status: normalizeStatus(c.status), sub: 'Ready to fund', href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at }
+      return { id: c.id, title: userTitle(local) || c.title || c.campaign_goal || 'New Campaign', status: normalizeStatus(c.status), sub: 'Ready to fund', href: `/workspace/${c.id}`, hasContract: true, _ts: c.created_at, _raw: c }
     })
 
   const serverIds = new Set([...serverNegotiating, ...serverFunded].map(c => c.id))
@@ -257,19 +252,42 @@ export default function WorkspaceList() {
         )}
       </div>
 
-      <div className="ws-list-scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-      {filtered.length === 0 ? (
+      <div
+        className="ws-list-scroll"
+        style={{
+          flex: 1, overflowY: 'auto', minHeight: 0,
+          // Fade the first/last ~16px so scrolled items appear/disappear
+          // smoothly instead of hard-cutting at the container edges. Padding
+          // matches the fade so the first/last items sit past the fade when
+          // not scrolled (they're never cut off at rest), but still scroll
+          // through the fade naturally when the user scrolls.
+          paddingTop: '16px', paddingBottom: '16px',
+          maskImage: 'linear-gradient(to bottom, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
+        }}
+      >
+      {!isLoaded || (isSignedIn && filtered.length === 0 && contracts.length === 0 && sessions.length === 0) ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px 0' }}>
+          {Array.from({ length: 4 }, (_, i) => <SidebarRowSkeleton key={i} />)}
+        </div>
+      ) : filtered.length === 0 ? (
         <div style={{ padding: '8px 8px 12px' }}>
           <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
-            {!isLoaded ? 'Loading…' : !isSignedIn ? 'Sign in to see your workspaces.' : 'No contracts match'}
+            {!isSignedIn ? 'Sign in to see your workspaces.' : 'No contracts match'}
           </p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {filtered.map(item => {
-            const dot      = DOT_COLOR[item.status] || DOT_COLOR.failure
-            const isActive = item.id === activeContractId
-            const showBtn  = hoveredId === item.id || menuState?.item?.id === item.id
+          {(() => {
+            const viewedMap = getViewedMap()
+            return filtered.map(item => {
+            const isActive   = item.id === activeContractId
+            const showBtn    = hoveredId === item.id || menuState?.item?.id === item.id
+            const needsAction = requiresAction(item.status)
+            // Only real backend contracts can be "unread" (they have activity
+            // timestamps); local drafts + the demo MOCK_CONTRACTS are never
+            // unread, since there's no agent activity on them yet.
+            const unread     = !isActive && item._raw && isUnread(item._raw, viewedMap)
             return (
               <div
                 key={item.id}
@@ -281,9 +299,25 @@ export default function WorkspaceList() {
                   href={item.href}
                   style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', paddingRight: showBtn ? '28px' : '8px', borderRadius: '8px', textDecoration: 'none', transition: 'padding-right 0.1s' }}
                 >
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: dot.bg, flexShrink: 0, marginTop: '5px', animation: dot.pulse ? 'agentThinkPulse 1.5s ease-in-out infinite' : 'none' }} />
+                  {/* Leading slot — fixed width so titles align whether or not
+                      the action-dot is rendered. Pulse only when the agent is
+                      blocked on the merchant. */}
+                  <div style={{ width: '6px', flexShrink: 0, marginTop: '5px' }}>
+                    {needsAction && (
+                      <div
+                        title="Action required"
+                        style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--c-amber)', animation: 'agentThinkPulse 1.5s ease-in-out infinite' }}
+                      />
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '14px', fontWeight: 500, color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: unread || isActive ? 700 : 500,
+                      color: isActive || unread ? 'var(--c-indigo)' : 'var(--c-sidebar-text)',
+                      fontFamily: 'Plus Jakarta Sans, sans-serif',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
                       {item.title}
                     </div>
                     <div suppressHydrationWarning style={{ fontSize: '11px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: '1px' }}>
@@ -302,7 +336,8 @@ export default function WorkspaceList() {
                 )}
               </div>
             )
-          })}
+          })
+          })()}
         </div>
       )}
       </div>

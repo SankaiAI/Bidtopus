@@ -8,6 +8,8 @@ import EscrowFundButton from '@/components/EscrowFundButton'
 import { createApiClient } from '@/lib/api'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved, canFund } from '@/lib/contractStatus'
 import TxHashLink, { isValidTxHash, truncateHash } from '@/components/TxHashLink'
+import { SkeletonBlock } from '@/components/Skeleton'
+import { markViewed } from '@/lib/contractActivity'
 
 const C = {
   bg:      'var(--c-bg)',
@@ -120,8 +122,10 @@ function buildStages(c) {
       note: null },
     { label: 'Escrow funded',
       note: c.fundedAt ? `${c.fee} USDC locked on Arc · ${c.fundedAt}` : null },
-    { label: 'Campaign running',
-      note: c.status === 'active' && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
+    // Funded = merchant is still approving the strategy plan, campaign hasn't
+    // launched yet — show that instead of misleading "Campaign running".
+    { label: c.status === 'funded' ? 'Awaiting strategy approval' : 'Campaign running',
+      note: c.status === 'active' && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.status === 'funded' ? 'Approve actions in chat to launch' : c.fundedAt ? 'Completed' : null },
     { label: 'Outcome resolved',
       note: c.status === 'success' ? `ROAS ${c.finalRoas}× — target met ✓` : c.status === 'failure' ? `ROAS ${c.finalRoas}× — target missed` : null },
     { label: 'Settlement',
@@ -234,6 +238,13 @@ function LiveMonitor({ c }) {
   const updated = formatRelativeMin(perf?.timestamp)
 
   if (!hasSnapshot) {
+    const isAwaitingApproval = c.status === 'funded'
+    const headline = loading ? 'Checking for telemetry…'
+      : isAwaitingApproval ? 'Approve the actions to launch'
+      : 'Awaiting first telemetry from Meta Ads'
+    const subhead = isAwaitingApproval
+      ? 'The campaign starts once you approve the strategy actions in the chat. First telemetry then arrives in about 15 min.'
+      : 'Snapshots arrive about every 15 minutes once the campaign is live.'
     return (
       <Card>
         <CardHead>Live Performance</CardHead>
@@ -244,12 +255,8 @@ function LiveMonitor({ c }) {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <p style={{ fontSize: '14px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>
-            {loading ? 'Checking for telemetry…' : 'Awaiting first telemetry from Meta Ads'}
-          </p>
-          <p style={{ fontSize: '12px', color: C.muted, lineHeight: 1.6, margin: 0, fontFamily: font }}>
-            Snapshots arrive about every 15 minutes once the campaign is live.
-          </p>
+          <p style={{ fontSize: '14px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>{headline}</p>
+          <p style={{ fontSize: '12px', color: C.muted, lineHeight: 1.6, margin: 0, fontFamily: font }}>{subhead}</p>
         </div>
         <div style={{ padding: '10px 18px 14px', borderTop: `1px solid ${C.borderS}`, display: 'flex', gap: '24px' }}>
           <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Target <strong style={{ color: C.sub }}>ROAS ≥ {c.targetRoas}×</strong></span>
@@ -662,11 +669,47 @@ export default function ContractDetailPage() {
     return () => { cancelled = true }
   }, [id, isLoaded, isSignedIn, getToken])
 
+  // Visiting the detail page also counts as "viewed" — clears the unread
+  // indicator on the My Contracts list + sidebar.
+  React.useEffect(() => {
+    if (id && !ALL[id]) markViewed(id)
+  }, [id])
+
   const c = React.useMemo(() => ALL[id] ? ALL[id] : shapeContract(raw), [id, raw])
 
   if (loading) return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg }}>
-      <p style={{ fontSize: '13px', color: C.muted, fontFamily: font }}>Loading contract…</p>
+    <div style={{ flex: 1, overflowY: 'auto', background: C.bg }}>
+      <div style={{ maxWidth: '1080px', margin: '0 auto', padding: '24px 24px 48px' }}>
+        {/* Back link placeholder */}
+        <SkeletonBlock w="110px" h="12px" style={{ marginBottom: '20px' }} />
+        {/* Page header placeholder */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' }}>
+          <SkeletonBlock w="280px" h="22px" />
+          <SkeletonBlock w="60%" h="13px" />
+        </div>
+        {/* Two-column grid placeholder */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <SkeletonBlock w="160px" h="14px" />
+              <SkeletonBlock w="100%" h="60px" radius="8px" />
+              <SkeletonBlock w="100%" h="40px" radius="8px" />
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <SkeletonBlock w="80px" h="13px" />
+              {Array.from({ length: 5 }, (_, i) => <SkeletonBlock key={i} w={`${60 + ((i * 13) % 30)}%`} h="11px" />)}
+            </div>
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <SkeletonBlock w="100px" h="13px" />
+              <SkeletonBlock w="100%" h="11px" />
+              <SkeletonBlock w="100%" h="11px" />
+              <SkeletonBlock w="80%" h="11px" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 

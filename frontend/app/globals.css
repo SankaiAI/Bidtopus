@@ -111,6 +111,11 @@
 }
 .skeleton-pulse { animation: skeleton-pulse 1.5s ease-in-out infinite; }
 
+/* Markdown tables in the chat: strip the last row's bottom border so the
+   table doesn't read as having a closing line below the content. Inline
+   styles can't select :last-child, so this lives here. */
+.chat-md-table tr:last-child td { border-bottom: none; }
+
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes phSlideOut { from { transform: translateY(0);    opacity: 1; } to { transform: translateY(-110%); opacity: 0; } }
 @keyframes phSlideIn  { from { transform: translateY(110%); opacity: 0; } to { transform: translateY(0);    opacity: 1; } }

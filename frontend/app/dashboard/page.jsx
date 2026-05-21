@@ -1,11 +1,23 @@
 'use client'
-import React from 'react'
+import React, { useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
 import { createApiClient } from '@/lib/api'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
+import { generateSessionId } from '@/lib/workspaceSessions'
+import { CompactContractRowSkeleton, SkeletonBlock } from '@/components/Skeleton'
+
+// Match the sidebar "New Workspace" button: route to a freshly-generated local
+// session id so the draft survives a refresh and shows up in the sidebar list.
+function useStartNewWorkspace() {
+  const router = useRouter()
+  return useCallback(() => {
+    router.push(`/workspace/${generateSessionId()}`)
+  }, [router])
+}
 
 const C = {
   bg:        'var(--c-bg)',
@@ -95,11 +107,22 @@ function computeKpis(contracts) {
   ]
 }
 
-function KpiStrip({ contracts }) {
+// Static placeholder labels so the skeleton tiles look like the real strip
+// (same labels, just no values) instead of four anonymous rectangles.
+const KPI_PLACEHOLDER_LABELS = ['Active Contracts', 'USDC in Escrow', 'Settled (lifetime)', 'Total Contracts']
+
+function KpiStrip({ contracts, loading }) {
   const tiles = computeKpis(contracts)
+  const showSkeleton = loading && contracts.length === 0
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
-      {tiles.map(tile => (
+      {showSkeleton ? KPI_PLACEHOLDER_LABELS.map(label => (
+        <div key={label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+          <div style={{ fontSize: '11px', color: C.muted, fontWeight: 500, marginBottom: '8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
+          <SkeletonBlock w="60px" h="22px" style={{ marginBottom: '8px' }} />
+          <SkeletonBlock w="85%" h="10px" />
+        </div>
+      )) : tiles.map(tile => (
         <div key={tile.label} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '12px', padding: '14px 16px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -116,11 +139,12 @@ function KpiStrip({ contracts }) {
 
 // ─── AGENT CARD ───────────────────────────────────────────────────────────────
 function AgentCard() {
+  const startNewWorkspace = useStartNewWorkspace()
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: '12px', marginBottom: '12px' }}>
       {/* Underwriting Agent */}
-      <Link href="/workspace/new" style={{
-        display: 'flex', flexDirection: 'column', textDecoration: 'none',
+      <button onClick={startNewWorkspace} style={{
+        display: 'flex', flexDirection: 'column', textAlign: 'left', cursor: 'pointer', font: 'inherit',
         background: 'linear-gradient(135deg, #2e2a7a 0%, #1e1a5e 50%, #0f0d2e 100%)',
         border: '1px solid #3730a3',
         borderRadius: '16px', padding: '24px 28px',
@@ -145,7 +169,7 @@ function AgentCard() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </span>
         </div>
-      </Link>
+      </button>
 
       {/* Execution Agent */}
       <div style={{
@@ -218,6 +242,7 @@ function ContractRow({ contract }) {
 }
 
 function RecentContracts({ contracts, loading, error, isSignedIn }) {
+  const startNewWorkspace = useStartNewWorkspace()
   const rows = contracts.slice(0, 6)
   return (
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
@@ -236,17 +261,19 @@ function RecentContracts({ contracts, loading, error, isSignedIn }) {
 
       {error ? (
         <div style={{ padding: '24px', fontSize: '12px', color: C.muted, textAlign: 'center' }}>{error}</div>
+      ) : loading && rows.length === 0 ? (
+        <>
+          {Array.from({ length: 3 }, (_, i) => <CompactContractRowSkeleton key={i} />)}
+        </>
       ) : rows.length === 0 ? (
         <div style={{ padding: '36px 20px', textAlign: 'center' }}>
           <p style={{ fontSize: '13px', color: C.muted, margin: '0 0 4px', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-            {loading ? 'Loading contracts…'
-              : !isSignedIn ? 'Sign in to see your contracts.'
-              : 'No contracts on this account yet.'}
+            {!isSignedIn ? 'Sign in to see your contracts.' : 'No contracts on this account yet.'}
           </p>
-          {!loading && isSignedIn && (
-            <Link href="/workspace/new" style={{ fontSize: '12px', color: C.indigo, fontWeight: 600, textDecoration: 'none', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+          {isSignedIn && (
+            <button onClick={startNewWorkspace} style={{ fontSize: '12px', color: C.indigo, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
               Start a new contract →
-            </Link>
+            </button>
           )}
         </div>
       ) : rows.map(c => <ContractRow key={c.id} contract={c} />)}
@@ -314,6 +341,8 @@ export default function DashboardPage() {
     return () => { cancelled = true }
   }, [isLoaded, isSignedIn, getToken, activeAccount?.id])
 
+  const startNewWorkspace = useStartNewWorkspace()
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.bg }}>
 
@@ -336,10 +365,11 @@ export default function DashboardPage() {
               </h1>
               <p style={{ fontSize: '12px', color: C.muted, margin: 0 }}>Here's the status of your performance contracts.</p>
             </div>
-            <Link href="/workspace/new" style={{
+            <button onClick={startNewWorkspace} style={{
               display: 'inline-flex', alignItems: 'center', gap: '7px',
               background: C.indigo, color: '#fff', fontSize: '12px', fontWeight: 700,
-              padding: '9px 18px', borderRadius: '8px', textDecoration: 'none',
+              padding: '9px 18px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
               transition: 'opacity 0.15s', flexShrink: 0,
             }}
               onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
@@ -347,7 +377,7 @@ export default function DashboardPage() {
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               New contract
-            </Link>
+            </button>
           </div>
 
           {/* ── Agent cards ── */}
@@ -355,7 +385,7 @@ export default function DashboardPage() {
 
           {/* ── KPI strip ── */}
           <div style={{ marginBottom: '12px' }}>
-            <KpiStrip contracts={contracts} />
+            <KpiStrip contracts={contracts} loading={loading} />
           </div>
 
           {/* ── Bottom: Contracts + Quick Access ── */}

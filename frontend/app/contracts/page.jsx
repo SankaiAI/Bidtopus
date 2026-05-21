@@ -6,6 +6,8 @@ import { useOpenMobileSidebar } from '@/components/AppShell'
 import { useMetaAccount } from '@/contexts/MetaAccountContext'
 import { createApiClient } from '@/lib/api'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved } from '@/lib/contractStatus'
+import { isUnread, requiresAction, getViewedMap } from '@/lib/contractActivity'
+import { ContractRowSkeleton } from '@/components/Skeleton'
 
 const C = {
   bg:        'var(--c-bg)',
@@ -85,7 +87,7 @@ const chevron = (
 // Renders a single contract from the API response. Optional fields like
 // finalRoas / settledAt come from ContractResponse if backend ticket #71 ran;
 // otherwise we render the basics (terms + status) without crashing.
-function ContractListRow({ c }) {
+function ContractListRow({ c, viewedMap }) {
   const status = normalizeStatus(c.status)
   const name = c.title || c.campaign_goal || 'Contract'
   const target = c.target_roas
@@ -96,6 +98,8 @@ function ContractListRow({ c }) {
   const isSuccess = status === 'success'
   const isFailure = status === 'failure'
   const isPending = isAwaitingFund(status)
+  const needsAction = requiresAction(status)
+  const unread = isUnread(c, viewedMap)
 
   return (
     <Link href={`/contracts/${c.id}`} style={{ display: 'block', textDecoration: 'none' }}>
@@ -104,11 +108,21 @@ function ContractListRow({ c }) {
         onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--c-border-hover)'}
         onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--c-border)'}
       >
-        <Dot status={status} />
+        {/* Leading slot — fixed-width so titles align whether or not an action
+            dot renders. Amber pulse only when the agent is waiting on the
+            merchant; otherwise the slot is invisible. */}
+        <div style={{ width: '7px', flexShrink: 0 }}>
+          {needsAction && (
+            <div
+              title="Action required"
+              style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--c-amber)', animation: 'agentThinkPulse 1.5s ease-in-out infinite' }}
+            />
+          )}
+        </div>
 
         {/* Name + meta */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '3px' }}>
+          <div style={{ fontSize: '14px', fontWeight: unread ? 700 : 600, color: unread ? C.indigo : C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: '3px' }}>
             {name}
           </div>
           <div style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>
@@ -245,8 +259,8 @@ export default function ContractsPage() {
               <p style={{ fontSize: '14px', color: C.red, fontFamily: font }}>{error}</p>
             </div>
           ) : loading && filteredItems.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '60px 0' }}>
-              <p style={{ fontSize: '14px', color: C.faint, fontFamily: font }}>Loading…</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {Array.from({ length: 4 }, (_, i) => <ContractRowSkeleton key={i} />)}
             </div>
           ) : filteredItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
@@ -259,7 +273,10 @@ export default function ContractsPage() {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {filteredItems.map(c => <ContractListRow key={c.id} c={c} />)}
+              {(() => {
+                const viewedMap = getViewedMap()
+                return filteredItems.map(c => <ContractListRow key={c.id} c={c} viewedMap={viewedMap} />)
+              })()}
             </div>
           )}
 

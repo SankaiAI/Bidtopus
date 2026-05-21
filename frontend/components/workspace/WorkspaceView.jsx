@@ -31,10 +31,15 @@ const MD = {
   code:   ({ inline, children }) => inline
     ? <code style={{ background: C.surfaceAlt, padding: '1px 5px', borderRadius: '4px', fontSize: '12px', fontFamily: 'monospace' }}>{children}</code>
     : <pre style={{ background: C.surfaceAlt, padding: '10px 12px', borderRadius: '8px', overflowX: 'auto', fontSize: '12px', margin: '6px 0' }}><code>{children}</code></pre>,
-  table:  ({ children }) => <div style={{ overflowX: 'auto', margin: '8px 0' }}><table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>{children}</table></div>,
-  thead:  ({ children }) => <thead style={{ background: C.surfaceAlt }}>{children}</thead>,
+  // Table: no thead background (was creating a perceived top edge), no
+  // bottom border on the last row (a CSS rule in globals.css strips it).
+  // Internal separators kept: borderBottom under the header row + between
+  // each data row. The `chat-md-table` class is the hook for the
+  // last-row :last-child rule.
+  table:  ({ children }) => <div style={{ overflowX: 'auto', margin: '10px 0' }}><table className="chat-md-table" style={{ borderCollapse: 'collapse', width: '100%', fontSize: '12px' }}>{children}</table></div>,
+  thead:  ({ children }) => <thead>{children}</thead>,
   th:     ({ children }) => <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 700, color: C.sub, borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{children}</th>,
-  td:     ({ children }) => <td style={{ padding: '5px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
+  td:     ({ children }) => <td style={{ padding: '6px 10px', borderBottom: `1px solid ${C.border}`, color: C.sub, verticalAlign: 'top' }}>{children}</td>,
 }
 
 // ─── MESSAGE COMPONENTS ───────────────────────────────────────────────────────
@@ -85,37 +90,80 @@ function AgentUpdate({ msg }) {
   )
 }
 
-const ACTION_ICONS = {
-  campaign: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
-  budget:   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
-  creative: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>,
-  audience: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
-}
-
+// Approval card: header row (icon + title + AWAITING badge) on top,
+// buttons stacked below. Every card uses the same layout regardless of
+// title length so the chat column has a predictable rhythm — short titles
+// inline with the buttons looked visually inconsistent with multi-line ones.
+// The previous render dumped extras as raw Python-dict text under the title;
+// that was removed — the title already carries the full description.
 function AgentActionCard({ msg, effectiveStatus, onApprove, error }) {
-  const status    = effectiveStatus || msg.status || 'pending'
-  const isPending = status === 'pending'
+  const status     = effectiveStatus || msg.status || 'pending'
+  const isPending  = status === 'pending'
   const isApproved = status === 'approved' || status === 'auto'
-  const icon = ACTION_ICONS[msg.actionType] || ACTION_ICONS.campaign
+  const title      = msg.title || msg.text || ''
+  // Status pill (AWAITING / Done / Auto-approved) intentionally omitted —
+  // for pending cards the visible Approve / Request changes buttons already
+  // signal "needs decision"; for resolved cards the footer line
+  // "Approved · timestamp" carries the signal.
+  // Ghost-at-rest, fill-on-hover. With 4+ approval cards stacked, solid indigo
+  // buttons created a wall of purple that drowned out the actual content.
+  // At rest the button is just indigo text + indigo border; on hover it fills
+  // and the checkmark (stroke=currentColor) flips white automatically.
+  const approveBtn = (
+    <button
+      onClick={onApprove}
+      style={{
+        padding: '8px 16px',
+        background: 'transparent',
+        color: C.indigo,
+        border: `1px solid ${C.indigoBorder}`,
+        borderRadius: '8px',
+        fontSize: '12px',
+        fontWeight: 600,
+        cursor: 'pointer',
+        fontFamily: font,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '6px',
+        whiteSpace: 'nowrap',
+        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = C.indigo
+        e.currentTarget.style.color = '#fff'
+        e.currentTarget.style.borderColor = C.indigo
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'transparent'
+        e.currentTarget.style.color = C.indigo
+        e.currentTarget.style.borderColor = C.indigoBorder
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      Approve
+    </button>
+  )
+  const requestBtn = (
+    <button style={{ padding: '8px 14px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: font, whiteSpace: 'nowrap', transition: 'color 0.15s, border-color 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.muted }} onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Request changes</button>
+  )
+
   return (
     <div style={{ borderRadius: '12px', border: `1px solid ${isPending ? C.indigoBorder : C.border}`, background: C.surface, overflow: 'hidden', fontFamily: font }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 14px', borderBottom: isPending ? `1px solid ${C.indigoBorder}` : 'none' }}>
-        <div style={{ width: 34, height: 34, borderRadius: 9, flexShrink: 0, background: isPending ? C.indigoBg : C.surfaceAlt, color: isPending ? C.indigo : C.muted, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: isPending ? C.text : C.sub, lineHeight: 1.3 }}>{msg.title}</div>
-          <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px' }}>{msg.detail}</div>
-        </div>
-        <div style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0, color: isPending ? C.indigo : C.faint, background: isPending ? C.indigoBg : C.surfaceAlt, padding: '3px 9px', borderRadius: 20 }}>
-          {status === 'auto' ? 'Auto-approved' : isApproved ? 'Done' : 'Awaiting'}
-        </div>
+      <div style={{ padding: '14px 16px 10px' }}>
+        {/* Title weight 500 (was 700) — four bold cards in a row competed for
+            attention. Medium reads as content, letting the (ghost) Approve
+            button carry the primary affordance. */}
+        <div style={{ fontSize: '13px', fontWeight: 500, color: isPending ? C.text : C.sub, lineHeight: 1.55 }}>{title}</div>
       </div>
       {isPending && (
-        <div style={{ padding: '10px 14px 12px', display: 'flex', gap: '8px' }}>
-          <button onClick={onApprove} style={{ flex: 1, padding: '9px', background: C.indigo, color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: font, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', transition: 'opacity 0.15s' }} onMouseEnter={e => e.currentTarget.style.opacity = '0.87'} onMouseLeave={e => e.currentTarget.style.opacity = '1'}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Approve
-          </button>
-          <button style={{ padding: '9px 14px', background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: '8px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: font, transition: 'color 0.15s, border-color 0.15s' }} onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.muted }} onMouseLeave={e => { e.currentTarget.style.color = C.muted; e.currentTarget.style.borderColor = C.border }}>Request changes</button>
+        // Right-aligned button pair at natural content width. Approve no
+        // longer fills the row — with stacked cards the full-width button
+        // wasted horizontal space and visually overweighted the action
+        // relative to the description.
+        <div style={{ padding: '4px 14px 12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+          {approveBtn}
+          {requestBtn}
         </div>
       )}
       {error && <div style={{ padding: '8px 14px 10px', display: 'flex', alignItems: 'center', gap: '7px' }}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.red} strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span style={{ fontSize: '11px', color: C.red, fontWeight: 500, fontFamily: font }}>{error}</span></div>}
@@ -124,11 +172,31 @@ function AgentActionCard({ msg, effectiveStatus, onApprove, error }) {
   )
 }
 
+// Strip dev-only annotations that the backend bakes into system event
+// strings ("(MOCK)", "(dev mock, no on-chain tx)") so production merchants
+// see the canonical message. Multiple parens variants and stray double-
+// dashes get cleaned up too.
+function cleanSystemText(text) {
+  if (typeof text !== 'string') return ''
+  return text
+    .replace(/\s*\(\s*MOCK\s*\)/gi, '')
+    .replace(/\s*\(\s*dev\s+mock[^)]*\)/gi, '')
+    .replace(/\s*\(\s*no on-chain tx[^)]*\)/gi, '')
+    .replace(/\s+—\s*$/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
 function SystemEvent({ msg }) {
+  const text = cleanSystemText(msg.text)
+  // No text → no divider. Otherwise we'd render a lonely "· timestamp" with
+  // horizontal lines around it, which is pure visual noise between two real
+  // messages that already carry their own timestamps.
+  if (!text) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div style={{ flex: 1, height: '1px', background: C.borderS }} />
-      <span style={{ fontSize: '11px', color: C.faint, fontFamily: font, whiteSpace: 'nowrap' }}>{msg.text} · {msg.time}</span>
+      <span style={{ fontSize: '11px', color: C.faint, fontFamily: font, whiteSpace: 'nowrap' }}>{text} · {msg.time}</span>
       <div style={{ flex: 1, height: '1px', background: C.borderS }} />
     </div>
   )
@@ -173,16 +241,16 @@ const STATUS_COLORS = {
   failure:         { color: C.muted,  bg: C.bg       },
 }
 
-function SectionRow({ num, title, subtitle }) {
+// Right-panel section header. `num` is accepted but ignored — numbered
+// circles implied sequential steps, which doesn't match the meaning here
+// (these sections are parallel, not ordered). Plain title + subtitle reads
+// cleaner; the lifecycle inside still uses its own per-stage numbering where
+// sequence actually matters.
+function SectionRow({ title, subtitle }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px 10px', flexShrink: 0 }}>
-      <div style={{ width: '22px', height: '22px', borderRadius: '50%', background: C.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        <span style={{ fontSize: '11px', fontWeight: 700, color: '#fff', lineHeight: 1 }}>{num}</span>
-      </div>
-      <div>
-        <div style={{ fontSize: '13px', fontWeight: 700, color: C.text, lineHeight: 1.3, fontFamily: font }}>{title}</div>
-        <div style={{ fontSize: '11px', color: C.muted, marginTop: '2px', fontFamily: font }}>{subtitle}</div>
-      </div>
+    <div style={{ padding: '16px 16px 10px', flexShrink: 0 }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: C.muted, lineHeight: 1.3, fontFamily: font, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title}</div>
+      <div style={{ fontSize: '11px', color: C.faint, marginTop: '3px', fontFamily: font }}>{subtitle}</div>
     </div>
   )
 }
@@ -256,6 +324,17 @@ function LivePerfPanel({ c }) {
   const prob = perf?.success_probability != null ? Math.round(perf.success_probability * 100) : null
 
   if (!hasSnapshot) {
+    // Two distinct pre-data states. Funded = escrow locked but the merchant
+    // hasn't approved the strategy yet, so nothing is running and "Awaiting
+    // telemetry" would be misleading. Active = strategy approved, campaign
+    // launched, first snapshot pending from the ~15 min ingest cycle.
+    const isAwaitingApproval = c.status === 'funded'
+    const headline = loading ? 'Checking for telemetry…'
+      : isAwaitingApproval ? 'Approve the actions to launch'
+      : 'Awaiting first telemetry'
+    const subhead = isAwaitingApproval
+      ? 'The campaign starts once you approve the strategy actions in the chat. First telemetry then arrives in about 15 min.'
+      : 'Snapshots arrive about every 15 min once the campaign is live.'
     return (
       <InnerCard>
         <div style={{ padding: '20px 16px 18px', textAlign: 'center' }}>
@@ -265,12 +344,8 @@ function LivePerfPanel({ c }) {
               <polyline points="12 6 12 12 16 14" />
             </svg>
           </div>
-          <p style={{ fontSize: '13px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>
-            {loading ? 'Checking for telemetry…' : 'Awaiting first telemetry'}
-          </p>
-          <p style={{ fontSize: '11px', color: C.muted, lineHeight: 1.55, margin: 0, fontFamily: font }}>
-            Snapshots arrive about every 15 min once the campaign is live.
-          </p>
+          <p style={{ fontSize: '13px', fontWeight: 600, color: C.sub, margin: '0 0 4px', fontFamily: font }}>{headline}</p>
+          <p style={{ fontSize: '11px', color: C.muted, lineHeight: 1.55, margin: 0, fontFamily: font }}>{subhead}</p>
         </div>
         <div style={{ padding: '10px 16px 12px', borderTop: '1px solid var(--c-inner-border)', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: C.faint, fontFamily: font }}>
           <span>Target <strong style={{ color: C.sub }}>ROAS ≥ {c.targetRoas}×</strong></span>
@@ -413,7 +488,10 @@ function PanelContent({ c, refetchContract }) {
       { label: 'ML underwriting', note },
       { label: c.agentDecision === 'counteroffer' ? 'Agent countered → accepted' : 'Agent accepted', note: null },
       { label: 'Escrow funded', note: c.fundedAt ? `${c.fee} USDC locked · ${c.fundedAt}` : null },
-      { label: 'Campaign running', note: isLive(c.status) && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.fundedAt ? 'Completed' : null },
+      // While in Funded state the merchant is approving strategy actions; the
+      // campaign hasn't launched yet, so don't claim "Campaign running."
+      { label: c.status === 'funded' ? 'Awaiting strategy approval' : 'Campaign running',
+        note: c.status === 'active' && c.daysLeft != null ? `Day ${c.windowDays - c.daysLeft} of ${c.windowDays}` : c.status === 'funded' ? 'Approve actions in chat to launch' : c.fundedAt ? 'Completed' : null },
       { label: 'Outcome resolved', note: c.status === 'success' ? `ROAS ${c.finalRoas}× ✓` : c.status === 'failure' ? `ROAS ${c.finalRoas}× — missed` : null },
       { label: 'Settlement', note: c.status === 'success' ? `${c.fee} USDC released · ${c.settledAt}` : c.status === 'failure' ? `${c.fee} USDC refunded · ${c.settledAt}` : null },
     ]
@@ -763,7 +841,15 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
 
         {/* Chat */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: C.surface, position: 'relative', minWidth: 0 }}>
-          <div ref={scrollRef} className="agent-msgs-area" style={{ flex: 1, overflowY: 'auto', overflowAnchor: 'none', paddingTop: '24px', paddingBottom: `${inputAreaHeight + 16}px` }}>
+          <div ref={scrollRef} className="agent-msgs-area" style={{
+            flex: 1, overflowY: 'auto', overflowAnchor: 'none',
+            paddingTop: '24px', paddingBottom: `${inputAreaHeight + 16}px`,
+            // Fade the top edge so messages soften into the header instead of
+            // hard-cutting against it as they scroll up. Bottom edge is
+            // already handled by the input bar's gradient overlay.
+            maskImage: 'linear-gradient(to bottom, transparent 0, black 24px, black 100%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, black 24px, black 100%)',
+          }}>
             {processedMessages.map((msg, i) => (
               <div key={i} style={{ maxWidth: '680px', margin: '0 auto', width: '100%', padding: '0 20px 14px' }}>
                 {msg._type === 'thinking-block' && <ThinkingBlock thinking={{ steps: msg.steps, isComplete: true, isOpen: openSeqs.has(msg.seqId) }} activeStepId={null} liveDetail="" onToggle={() => toggleSeq(msg.seqId)} />}
