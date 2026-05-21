@@ -191,7 +191,7 @@ function AgentCard() {
           After you approve the strategy, this agent runs the Meta Ads campaign and continuously optimizes toward your contracted ROAS target.
         </p>
         <div style={{ marginTop: 'auto' }}>
-          <Link href="/contracts" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 600, padding: '7px 18px', borderRadius: '8px', border: `1px solid ${C.border}`, textDecoration: 'none' }}>
+          <Link href="/contracts" prefetch={false} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'transparent', color: C.text, fontSize: '12px', fontWeight: 600, padding: '7px 18px', borderRadius: '8px', border: `1px solid ${C.border}`, textDecoration: 'none' }}>
             View active contracts
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           </Link>
@@ -248,7 +248,7 @@ function RecentContracts({ contracts, loading, error, isSignedIn }) {
     <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: '14px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: '13px', fontWeight: 700, color: C.text, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Recent Contracts</span>
-        <Link href="/contracts" style={{ fontSize: '11px', fontWeight: 600, color: C.indigo, textDecoration: 'none' }}>View all →</Link>
+        <Link href="/contracts" prefetch={false} style={{ fontSize: '11px', fontWeight: 600, color: C.indigo, textDecoration: 'none' }}>View all →</Link>
       </div>
 
       {/* Table header */}
@@ -299,6 +299,8 @@ function RecentContracts({ contracts, loading, error, isSignedIn }) {
 }
 
 // ─── QUICK LINKS ─────────────────────────────────────────────────────────────
+// `protected: true` disables Link prefetch so unauthenticated visitors don't
+// trigger a cross-origin Clerk redirect (CORS-blocks the RSC prefetch).
 const QUICK_LINKS = [
   {
     href: '/workspace/new',
@@ -308,12 +310,14 @@ const QUICK_LINKS = [
   },
   {
     href: '/contracts',
+    protected: true,
     label: 'My Contracts',
     sub: 'View all active and past contracts',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   },
   {
     href: '/settings',
+    protected: true,
     label: 'Settings',
     sub: 'Wallet, notifications, and API keys',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>,
@@ -416,7 +420,7 @@ export default function DashboardPage() {
               <div style={{ fontSize: '13px', fontWeight: 700, color: C.text, marginBottom: '12px', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Quick access</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {QUICK_LINKS.map(link => (
-                  <Link key={link.href} href={link.href}
+                  <Link key={link.href} href={link.href} prefetch={link.protected ? false : undefined}
                     style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 8px', borderRadius: '9px', textDecoration: 'none', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = C.surfaceAlt}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
