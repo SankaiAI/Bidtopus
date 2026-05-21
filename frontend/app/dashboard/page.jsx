@@ -34,11 +34,17 @@ const C = {
   red:       'var(--c-red)',
 }
 
-function greeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
-  return 'Good evening'
+function useGreeting() {
+  // Compute on the client only — the server's timezone differs from the user's,
+  // so rendering `new Date().getHours()` during SSR causes a hydration mismatch
+  // (React errors #418/#423/#425). First paint shows the static fallback, then
+  // the effect swaps in the localized greeting after mount.
+  const [g, setG] = React.useState('Welcome')
+  React.useEffect(() => {
+    const h = new Date().getHours()
+    setG(h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening')
+  }, [])
+  return g
 }
 
 // ─── STATUS BADGE ─────────────────────────────────────────────────────────────
@@ -333,6 +339,7 @@ export default function DashboardPage() {
   const [contracts, setContracts] = React.useState([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState(null)
+  const greeting = useGreeting()
 
   React.useLayoutEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -382,7 +389,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
             <div>
               <h1 style={{ fontSize: '22px', fontWeight: 800, color: C.text, letterSpacing: '-0.03em', margin: '0 0 2px', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                {greeting()}
+                {greeting}
               </h1>
               <p style={{ fontSize: '12px', color: C.muted, margin: 0 }}>Here's the status of your performance contracts.</p>
             </div>
