@@ -260,7 +260,24 @@ function RecentContracts({ contracts, loading, error, isSignedIn }) {
       </div>
 
       {error ? (
-        <div style={{ padding: '24px', fontSize: '12px', color: C.muted, textAlign: 'center' }}>{error}</div>
+        // Generic copy regardless of which API error fired — the raw message
+        // (e.g. "API GET /api/contracts → 403") is developer noise, not
+        // something a merchant should see. The retry button just rerenders
+        // the page; the parent's useEffect runs the fetch again.
+        <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', color: C.sub, margin: '0 0 4px', fontFamily: 'Plus Jakarta Sans, sans-serif', fontWeight: 600 }}>
+            Couldn&apos;t load contracts
+          </p>
+          <p style={{ fontSize: '11px', color: C.muted, margin: '0 0 10px', fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.5 }}>
+            The service is briefly unreachable. Refresh to try again.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ fontSize: '12px', color: C.indigo, fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+          >
+            Refresh →
+          </button>
+        </div>
       ) : loading && rows.length === 0 ? (
         <>
           {Array.from({ length: 3 }, (_, i) => <CompactContractRowSkeleton key={i} />)}

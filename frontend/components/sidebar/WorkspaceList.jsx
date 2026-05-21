@@ -22,10 +22,6 @@ const ACCENT = 'var(--c-indigo)'
 
 const sectionLbl = { fontSize: '12px', fontWeight: 600, color: 'var(--c-sidebar-section)', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '14px 8px 6px', fontFamily: 'Plus Jakarta Sans, sans-serif', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }
 
-const MOCK_CONTRACTS = [
-  { id: 'c1', title: 'Summer Sale — Retargeting', status: 'active', sub: 'ROAS 1.86× · 3 days left', href: '/workspace/c1', hasContract: true },
-]
-
 const WS_FILTERS = [
   { id: 'all',      label: 'All',      match: () => true },
   { id: 'active',   label: 'Active',   match: s => isLive(s.status) },
@@ -163,15 +159,14 @@ export default function WorkspaceList() {
     .filter(s => !serverIds.has(s.id))
     .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/workspace/${s.id}`, hasContract: false, _ts: s.createdAt }))
 
-  // Privacy gate: never surface workspaces (server contracts, local drafts,
-  // or the demo MOCK_CONTRACTS) to an unauthenticated browser. Local drafts
-  // (`sessions`) are kept in localStorage so the user doesn't lose them on
-  // sign-out, but they only render once a Clerk session is active.
+  // Privacy gate: never surface workspaces (server contracts, local drafts)
+  // to an unauthenticated browser. Local drafts (`sessions`) are kept in
+  // localStorage so the user doesn't lose them on sign-out, but they only
+  // render once a Clerk session is active.
   const allItems = !isSignedIn ? [] : [
     ...serverNegotiating,
     ...serverFunded,
     ...localOnly,
-    ...MOCK_CONTRACTS,
   ].sort((a, b) => {
     if (!a._ts) return 1
     if (!b._ts) return -1
@@ -285,8 +280,8 @@ export default function WorkspaceList() {
             const showBtn    = hoveredId === item.id || menuState?.item?.id === item.id
             const needsAction = requiresAction(item.status)
             // Only real backend contracts can be "unread" (they have activity
-            // timestamps); local drafts + the demo MOCK_CONTRACTS are never
-            // unread, since there's no agent activity on them yet.
+            // timestamps); local drafts are never unread since there's no
+            // agent activity on them yet.
             const unread     = !isActive && item._raw && isUnread(item._raw, viewedMap)
             return (
               <div
