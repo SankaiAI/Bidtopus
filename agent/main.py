@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from auth.service_token import log_startup_state as _log_auth_state
 from config import settings
 from routes import router
 from routes.chat import router as chat_router
@@ -30,6 +31,7 @@ async def lifespan(_app: FastAPI):
     from db.backend_models import PerformanceContractORM
 
     logger.info("agent_startup", model=settings.CLAUDE_MODEL)
+    _log_auth_state()
 
     # Warm up ML models so the first request is not slow.
     orchestrator._get_underwriting_model()

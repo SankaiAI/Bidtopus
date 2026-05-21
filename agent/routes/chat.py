@@ -12,12 +12,18 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from auth.service_token import verify_service_token
 from db.session import get_db
 from llm.chat import ChatAgent
 from utils.logging import attach_session, get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/agent/chat", tags=["chat"])
+# Router-level dependency: see routes/agent.py for context.
+router = APIRouter(
+    prefix="/agent/chat",
+    tags=["chat"],
+    dependencies=[Depends(verify_service_token)],
+)
 
 _SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 

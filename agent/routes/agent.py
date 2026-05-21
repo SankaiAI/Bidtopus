@@ -21,6 +21,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from auth.service_token import verify_service_token
 from db.backend_models import PerformanceContractORM
 from db.session import get_db
 from exceptions import AdapterError, SafeAgentError
@@ -34,7 +35,13 @@ import orchestrator
 from utils.logging import attach_session, get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/agent", tags=["agent"])
+# Router-level dependency: every /agent/* route enforces X-Service-Token
+# (with rollout grace when AGENT_SERVICE_TOKEN is unset — see auth/service_token.py).
+router = APIRouter(
+    prefix="/agent",
+    tags=["agent"],
+    dependencies=[Depends(verify_service_token)],
+)
 
 
 # ── Request / response schemas ─────────────────────────────────────────────────
