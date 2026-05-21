@@ -43,22 +43,23 @@ export const metadata = {
   },
 }
 
-const hasClerk = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-
+// ClerkProvider is always rendered. The previous `hasClerk` conditional
+// hid it when NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY was unset, which silently
+// broke every component that calls useAuth (MetaAccountContext,
+// useWalletConnect, WorkspaceList, etc.) — including during Vercel's
+// prerender pass. Setting the env var is now a hard requirement; missing
+// it will throw a clear Clerk error instead of a confusing useAuth one.
 export default function RootLayout({ children }) {
-  const inner = (
-    <Web3Provider>
-      <MetaAccountProvider>
-        <AppShell>{children}</AppShell>
-      </MetaAccountProvider>
-    </Web3Provider>
-  )
-  const shell = hasClerk ? <ClerkProvider>{inner}</ClerkProvider> : inner
-
   return (
     <html lang="en">
       <body className={font.className}>
-        {shell}
+        <ClerkProvider>
+          <Web3Provider>
+            <MetaAccountProvider>
+              <AppShell>{children}</AppShell>
+            </MetaAccountProvider>
+          </Web3Provider>
+        </ClerkProvider>
       </body>
     </html>
   )
