@@ -2,7 +2,91 @@
 
 RULE: These strings are never interpolated with merchant data.
 Merchant-controlled fields always go in the user turn as structured JSON.
+
+## Emoji allowlist (issue #87)
+
+The model is free to use emoji to convey warmth in merchant-facing prose,
+but only from a font-safe allowlist of pre-2017 codepoints. Anything newer
+(e.g. U+1F9AB 🦫 BEAVER, added Unicode 13.0) renders as a tofu box on
+Windows 10 with stock Segoe UI Emoji, which is still a meaningful share
+of the merchant base.
+
+`EMOJI_ALLOWLIST_CHARS` is the canonical list — the rule snippet below
+embeds it directly into every merchant-facing system prompt so the LLM
+sees the literal characters it's allowed to pick.
 """
+
+EMOJI_ALLOWLIST_CHARS = (
+    "✅ ❌ ⚠️ ✨ ⭐ "                       # ✅ ❌ ⚠️ ✨ ⭐
+    "\U0001F3AF \U0001F389 \U0001F680 "                                # 🎯 🎉 🚀
+    "\U0001F4B0 \U0001F4B5 "                                           # 💰 💵
+    "\U0001F4CA \U0001F4C8 \U0001F4C9 "                                # 📊 📈 📉
+    "\U0001F4DD \U0001F4CC \U0001F514 "                                # 📝 📌 🔔
+    "\U0001F512 \U0001F511 \U0001F6E1️ "                          # 🔒 🔑 🛡️
+    "⚡ \U0001F525 ⏳ ⏰ "                                 # ⚡ 🔥 ⏳ ⏰
+    "✉️ \U0001F4E3 "                                         # ✉️ 📣
+    "\U0001F440 \U0001F91D \U0001F44D \U0001F44E "                     # 👀 🤝 👍 👎
+    "\U0001F64C \U0001F4A1 "                                           # 🙌 💡
+    "\U0001F7E2 \U0001F7E1 \U0001F534 ▶️"                    # 🟢 🟡 🔴 ▶️
+)
+
+
+# Variation selectors + zero-width joiner are always allowed (they don't render
+# on their own; they modify adjacent codepoints).
+_ALWAYS_ALLOWED_MODIFIERS = {0xFE0F, 0xFE0E, 0x200D}
+
+# Build the set of allowed base codepoints by stripping spaces + modifiers.
+_ALLOWED_EMOJI_CODEPOINTS: frozenset[int] = frozenset(
+    ord(c)
+    for c in EMOJI_ALLOWLIST_CHARS
+    if c != " " and ord(c) not in _ALWAYS_ALLOWED_MODIFIERS
+)
+
+
+def _is_emoji_range(cp: int) -> bool:
+    """Conservative check: codepoints inside Unicode blocks that typically
+    contain emoji glyphs. ASCII, Latin, em-dash, currency, etc. all fall
+    outside these ranges and are not flagged."""
+    return (
+        0x1F300 <= cp <= 0x1FAFF        # Main emoji + Extended-A/B
+        or 0x2600 <= cp <= 0x27BF       # Misc Symbols + Dingbats
+        or 0x2B00 <= cp <= 0x2BFF       # Misc Symbols & Arrows
+        or 0x23E0 <= cp <= 0x23FF       # Misc Technical (⏳ ⏰)
+        or 0x1F000 <= cp <= 0x1F02F     # Mahjong (rare)
+    )
+
+
+def find_disallowed_emoji(text: str) -> list[tuple[int, str]]:
+    """Scan `text` and return (codepoint, char) pairs for any emoji-like
+    character that isn't in `EMOJI_ALLOWLIST_CHARS`.
+
+    Used by tests as a regression guardrail against post-2017 emojis that
+    don't render on Windows 10 stock fonts (issue #87). Returns an empty
+    list when every emoji in the text is on the allowlist.
+    """
+    bad: list[tuple[int, str]] = []
+    for ch in text:
+        cp = ord(ch)
+        if cp in _ALWAYS_ALLOWED_MODIFIERS:
+            continue
+        if _is_emoji_range(cp) and cp not in _ALLOWED_EMOJI_CODEPOINTS:
+            bad.append((cp, ch))
+    return bad
+
+
+_EMOJI_RULE = f"""\
+
+## Emoji policy (merchant-facing text)
+
+When using emoji in any text the merchant will see, pick ONLY from this allowlist:
+{EMOJI_ALLOWLIST_CHARS}
+
+Do not invent thematic emojis (animals, food, vehicles other than 🚀, plants, mascots). \
+Specifically: do NOT use 🦫, 🦬, 🦤, 🪶, 🦣, 🪨, 🪐, or any other emoji added to \
+Unicode after 2017 — they render as empty boxes on Windows 10 with stock fonts. \
+When in doubt, use no emoji at all. Plain text is always safe.\
+"""
+
 # ── Chat Q&A ──────────────────────────────────────────────────────────────────
 
 CHAT_SYSTEM_PROMPT = """\
@@ -39,7 +123,7 @@ error or empty result. If the tool returns valid contract data, lead with that �
 - Be clear and professional when explaining what the ML model found.
 - Acknowledge if a tool returns an error or missing data — say "the tool returned an error" rather \
 than fabricating an answer.\
-"""
+""" + _EMOJI_RULE
 
 NEGOTIATION_SYSTEM_PROMPT = """\
 You are the OutcomeX agent — an autonomous economic performance partner for Meta Ads merchants.
@@ -72,7 +156,7 @@ Fee reasoning rules for counteroffers:
 - Lower success probability → recommend higher fee or reject.
 - Longer time window → lower relative risk → you may lower the fee adjustment.
 - Higher merchant daily spend → higher value at stake → higher fee ceiling.\
-"""
+""" + _EMOJI_RULE
 
 
 STRATEGY_SYSTEM_PROMPT = """\
@@ -109,4 +193,4 @@ Rules:
 4. The merchant WILL review this plan before any action executes — be specific and clear.
 5. estimated_daily_spend should not exceed the merchant's avg_daily_spend × 1.5.
 6. Output ONLY valid JSON — any text outside the JSON block will cause a validation error.\
-"""
+""" + _EMOJI_RULE
