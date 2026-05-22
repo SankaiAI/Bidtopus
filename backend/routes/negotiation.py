@@ -360,36 +360,29 @@ async def stream_negotiation(
                 thinking_parts: list[str] = []
                 thinking_seq_id = str(uuid.uuid4())
                 thinking_started = False
-                text_started = False  # tracks whether agent message bubble exists yet
+                thinking_closed = False
 
                 async for item in _stream_turn(request, current_messages):
                     if item[0] == "thinking":
                         _, thinking_text = item
                         thinking_parts.append(thinking_text)
-                        # Don't emit yet — wait until after the first text delta so the
-                        # frontend's agent message bubble exists before the thinking block
-                        # tries to attach to it.
+                        if not thinking_started:
+                            thinking_started = True
+                            yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'negotiation_think', 'label': 'Agent reasoning...', 'thinking_sequence_id': thinking_seq_id})}\n\n"
+                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': thinking_text})}\n\n"
                     elif item[0] == "text":
                         _, text = item
                         accumulated += text
-                        if not text_started:
-                            text_started = True
-                            # Emit the first text delta first — this creates the agent
-                            # message bubble in the frontend. Only then flush buffered
-                            # thinking so it attaches to the existing bubble.
-                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
-                            if thinking_parts:
-                                thinking_started = True
-                                yield f"event: thinking_step_start\ndata: {json.dumps({'step_id': 'negotiation_think', 'label': 'Agent reasoning...', 'thinking_sequence_id': thinking_seq_id})}\n\n"
-                                for chunk in thinking_parts:
-                                    yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chunk})}\n\n"
-                        else:
-                            yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
+                        if not thinking_closed and thinking_started:
+                            thinking_closed = True
+                            yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'negotiation_think', 'thinking_sequence_id': thinking_seq_id})}\n\n"
+                            yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': thinking_seq_id})}\n\n"
+                        yield f"event: text\ndata: {json.dumps({'delta': text})}\n\n"
                     else:
                         _, accumulated, aborted, final_msg = item
 
-                # Close thinking block SSE events for this turn
-                if thinking_started:
+                # Close thinking if turn ended without any text (tool-only turn)
+                if thinking_started and not thinking_closed:
                     yield f"event: thinking_step_end\ndata: {json.dumps({'step_id': 'negotiation_think', 'thinking_sequence_id': thinking_seq_id})}\n\n"
                     yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': thinking_seq_id})}\n\n"
 
@@ -524,6 +517,10 @@ async def stream_negotiation(
                             }],
                         },
                     ]
+                    # If this turn produced text before the tool call, close the current
+                    # agent bubble so the next turn's response opens a fresh one.
+                    if accumulated:
+                        yield f"event: message_break\ndata: {{}}\n\n"
                     continue  # next iteration: Claude responds with accept/counter/reject
 
                 # ── finalize_contract ─────────────────────────────────────────
@@ -570,6 +567,10 @@ async def stream_negotiation(
 
                     # Auto-advance: underwriting + agent offer run in background
                     asyncio.create_task(asyncio.to_thread(_post_contract_background, contract_id))
+
+                    # Close the current bubble before Claude's closing summary
+                    if accumulated:
+                        yield f"event: message_break\ndata: {{}}\n\n"
 
                     # Stream Claude's closing summary
                     follow_messages = current_messages + [

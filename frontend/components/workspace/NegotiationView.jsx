@@ -148,23 +148,29 @@ const NegotiationMessage = React.memo(function NegotiationMessage({ msg, msgInde
         {msg.acknowledgment && <p style={{ margin: '0 0 8px' }}>{msg.acknowledgment}</p>}
         {msg.ackDone !== false && (() => {
           const segs = msg.segments ?? (msg.content ? [{ type: 'text', content: msg.content }] : [])
-          const thinkingSegs = segs.filter(s => s.type === 'thinking')
-          const textContent = segs.filter(s => s.type === 'text').map(s => s.content).join('')
-          const origIdx = (seg) => segs.indexOf(seg)
           return (
             <>
-              {thinkingSegs.map(seg => (
-                <ThinkingBlock
-                  key={seg.seqId || origIdx(seg)}
-                  thinking={seg}
-                  activeStepId={isLastMsg && seg.seqId === activeSeqId ? activeStepId : null}
-                  liveDetail={isLastMsg && seg.seqId === activeSeqId ? liveDetail : ''}
-                  onToggle={() => onThinkingToggle(msgIndex, origIdx(seg))}
-                />
-              ))}
-              {textContent && (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{textContent}</ReactMarkdown>
-              )}
+              {segs.map((seg, idx) => {
+                if (seg.type === 'thinking') {
+                  return (
+                    <ThinkingBlock
+                      key={seg.seqId || idx}
+                      thinking={seg}
+                      activeStepId={isLastMsg && seg.seqId === activeSeqId ? activeStepId : null}
+                      liveDetail={isLastMsg && seg.seqId === activeSeqId ? liveDetail : ''}
+                      onToggle={() => onThinkingToggle(msgIndex, idx)}
+                    />
+                  )
+                }
+                if (seg.type === 'text' && seg.content) {
+                  return (
+                    <ReactMarkdown key={idx} remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+                      {seg.content}
+                    </ReactMarkdown>
+                  )
+                }
+                return null
+              })}
             </>
           )
         })()}

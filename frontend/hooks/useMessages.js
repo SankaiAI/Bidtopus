@@ -304,6 +304,13 @@ export function useMessages(contractId) {
             setActiveStepId(null)
             setThinking(prev => ({ ...prev, isComplete: true, isOpen: false }))
 
+          } else if (eventType === 'message_break') {
+            // Backend signals a new Claude turn is starting (after a tool call).
+            // Finalize the current bubble so the next text event opens a fresh one.
+            if (agentBubbleAdded && agentText) flushAgentText()
+            agentText = ''
+            agentBubbleAdded = false
+
           } else if (eventType === 'text') {
             const chunk = (data.delta || data.text || '').replace(/�/g, '')
             if (chunk) {

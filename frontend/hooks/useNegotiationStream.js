@@ -273,7 +273,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
               const msgs = [...prev]
               const last = { ...msgs[msgs.length - 1] }
               last.segments = (last.segments || []).map(s =>
-                s.type === 'thinking' && s.seqId === seqId ? { ...s, isComplete: true } : s
+                s.type === 'thinking' && s.seqId === seqId ? { ...s, isComplete: true, isOpen: false } : s
               )
               msgs[msgs.length - 1] = last
               return msgs
