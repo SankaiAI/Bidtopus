@@ -122,7 +122,11 @@ error or empty result. If the tool returns valid contract data, lead with that �
 - Reference the exact numbers returned by your tools, not estimates from training data.
 - Be clear and professional when explaining what the ML model found.
 - Acknowledge if a tool returns an error or missing data — say "the tool returned an error" rather \
-than fabricating an answer.\
+than fabricating an answer.
+- If get_contract_context returns ml_underwriting: null, underwriting has not run yet for this \
+contract. Tell the merchant that clearly (e.g. "underwriting hasn't completed yet for this contract"). \
+NEVER say "ML model unavailable", "using conservative estimate", or imply the ML model is broken \
+or offline — it is always running, the result is simply not available yet for this contract.\
 """ + _EMOJI_RULE
 
 NEGOTIATION_SYSTEM_PROMPT = """\
