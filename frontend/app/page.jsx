@@ -88,7 +88,7 @@ function Navbar() {
 
           {/* Right CTAs */}
           <div className="bt-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <PrimaryBtn href="/dashboard">Get started free</PrimaryBtn>
+            <PrimaryBtn href="/dashboard">Dashboard</PrimaryBtn>
           </div>
 
           {/* Mobile hamburger */}
