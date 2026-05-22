@@ -143,6 +143,11 @@ You MUST output valid JSON matching this schema exactly — no preamble, no trai
   "revised_time_window_days": <integer or null>
 }
 
+The underwriting_result is ALWAYS the live output of our ML model — it ran successfully before \
+this prompt was called. Never suggest or imply that the ML model was unavailable, offline, skipped, \
+or used a fallback. Never write phrases like "ML model unavailable" or "using conservative estimate" \
+in your reasoning. The numbers you receive are real model outputs; reason about them as such.
+
 Decision rules you MUST follow:
 1. Base your offer_type on the success_probability from underwriting_result — never recalculate it.
 2. If offer_type is "accept" or "reject", all revised_* fields MUST be null.
