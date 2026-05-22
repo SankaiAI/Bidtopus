@@ -299,7 +299,7 @@ export default function WorkspaceList() {
               >
                 <Link
                   href={item.href}
-                  style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', paddingRight: showBtn ? '28px' : '8px', borderRadius: '8px', textDecoration: 'none', transition: 'padding-right 0.1s' }}
+                  style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', paddingRight: showBtn ? '28px' : '8px', borderRadius: '8px', textDecoration: 'none', color: 'var(--c-sidebar-text)', transition: 'padding-right 0.1s' }}
                 >
                   {/* Leading slot — fixed width so titles align whether or not
                       the action-dot is rendered. Pulse only when the agent is
@@ -315,8 +315,8 @@ export default function WorkspaceList() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{
                       fontSize: '14px',
-                      fontWeight: unread || isActive ? 700 : 500,
-                      color: isActive || unread ? 'var(--c-indigo)' : 'var(--c-sidebar-text)',
+                      fontWeight: isActive ? 600 : 500,
+                      color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)',
                       fontFamily: 'Plus Jakarta Sans, sans-serif',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
