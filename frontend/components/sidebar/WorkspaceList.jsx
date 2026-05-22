@@ -56,6 +56,7 @@ export default function WorkspaceList() {
   const [sessions, setSessions]         = useState([])
   const [contracts, setContracts]       = useState([])
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false)
+  const [fetchFailed, setFetchFailed]   = useState(false)
   const [hoveredId, setHoveredId]       = useState(null)
   const [menuState, setMenuState]       = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -81,14 +82,14 @@ export default function WorkspaceList() {
     if (!isSignedIn) {
       setContracts([])
       setHasFetchedOnce(false)
+      setFetchFailed(false)
       try { localStorage.removeItem('bidtopus_contracts') } catch {}
       clearLastViewed()
       return
     }
-    try {
-      const cached = JSON.parse(localStorage.getItem('bidtopus_contracts') || 'null')
-      if (cached?.length > 0) setContracts(cached)
-    } catch {}
+    // Do NOT pre-load the localStorage cache here. We only show server data
+    // after a successful fetch so stale cache is never surfaced when the
+    // backend is unreachable.
   }, [isLoaded, isSignedIn])
 
   // Refetch the server contract list on mount, on window focus, every 30s,
@@ -107,9 +108,17 @@ export default function WorkspaceList() {
           if (cancelled) return
           const list = data || []
           setContracts(list)
+          setFetchFailed(false)
           try { localStorage.setItem('bidtopus_contracts', JSON.stringify(list)) } catch {}
         })
-        .catch(() => {})
+        .catch(() => {
+          if (cancelled) return
+          // Backend unreachable — wipe any cached contracts so stale data from
+          // a previous session is never shown to the signed-in user.
+          setContracts([])
+          setFetchFailed(true)
+          try { localStorage.removeItem('bidtopus_contracts') } catch {}
+        })
         .finally(() => { if (!cancelled) setHasFetchedOnce(true) })
     }
 
@@ -264,9 +273,15 @@ export default function WorkspaceList() {
           WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
         }}
       >
-      {!isLoaded || (isSignedIn && !hasFetchedOnce && contracts.length === 0 && sessions.length === 0) ? (
+      {!isLoaded || (isSignedIn && !hasFetchedOnce && sessions.length === 0) ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px 0' }}>
           {Array.from({ length: 4 }, (_, i) => <SidebarRowSkeleton key={i} />)}
+        </div>
+      ) : fetchFailed ? (
+        <div style={{ padding: '8px 8px 12px' }}>
+          <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+            Could not reach the server. Check your connection and try again.
+          </p>
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: '8px 8px 12px' }}>
