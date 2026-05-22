@@ -11,7 +11,7 @@ from logging_config import setup_logging
 from limiter import limiter
 from sqlalchemy import text
 from db.session import Base, engine
-from routes import conductor, contracts, messages, negotiation, stream, users
+from routes import conductor, contracts, messages, meta_auth, negotiation, stream, users
 
 setup_logging(level="DEBUG" if settings.environment == "development" else "INFO")
 log = logging.getLogger(__name__)
@@ -169,6 +169,7 @@ app.include_router(messages.router)
 app.include_router(stream.router)
 app.include_router(negotiation.router)
 app.include_router(conductor.router)
+app.include_router(meta_auth.router)
 
 
 @app.get("/health")

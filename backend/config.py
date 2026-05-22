@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Shared secret for agent → backend service-to-service calls (e.g. perf ingest, issue #79)
     agent_service_token: str = ""
 
+    # Meta Ads OAuth popup flow (issue #91)
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    meta_redirect_uri: str = "http://localhost:8000/api/auth/meta/callback"
+
     # SIWE wallet-connect (issue #84). Domain the SIWE message must declare —
     # frontend signs with this host so a leaked signature from one deploy can't
     # be replayed against another.

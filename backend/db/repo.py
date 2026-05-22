@@ -25,6 +25,10 @@ def get_or_create_user(db: Session, clerk_user_id: str, email: str) -> User:
     return user
 
 
+def get_user_by_clerk_id(db: Session, clerk_user_id: str) -> Optional[User]:
+    return db.query(User).filter(User.clerk_user_id == clerk_user_id).first()
+
+
 def get_user_by_id(db: Session, user_id: str) -> Optional[User]:
     return db.query(User).filter(User.id == user_id).first()
 
