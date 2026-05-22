@@ -106,6 +106,9 @@ def get_meta_account_by_external_id(
 def create_meta_account(
     db: Session, merchant_id: str, meta_ads_account_id: str, name: Optional[str] = None,
 ) -> MetaAdsAccount:
+    existing = get_meta_account_by_external_id(db, merchant_id, meta_ads_account_id)
+    if existing is not None:
+        return existing
     account = MetaAdsAccount(
         merchant_id=merchant_id,
         meta_ads_account_id=meta_ads_account_id,
