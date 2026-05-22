@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { useAuth } from '@clerk/nextjs'
 import { createApiClient } from '@/lib/api'
 import { isUUID } from '@/hooks/useNegotiationStream'
+import { canFund } from '@/lib/contractStatus'
 import NegotiationView from '@/components/workspace/NegotiationView'
 import WorkspaceView, { WorkspaceRightPanel } from '@/components/workspace/WorkspaceView'
 import { markViewed } from '@/lib/contractActivity'
@@ -59,6 +60,15 @@ export default function WorkspacePage() {
       })
       .catch(() => setIsCheckingStatus(false))
   }, [id, isLoaded, isSignedIn])
+
+  // Poll for status changes while the agent is progressing through underwriting →
+  // offered → pending_funding. Stops once the contract is fundable or beyond.
+  React.useEffect(() => {
+    if (!contract || !isUUID(id) || !isSignedIn) return
+    if (canFund(contract.status) || !['created', 'underwriting', 'offered'].includes(contract.status)) return
+    const timer = setInterval(refetchContract, 3000)
+    return () => clearInterval(timer)
+  }, [contract?.status, id, isSignedIn, refetchContract])
 
   // Stamp the workspace as viewed so the sidebar/list pages can clear the
   // unread indicator. Real UUIDs only — local ws_xxx drafts don't need it.

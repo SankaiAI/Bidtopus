@@ -448,6 +448,8 @@ function PanelContent({ c, refetchContract }) {
             <p style={{ fontSize: '13px', color: C.sub, lineHeight: 1.65, margin: 0, fontFamily: font }}>
               {c.status === 'underwriting'
                 ? 'The agent is evaluating your contract. The offer will appear in chat shortly.'
+                : c.status === 'offered'
+                ? 'Contract accepted — preparing your escrow funding details.'
                 : 'The agent is preparing your contract. Watch the chat for the next step.'}
             </p>
           </div>
