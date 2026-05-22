@@ -467,7 +467,7 @@ function Receipt() {
 // ─── How it works ─────────────────────────────────────────────────────────────
 function HowItWorks() {
   return (
-    <section style={{ borderTop: `1px solid ${S.hairlineSoft}`, borderBottom: `1px solid ${S.hairlineSoft}`, padding: '80px 0', marginBottom: 96 }}>
+    <section style={{ padding: '80px 0', marginBottom: 96 }}>
       <Wrap>
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
           <h2 style={{ font: `600 48px/1.1 ${S.fontSans}`, letterSpacing: '-1.4px', maxWidth: 680, margin: '0 auto', color: S.ink }}>
