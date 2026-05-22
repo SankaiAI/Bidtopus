@@ -162,7 +162,7 @@ All endpoints are prefixed `/api`. The backend must implement all 14 of the foll
 | planned_actions | json | Structured list of ad actions |
 | approval_status | string | pending / approved / declined |
 | approved_at | timestamp | |
-| execution_receipts | json | **Nullable** — MCP return values written after Day 1 execution: `{campaign_id, ad_set_ids, creative_ids}`. Required by the 24h monitoring tick to reference existing campaigns when calling MCP. |
+| execution_receipts | json | **Nullable** — MCP return values written after Day 1 execution: `{campaign_id, ad_set_ids, creative_ids}`. Required by the monitoring tick to reference existing campaigns when calling MCP. |
 
 ### performance_snapshots
 | Field | Type | Notes |

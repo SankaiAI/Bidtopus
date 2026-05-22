@@ -171,8 +171,8 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 - ML-estimated probability of success (e.g. 61%)
 - Contract status indicator (Active / On Track / At Risk)
 
-**Daily monitoring tick UI (in the chat timeline):**
-- Each 24h tick appends a `daily_update` card to the timeline — shows real ROAS, spend, days left, and ML forecast.
+**Monitoring tick UI (in the chat timeline):**
+- Each tick appends a `daily_update` card to the timeline — shows real ROAS, spend, days left, and ML forecast. Ticks run every 15–30 min for Active contracts so data stays fresh without calling MCP on every chat message.
 - In **manual mode**: the tick also appends `approval_request` cards for each suggested optimization. Each card shows the action, rationale, and a countdown to `expires_at` (23h window). The merchant clicks **Approve** or **Decline** per card. Unanswered cards show as expired at the next tick.
 - In **auto mode**: the tick appends a `system_event` per action executed (e.g. "Budget scaled · warm_30d $50 → $65/day"). No approval cards.
 - Urgency styling: `recommended` (standard), `urgent` (amber highlight), `critical` (red, pinned to top).
@@ -216,7 +216,7 @@ The sections below (4.3–4.7) describe what content must appear at each phase, 
 **Must show:**
 
 **Agent Execution — Approval Mode**
-- **Manual (default):** Each 24h monitoring tick surfaces `approval_request` cards in the chat timeline — one per suggested action (scale budget, pause ad_set, swap creative, etc.). Merchant must click Approve per card before the action runs. Cards expire after 23h; unanswered cards are skipped at the next tick.
+- **Manual (default):** Each monitoring tick surfaces `approval_request` cards in the chat timeline — one per suggested action (scale budget, pause ad_set, swap creative, etc.). Merchant must click Approve per card before the action runs. Cards expire after 23h; unanswered cards are skipped once their `expires_at` passes.
 - **Auto-approve:** The agent executes all monitoring tick decisions immediately via Meta Ads MCP. Actions are logged as `system_event` cards in the timeline. No approval cards for monitoring decisions.
 - **The initial strategy plan always requires explicit approval in both modes.** Auto mode only applies to mid-campaign monitoring adjustments.
 - An amber banner appears at the top of the Workspace when a contract is Active and approval mode is Manual, showing the count of pending approval cards and linking to Settings.

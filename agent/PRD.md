@@ -182,22 +182,27 @@ This model runs continuously while the contract is Active and feeds the live mon
 
 ---
 
-### 4.5 24h Monitoring Tick Loop
+### 4.5 Monitoring Tick Loop
 
-**Primary question:** "What should the agent adjust today, and does the merchant need to approve it first?"
+**Primary question:** "What should the agent adjust now, and does the merchant need to approve it first?"
 
-This loop runs once every 24h for each Active contract via APScheduler. It is the core of the autonomous execution cycle.
+This loop runs on a configurable schedule via APScheduler. Default cadences:
+- **Active contracts:** every 15–30 minutes — frequent enough to catch intraday ROAS swings before they become unrecoverable
+- **Funded contracts (pre-execution):** every 60 minutes — waiting for strategy approval, no MCP data to pull yet
+- **All other states:** off
+
+The tick frequency is the primary lever for data freshness. Meta's reporting API has a native 15–60 minute delay, so a 15-min tick gives effectively real-time data without burning API rate limits on every chat message.
 
 **Step-by-step sequence:**
 
-1. **Expire stale cards** — mark any `approval_request` messages from the previous tick with status `expired` if they are still `pending`. The agent never acts on unanswered cards.
+1. **Expire stale cards** — mark any `approval_request` messages whose `expires_at` timestamp has passed as `expired` if they are still `pending`. The agent never acts on unanswered cards.
 2. **Read execution receipts** — load `strategy_plans.execution_receipts` to get the existing `campaign_id` and `ad_set_ids` created on Day 1.
 3. **MCP pull** — call Meta Ads MCP `get_adset_insights` scoped to the existing `ad_set_ids` from `execution_receipts`. Retrieve ad-set-level ROAS, spend, CTR, and conversion events. This is real account data, not the contract-level snapshot.
 4. **ML forecast** — run the live outcome forecast model (4.4) with current spend, revenue, and days remaining. Produces `predicted_final_roas`, `success_probability`, `status`.
 5. **LLM decision** — Claude reasons over the ad-set breakdown + ML forecast and produces a list of structured optimization actions: which ad_sets to scale, pause, or swap; whether to adjust creative. Each action references a real `ad_set_id` from the execution receipts.
 6. **Write `daily_update`** — append one `daily_update` message to the contract timeline with the real metrics and ML forecast.
 7. **Branch on `user.approval_mode`:**
-   - **Manual mode:** Write one `approval_request` card per suggested action. Each card has `expires_at = now + 23h`. Do **not** execute. Wait for the merchant to approve or decline each card via `/actions/:id/approve`. Unanswered cards expire at the next tick.
+   - **Manual mode:** Write one `approval_request` card per suggested action. Each card has `expires_at = now + 23h`. Do **not** execute. Wait for the merchant to approve or decline each card via `/actions/:id/approve`. Unanswered cards are expired by the next tick that runs after their `expires_at` timestamp.
    - **Auto mode:** Execute all actions immediately via the Meta Ads adapter. Write one `system_event` per action executed. No approval cards.
 8. **Write execution receipts** (auto mode or after all cards approved) — update `strategy_plans.execution_receipts` with any new or modified campaign object IDs.
 
@@ -331,7 +336,7 @@ The orchestrator is the entry point called by the backend. It sequences the comp
 | `/execute-ads-actions` | Re-read approved cards from DB → call Meta Ads adapter → write execution receipts |
 | `/performance` | Call Meta Ads adapter for current data + run live forecast model |
 | `/resolve` | Run deterministic resolution engine → call Arc escrow adapter |
-| APScheduler tick (every 24h) | Expire stale cards → MCP `get_adset_insights` → ML forecast → LLM decision → manual: write approval cards with `expires_at`; auto: execute immediately |
+| APScheduler tick (every 15–30 min for Active; 60 min for Funded) | Expire cards past `expires_at` → MCP `get_adset_insights` → ML forecast → LLM decision → manual: write approval cards with `expires_at = now + 23h`; auto: execute immediately |
 
 ---
 

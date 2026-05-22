@@ -450,34 +450,43 @@ async def stream_negotiation(
                     uw_detail_parts: list[str] = []
                     try:
                         ml_result = await asyncio.to_thread(agent_client.run_underwriting, contract_id)
-                        prob = ml_result.get("success_probability", 0)
-                        risk = ml_result.get("risk_level", "unknown")
-                        rec = ml_result.get("recommendation", "unknown")
-                        roas_range = ml_result.get("expected_roas_range", [])
-                        fee = ml_result.get("recommended_fee_usdc")
-                        lines = [
-                            f"Success probability: {prob:.0%}",
-                            f"Risk level: {risk}",
-                            f"Recommendation: {rec}",
-                        ]
-                        if len(roas_range) >= 2:
-                            lines.append(f"Expected ROAS: {roas_range[0]:.2f}× – {roas_range[1]:.2f}×")
-                        if fee is not None:
-                            lines.append(f"Recommended fee: {fee} USDC")
-                        detail = chr(10).join(lines)
-                        uw_detail_parts.append(detail)
-                        yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': detail})}\n\n"
                         tool_result = json.dumps(ml_result)
                         log.info("ML underwriting during negotiation contract=%s prob=%.2f rec=%s",
                                  contract_id, ml_result.get("success_probability", 0), ml_result.get("recommendation"))
                         log.debug("tool result [evaluate_contract_terms]:\n%s", json.dumps(ml_result, indent=2))
+
+                        # Stream a natural-language narration of the ML result via Haiku
+                        # so the thinking panel shows real analytical reasoning, not a
+                        # formatted data dump.
+                        narration_prompt = (
+                            "You are the Bidtopus autonomous agent reasoning through an ML underwriting result. "
+                            "Think analytically in first person. Be specific about the numbers. "
+                            "Do not use bullet points or headers — write flowing analytical reasoning.\n\n"
+                            f"Proposed contract: target_roas={inp['target_roas']}×, "
+                            f"min_spend=${inp['min_spend_usd']}, "
+                            f"time_window={inp['time_window_days']} days, "
+                            f"campaign_mode={inp['campaign_mode']}\n\n"
+                            f"ML result: {tool_result}\n\n"
+                            "Write 2-3 sentences of reasoning about what these numbers mean "
+                            "and how confident I should be. End with the recommendation clearly stated."
+                        )
+                        with _anthropic.messages.stream(
+                            model="claude-haiku-4-5-20251001",
+                            max_tokens=250,
+                            messages=[{"role": "user", "content": narration_prompt}],
+                        ) as narration_stream:
+                            for chunk in narration_stream.text_stream:
+                                if await request.is_disconnected():
+                                    narration_stream.close()
+                                    break
+                                uw_detail_parts.append(chunk)
+                                yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chunk})}\n\n"
+
                     except Exception as exc:
                         log.warning("evaluate_contract_terms: underwriting failed contract=%s: %s", contract_id, exc)
                         fallback = "ML model unavailable — using conservative estimate."
                         uw_detail_parts.append(fallback)
                         yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': fallback})}\n\n"
-                        # Don't pass raw exception string back to the LLM — it may
-                        # echo internals into the merchant-visible response.
                         tool_result = json.dumps({"error": "ml_model_unavailable", "recommendation": "counteroffer"})
 
                     messages_repo.append(
