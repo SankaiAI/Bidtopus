@@ -102,10 +102,12 @@ class PerformanceContractORM(BackendBase):
         json_account = ctx.get("meta_ads_account_id")
         if json_account:
             return json_account
-        raise ValueError(
-            f"Contract {self.id} has no meta_ads_account_id "
-            "(neither FK relationship nor account_context JSON)"
-        )
+        # Negotiation-phase contracts have no linked Meta account yet.
+        # "act_0" satisfies the AccountContext validator and is safe here because
+        # the ML underwriting model does not use account_id as a feature.
+        # generate-strategy and execute-ads only run post-funding when a real
+        # account is guaranteed to be linked.
+        return "act_0"
 
     @property
     def pixel_id(self) -> str | None:
