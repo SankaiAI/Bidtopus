@@ -307,8 +307,16 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
 
             {loading && (
               <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 0' }}>
-                  {[0, 1, 2].map(i => <span key={i} style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: C.indigo, animation: 'agentDotBounce 1.1s ease-in-out infinite', animationDelay: `${i * 0.18}s` }} />)}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 8, background: C.indigoBg, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'agentAvatarPulse 1.6s ease-in-out infinite' }}>
+                      <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
+                    </svg>
+                  </div>
+                  <div style={{ flex: 1, paddingTop: '5px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.indigo, animation: 'agentThinkPulse 1s infinite' }} />
+                    <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Thinking...</span>
+                  </div>
                 </div>
               </div>
             )}
