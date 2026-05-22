@@ -20,9 +20,16 @@ from config import settings
 
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,      # detect stale connections
+    pool_pre_ping=True,   # test connections before use
+    pool_recycle=60,      # recycle before Railway's ~90s TCP idle timeout drops them
     pool_size=5,
     max_overflow=10,
+    connect_args={
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    },
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
