@@ -15,21 +15,17 @@ from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from config import settings
 
+# NullPool: open a fresh connection per request and close it immediately after.
+# Railway's NAT drops idle TCP state to external services (Neon) within ~60s,
+# causing TCP_OVERWINDOW on pooled connections. NullPool avoids this entirely.
 engine = create_engine(
     settings.DATABASE_URL,
-    pool_pre_ping=True,   # test connections before use
-    pool_recycle=60,      # recycle before Railway's ~90s TCP idle timeout drops them
-    pool_size=5,
-    max_overflow=10,
-    connect_args={
-        "keepalives": 1,
-        "keepalives_idle": 30,
-        "keepalives_interval": 10,
-        "keepalives_count": 5,
-    },
+    poolclass=NullPool,
+    connect_args={"connect_timeout": 10},
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
