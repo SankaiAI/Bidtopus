@@ -1,8 +1,8 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 const isPublic = createRouteMatcher([
-  '/',                    // root → landing
-  '/landing',             // public marketing page (linked from sidebar logo)
+  '/',                    // landing page
+  '/landing',             // redirect → / (keep public so the redirect works)
   '/dashboard',           // browsable without login
   '/workspace/new',       // workspace builder UI visible, but chat action gates itself
   '/api/agent',           // SSE route (frontend won't call it unauthenticated)
