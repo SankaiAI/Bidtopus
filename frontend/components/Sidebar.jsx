@@ -7,8 +7,6 @@ import { useTheme } from '@/components/AppShell'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useWalletConnect } from '@/hooks/useWalletConnect'
 import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
-import { createApiClient } from '@/lib/api'
-import { useAuth } from '@clerk/nextjs'
 import { Icon, PanelClose, PanelOpen } from './sidebar/icons'
 import EscrowProtect from './sidebar/EscrowProtect'
 import UserProfile from './sidebar/UserProfile'
@@ -38,35 +36,12 @@ const hoverOff = e => { e.currentTarget.style.background = 'none'; e.currentTarg
 
 // ─── META ACCOUNT SELECTOR ────────────────────────────────────────────────────
 function MetaAccountSelector({ collapsed }) {
-  const { accounts, activeAccount, loading, setActiveAccount, reloadAccounts } = useMetaAccount()
-  const { getToken } = useAuth()
+  const { accounts, activeAccount, loading, setActiveAccount } = useMetaAccount()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [connecting, setConnecting] = useState(false)
-  const [newAccountId, setNewAccountId] = useState('')
-  const [connectLoading, setConnectLoading] = useState(false)
-  const [connectError, setConnectError] = useState('')
   const containerRef = React.useRef(null)
   const filtered = accounts.filter(a => accountLabel(a).toLowerCase().includes(search.toLowerCase()))
   const selectedLabel = activeAccount ? accountLabel(activeAccount) : null
-
-  const handleConnect = async () => {
-    const trimmed = newAccountId.trim()
-    if (!trimmed) return
-    setConnectLoading(true)
-    setConnectError('')
-    try {
-      await createApiClient(getToken).connectMetaAccount(trimmed)
-      await reloadAccounts()
-      setNewAccountId('')
-      setConnecting(false)
-      setOpen(false)
-    } catch (e) {
-      setConnectError(e?.message || 'Failed to connect account')
-    } finally {
-      setConnectLoading(false)
-    }
-  }
 
   React.useEffect(() => {
     if (!open) return
@@ -99,7 +74,7 @@ function MetaAccountSelector({ collapsed }) {
     <div ref={containerRef} style={{ padding: '8px 12px 10px', flexShrink: 0 }}>
       <div style={{ position: 'relative' }}>
         <button
-          onClick={() => { setOpen(v => !v); setSearch(''); setConnecting(false); setNewAccountId(''); setConnectError('') }}
+          onClick={() => { setOpen(v => !v); setSearch('') }}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: '8px',
             padding: '8px 10px',
@@ -166,46 +141,6 @@ function MetaAccountSelector({ collapsed }) {
               })}
             </div>
 
-            <div style={{ borderTop: '1px solid #f0eef8' }}>
-              {connecting ? (
-                <div style={{ padding: '10px 12px' }}>
-                  <input
-                    autoFocus
-                    placeholder="act_XXXXXXXXX"
-                    value={newAccountId}
-                    onChange={e => { setNewAccountId(e.target.value); setConnectError('') }}
-                    onKeyDown={e => { if (e.key === 'Enter') handleConnect(); if (e.key === 'Escape') { setConnecting(false); setNewAccountId(''); setConnectError('') } }}
-                    style={{ width: '100%', border: `1px solid ${connectError ? 'var(--c-red)' : 'var(--c-border)'}`, borderRadius: '6px', padding: '7px 10px', fontSize: '13px', color: 'var(--c-text)', fontFamily: 'Plus Jakarta Sans, sans-serif', outline: 'none', background: 'var(--c-bg)', boxSizing: 'border-box' }}
-                  />
-                  {connectError && <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'var(--c-red)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{connectError}</p>}
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
-                    <button
-                      onClick={handleConnect}
-                      disabled={connectLoading || !newAccountId.trim()}
-                      style={{ flex: 1, padding: '6px 0', background: 'var(--c-indigo)', color: '#fff', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: 600, fontFamily: 'Plus Jakarta Sans, sans-serif', cursor: connectLoading ? 'wait' : 'pointer', opacity: (!newAccountId.trim() || connectLoading) ? 0.6 : 1 }}
-                    >
-                      {connectLoading ? 'Connecting…' : 'Connect'}
-                    </button>
-                    <button
-                      onClick={() => { setConnecting(false); setNewAccountId(''); setConnectError('') }}
-                      style={{ padding: '6px 12px', background: 'none', border: '1px solid var(--c-border)', borderRadius: '6px', fontSize: '13px', color: 'var(--c-muted)', fontFamily: 'Plus Jakarta Sans, sans-serif', cursor: 'pointer' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => { setConnecting(true); setConnectError('') }}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: 'Plus Jakarta Sans, sans-serif', textAlign: 'left', transition: 'background 0.12s' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-hover)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  <span style={{ fontSize: '18px', lineHeight: 1, color: '#6b6880', marginTop: '-1px' }}>+</span>
-                  Connect new account
-                </button>
-              )}
-            </div>
           </div>
         )}
       </div>
