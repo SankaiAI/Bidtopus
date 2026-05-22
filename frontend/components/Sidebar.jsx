@@ -141,6 +141,18 @@ function MetaAccountSelector({ collapsed }) {
               })}
             </div>
 
+            <div style={{ borderTop: '1px solid #f0eef8' }}>
+              <button
+                onClick={() => {}}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: 'Plus Jakarta Sans, sans-serif', textAlign: 'left', transition: 'background 0.12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-hover)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ fontSize: '18px', lineHeight: 1, color: '#6b6880', marginTop: '-1px' }}>+</span>
+                Connect new account
+              </button>
+            </div>
+
           </div>
         )}
       </div>
