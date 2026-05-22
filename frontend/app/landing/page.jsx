@@ -368,8 +368,8 @@ function Receipt() {
       <Wrap>
         <div className="receipt-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 64, alignItems: 'center' }}>
           {/* Copy */}
-          <div>
-            <h2 style={{ font: `600 48px/1.1 ${S.fontSans}`, letterSpacing: '-1.4px', color: S.ink, margin: '0 0 24px' }}>
+          <div className="receipt-copy">
+            <h2 className="receipt-h2" style={{ font: `600 48px/1.1 ${S.fontSans}`, letterSpacing: '-1.4px', color: S.ink, margin: '0 0 24px' }}>
               Every result has{' '}
               <span style={{ color: S.cyanDeep, fontStyle: 'italic', fontWeight: 500 }}>a tx hash.</span>
             </h2>
@@ -470,7 +470,7 @@ function HowItWorks() {
     <section style={{ padding: '80px 0', marginBottom: 96 }}>
       <Wrap>
         <div style={{ textAlign: 'center', marginBottom: 56 }}>
-          <h2 style={{ font: `600 48px/1.1 ${S.fontSans}`, letterSpacing: '-1.4px', maxWidth: 680, margin: '0 auto', color: S.ink }}>
+          <h2 className="flow-h2" style={{ font: `600 48px/1.1 ${S.fontSans}`, letterSpacing: '-1.4px', maxWidth: 680, margin: '0 auto', color: S.ink }}>
             Three steps.{' '}
             <span style={{ color: S.cyanDeep, fontStyle: 'italic', fontWeight: 500 }}>Zero retainer.</span>
           </h2>
@@ -628,19 +628,26 @@ export default function LandingPage() {
 
           /* Mission */
           .mission-card { padding: 36px 24px !important; border-radius: 20px !important; }
-          .mission-h2   { font-size: 34px !important; letter-spacing: -1px !important; line-height: 1.1 !important; }
+          .mission-h2   { font-size: 34px !important; letter-spacing: -1px !important; line-height: 1.1 !important; text-align: center !important; }
+          .mission-row  { text-align: center !important; }
+          .mission-row .bt-btn-tertiary { margin: 0 auto !important; }
 
           /* Arms */
-          .arms-h2   { font-size: 30px !important; letter-spacing: -0.8px !important; }
-          .arms-head { gap: 12px !important; margin-bottom: 24px !important; }
+          .arms-h2   { font-size: 30px !important; letter-spacing: -0.8px !important; text-align: center !important; }
+          .arms-head { gap: 12px !important; margin-bottom: 24px !important; text-align: center !important; align-items: center !important; }
+          .arms-head p { display: none !important; }
           .arms-grid { grid-template-columns: 1fr !important; }
 
           /* Receipt */
-          .receipt-row { grid-template-columns: 1fr !important; }
+          .receipt-row  { grid-template-columns: 1fr !important; }
+          .receipt-copy { text-align: center !important; }
+          .receipt-h2   { font-size: 34px !important; letter-spacing: -1px !important; }
+          .receipt-copy ul { text-align: left !important; }
 
           /* How it works */
           .flow-steps-grid { grid-template-columns: 1fr !important; gap: 36px !important; }
           .flow-line        { display: none !important; }
+          .flow-h2          { font-size: 32px !important; letter-spacing: -0.8px !important; }
 
           /* CTA */
           .cta-card { padding: 48px 24px !important; border-radius: 20px !important; }
