@@ -7,6 +7,8 @@ import { useTheme } from '@/components/AppShell'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useWalletConnect } from '@/hooks/useWalletConnect'
 import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
+import { createApiClient } from '@/lib/api'
+import { useAuth } from '@clerk/nextjs'
 import { Icon, PanelClose, PanelOpen } from './sidebar/icons'
 import EscrowProtect from './sidebar/EscrowProtect'
 import UserProfile from './sidebar/UserProfile'
@@ -36,10 +38,41 @@ const hoverOff = e => { e.currentTarget.style.background = 'none'; e.currentTarg
 
 // ─── META ACCOUNT SELECTOR ────────────────────────────────────────────────────
 function MetaAccountSelector({ collapsed }) {
-  const { accounts, activeAccount, loading, setActiveAccount } = useMetaAccount()
+  const { accounts, activeAccount, loading, setActiveAccount, reloadAccounts } = useMetaAccount()
+  const { getToken } = useAuth()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const [connecting, setConnecting] = useState(false)
   const containerRef = React.useRef(null)
+
+  const handleConnectNew = async () => {
+    if (connecting) return
+    setConnecting(true)
+    try {
+      const { url } = await createApiClient(getToken).getMetaOAuthUrl()
+      const popup = window.open(url, 'meta_oauth', 'width=600,height=700,left=200,top=100')
+      const onMessage = (e) => {
+        if (e.origin !== window.location.origin) return
+        if (e.data?.type === 'meta_oauth_success') {
+          reloadAccounts()
+          setOpen(false)
+        }
+        window.removeEventListener('message', onMessage)
+        setConnecting(false)
+      }
+      window.addEventListener('message', onMessage)
+      // Fallback: if popup closes without postMessage (user closed manually)
+      const poll = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(poll)
+          window.removeEventListener('message', onMessage)
+          setConnecting(false)
+        }
+      }, 500)
+    } catch {
+      setConnecting(false)
+    }
+  }
   const filtered = accounts.filter(a => accountLabel(a).toLowerCase().includes(search.toLowerCase()))
   const selectedLabel = activeAccount ? accountLabel(activeAccount) : null
 
@@ -143,13 +176,14 @@ function MetaAccountSelector({ collapsed }) {
 
             <div style={{ borderTop: '1px solid #f0eef8' }}>
               <button
-                onClick={() => {}}
-                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 12px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: 'Plus Jakarta Sans, sans-serif', textAlign: 'left', transition: 'background 0.12s' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--c-sidebar-hover)'}
+                onClick={handleConnectNew}
+                disabled={connecting}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '9px', padding: '10px 12px', background: 'none', border: 'none', cursor: connecting ? 'wait' : 'pointer', fontSize: '14px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: 'Plus Jakarta Sans, sans-serif', textAlign: 'left', transition: 'background 0.12s', opacity: connecting ? 0.6 : 1 }}
+                onMouseEnter={e => { if (!connecting) e.currentTarget.style.background = 'var(--c-sidebar-hover)' }}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <span style={{ fontSize: '18px', lineHeight: 1, color: '#6b6880', marginTop: '-1px' }}>+</span>
-                Connect new account
+                {connecting ? 'Connecting…' : 'Connect new account'}
               </button>
             </div>
 

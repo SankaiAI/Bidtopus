@@ -117,6 +117,9 @@ export function createApiClient(getToken) {
     connectWallet: (walletAddress, signature) =>
       post('/api/users/me/wallet', { wallet_address: walletAddress, signature }),
 
+    // ── Meta OAuth (issue #91) ──────────────────────────────────────────
+    getMetaOAuthUrl: () => get('/api/auth/meta/url'),
+
     // ── Meta Ads accounts (backend ticket #76) ─────────────────────────
     listMetaAccounts:      ()                       => get('/api/users/me/meta-accounts'),
     connectMetaAccount:    (externalId, label = null) =>
