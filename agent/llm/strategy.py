@@ -36,11 +36,15 @@ class StrategyGenerator:
         self,
         contract_terms: ContractTerms,
         account_context: AccountContext,
+        live_context: dict | None = None,
     ) -> tuple[StrategyPlan, str | None]:
-        user_payload = json.dumps({
+        payload: dict = {
             "contract_terms": contract_terms.model_dump(),
             "account_context": account_context.model_dump(),
-        })
+        }
+        if live_context:
+            payload["live_campaign_context"] = live_context
+        user_payload = json.dumps(payload)
 
         response = self._client.messages.create(
             model=settings.CLAUDE_MODEL,
@@ -78,12 +82,16 @@ class StrategyGenerator:
         self,
         contract_terms: ContractTerms,
         account_context: AccountContext,
+        live_context: dict | None = None,
     ) -> Generator[tuple[str, Any], None, None]:
         """Yields ('thinking', str) deltas then a final ('result', StrategyPlan)."""
-        user_payload = json.dumps({
+        payload: dict = {
             "contract_terms": contract_terms.model_dump(),
             "account_context": account_context.model_dump(),
-        })
+        }
+        if live_context:
+            payload["live_campaign_context"] = live_context
+        user_payload = json.dumps(payload)
         accumulated_text: list[str] = []
 
         with self._client.messages.stream(

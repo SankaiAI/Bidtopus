@@ -104,6 +104,11 @@ class ActivateResponse(BaseModel):
     monitoring_scheduled: bool
 
 
+class PerformanceResponse(BaseModel):
+    snapshot: dict
+    forecast: dict
+
+
 class GeneratePlanRequest(BaseModel):
     contract_id: str
     user_id: str
@@ -444,13 +449,60 @@ def activate(body: ContractRequest, db: Session = Depends(get_db)):
     return ActivateResponse(contract_id=body.contract_id, monitoring_scheduled=True)
 
 
+@router.get("/performance", response_model=PerformanceResponse)
+def get_performance(contract_id: str, db: Session = Depends(get_db)):
+    """Return current performance snapshot + forecast for an Active contract.
+
+    Called by the backend conductor's check_performance tool.
+    day is computed from funded_at; returns 422 if the contract has not been funded.
+    """
+    from datetime import timezone
+
+    contract = _get_contract_or_404(contract_id, db)
+    attach_session(contract_id)
+    logger.info("request_received", contract_id=contract_id, action="get_performance", state=contract.status)
+
+    if not contract.funded_at:
+        raise HTTPException(status_code=422, detail="Contract has not been funded yet — no performance data available.")
+
+    now = datetime.now(timezone.utc)
+    funded_at_utc = contract.funded_at.replace(tzinfo=timezone.utc)
+    days_elapsed = max(0, (now - funded_at_utc).days)
+    day = days_elapsed + 1
+    days_remaining = max(0, (contract.time_window_days or 7) - days_elapsed)
+
+    try:
+        result = orchestrator.get_performance(
+            contract_id=contract_id,
+            day=day,
+            target_roas=contract.target_roas,
+            minimum_spend=contract.minimum_spend or 0.0,
+            days_elapsed=days_elapsed,
+            days_remaining=days_remaining,
+            db=db,
+        )
+    except Exception as e:
+        _handle_agent_error(e, contract_id)
+
+    logger.info(
+        "request_complete",
+        contract_id=contract_id,
+        action="get_performance",
+        day=day,
+        roas=result["snapshot"].get("roas"),
+    )
+    return PerformanceResponse(snapshot=result["snapshot"], forecast=result["forecast"])
+
+
 # ── Action-type label map ─────────────────────────────────────────────────────
 _ACTION_TYPE_MAP = {
-    "create_campaign": "campaign",
-    "create_ad_set":   "audience",
-    "set_budget":      "budget",
-    "update_targeting": "audience",
-    "pause_ad_set":    "campaign",
+    "create_campaign":    "campaign",
+    "create_ad_set":      "audience",
+    "create_ad_creative": "creative",
+    "create_ad":          "ad",
+    "set_budget":         "budget",
+    "update_targeting":   "audience",
+    "pause_ad_set":       "campaign",
 }
 
 
@@ -466,6 +518,10 @@ def _action_content(action_type: str, params: dict) -> str:
         return f"Set daily budget to ${params.get('daily_budget_usd', 0):.0f}"
     if action_type == "update_targeting":
         return f"Update targeting: {params.get('targeting_description', '')}"
+    if action_type == "create_ad_creative":
+        return f"Create ad creative — {params.get('name', 'new creative')}"
+    if action_type == "create_ad":
+        return f"Create ad in ad set {params.get('adset_id', '')}"
     if action_type == "pause_ad_set":
         return f"Pause ad set — {params.get('reason', 'optimisation')}"
     return action_type
@@ -522,6 +578,14 @@ def generate_plan(body: GeneratePlanRequest, db: Session = Depends(get_db)):
             aov=account_context.aov,
         )
 
+    # Fetch live campaign data to give the LLM current campaign state
+    live_context: dict | None = None
+    try:
+        from adapters.meta_ads import get_meta_ads_adapter as _get_adapter
+        live_context = _get_adapter().get_live_campaign_context(account_context.account_id)
+    except Exception as exc:
+        logger.warning("live_campaign_context_fetch_failed", contract_id=body.contract_id, error=str(exc))
+
     try:
         plan, _ = orchestrator.generate_plan(
             contract_id=body.contract_id,
@@ -529,6 +593,7 @@ def generate_plan(body: GeneratePlanRequest, db: Session = Depends(get_db)):
             account_context=account_context,
             contract_status=contract.status,
             db=db,
+            live_context=live_context,
         )
     except Exception as e:
         _handle_agent_error(e, body.contract_id)

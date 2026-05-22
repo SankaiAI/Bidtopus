@@ -103,6 +103,8 @@ class StrategyAction(BaseModel):
     type: Literal[
         "create_campaign",
         "create_ad_set",
+        "create_ad_creative",
+        "create_ad",
         "set_budget",
         "update_targeting",
         "pause_ad_set",

@@ -331,6 +331,7 @@ def generate_plan(
     account_context: AccountContext,
     contract_status: str,
     db: Session,
+    live_context: dict | None = None,
 ) -> tuple[StrategyPlan, str | None]:
     """Like generate_strategy but without writing the aggregated approval_request.
 
@@ -344,7 +345,9 @@ def generate_plan(
         "account_context": account_context.model_dump(),
     })
 
-    plan, thinking = _get_strategy_generator().generate_strategy(contract_terms, account_context)
+    plan, thinking = _get_strategy_generator().generate_strategy(
+        contract_terms, account_context, live_context=live_context
+    )
     audit.log(contract_id, "llm_strategy", "result", plan.model_dump())
 
     logger.info(

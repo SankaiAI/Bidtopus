@@ -105,16 +105,69 @@ class MockMetaAdsAdapter(MetaAdsAdapterBase):
             "aov": round(30.0 + rng.uniform(10, 120), 2),
         }
 
+    def get_live_campaign_context(self, account_id: str) -> dict[str, Any]:
+        rng = random.Random(_seed_for(account_id))
+        daily_spend = round(50.0 + rng.uniform(0, 200), 2)
+        return {
+            "campaigns": [
+                {
+                    "id": f"mock_campaign_{account_id[-4:]}",
+                    "name": "Retargeting — Warm Audiences",
+                    "status": "ACTIVE",
+                    "objective": "OUTCOME_SALES",
+                    "daily_budget_usd": round(daily_spend * 0.6, 2),
+                }
+            ],
+            "ad_sets": [
+                {
+                    "id": f"mock_adset_{account_id[-4:]}_1",
+                    "name": "Lookalike 1% — Purchasers",
+                    "status": "ACTIVE",
+                    "daily_budget_usd": round(daily_spend * 0.4, 2),
+                    "targeting": "Lookalike 1% based on purchasers",
+                },
+                {
+                    "id": f"mock_adset_{account_id[-4:]}_2",
+                    "name": "Website Visitors — 30d",
+                    "status": "ACTIVE",
+                    "daily_budget_usd": round(daily_spend * 0.2, 2),
+                    "targeting": "Website visitors in last 30 days",
+                },
+            ],
+            "insights": {
+                "impressions": int(daily_spend * rng.uniform(80, 120)),
+                "clicks": int(daily_spend * rng.uniform(1, 3)),
+                "spend": daily_spend,
+                "roas": round(1.2 + rng.uniform(0.0, 1.0), 2),
+                "ctr": round(rng.uniform(0.01, 0.03), 4),
+                "cpc": round(rng.uniform(0.3, 1.5), 2),
+            },
+            "creatives": [
+                {
+                    "id": f"mock_creative_{account_id[-4:]}",
+                    "name": "Product carousel — hero SKUs",
+                    "format": "CAROUSEL",
+                }
+            ],
+        }
+
 
 # ── Real adapter — Meta Ads MCP at https://mcp.facebook.com/ads ───────────────
+#
+# Active MCP server: https://mcp.facebook.com/ads  (Meta's official server)
+# Tool name convention: unprefixed (e.g. "create_campaign", not "mcp_meta_ads_create_campaign").
+# The community Pipeboard server (https://mcp.pipeboard.co/meta-ads-mcp) uses the
+# "mcp_meta_ads_*" prefix — do NOT use that server URL or prefix here.
 
 # Maps StrategyAction.type values to their MCP tool names
 _ACTION_MCP_TOOL: dict[str, str] = {
-    "create_campaign":  "create_campaign",
-    "create_ad_set":    "create_ad_set",
-    "set_budget":       "set_budget",
-    "update_targeting": "update_targeting",
-    "pause_ad_set":     "pause_ad_set",
+    "create_campaign":    "create_campaign",
+    "create_ad_set":      "create_adset",
+    "create_ad_creative": "create_ad_creative",
+    "create_ad":          "create_ad",
+    "set_budget":         "set_budget",
+    "update_targeting":   "update_targeting",
+    "pause_ad_set":       "pause_adset",
 }
 
 
@@ -195,6 +248,39 @@ class RealMetaAdsAdapter(MetaAdsAdapterBase):
 
     def get_account_context(self, account_id: str) -> dict[str, Any]:
         return _run_sync(self._get_account_context_async(account_id))
+
+    def get_live_campaign_context(self, account_id: str) -> dict[str, Any]:
+        return _run_sync(self._get_live_campaign_context_async(account_id))
+
+    async def _get_live_campaign_context_async(self, account_id: str) -> dict[str, Any]:
+        async with streamablehttp_client(self._MCP_URL, headers=self._headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+
+                campaigns_result = await session.call_tool("get_campaigns", {"account_id": account_id})
+                ad_sets_result = await session.call_tool("get_adsets", {"account_id": account_id})
+                insights_result = await session.call_tool(
+                    "get_insights", {"account_id": account_id, "date_preset": "last_7d"}
+                )
+                creatives_result = await session.call_tool("get_ad_creatives", {"account_id": account_id})
+
+        def _parse(result: Any) -> Any:
+            if result.isError:
+                return None
+            raw = _extract_text(result)
+            try:
+                return json.loads(raw)
+            except (ValueError, TypeError):
+                return None
+
+        context = {
+            "campaigns": _parse(campaigns_result),
+            "ad_sets": _parse(ad_sets_result),
+            "insights": _parse(insights_result),
+            "creatives": _parse(creatives_result),
+        }
+        logger.info("mcp_live_campaign_context_fetched", account_id=account_id)
+        return context
 
     async def _get_account_context_async(self, account_id: str) -> dict[str, Any]:
         async with streamablehttp_client(self._MCP_URL, headers=self._headers) as (read, write, _):

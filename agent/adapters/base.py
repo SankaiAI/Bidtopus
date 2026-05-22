@@ -41,6 +41,13 @@ class MetaAdsAdapterBase(ABC):
             "aov": None,
         }
 
+    def get_live_campaign_context(self, account_id: str) -> dict:  # noqa: ARG002
+        """Return live campaign/ad set/insight/creative data for strategy generation.
+
+        Default returns empty collections. Override in concrete adapters.
+        """
+        return {"campaigns": None, "ad_sets": None, "insights": None, "creatives": None}
+
 
 class ArcEscrowAdapterBase(ABC):
     @abstractmethod
