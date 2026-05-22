@@ -25,7 +25,7 @@ const S = {
 
 // ─── Reusable primitives ─────────────────────────────────────────────────────
 const Wrap = ({ children, style }) => (
-  <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px', ...style }}>
+  <div className="wrap" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 40px', ...style }}>
     {children}
   </div>
 )
@@ -116,7 +116,7 @@ function Navbar() {
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 function Hero() {
   return (
-    <section style={{ position: 'relative', padding: '88px 0 56px', overflow: 'hidden' }}>
+    <section className="hero-section" style={{ position: 'relative', padding: '88px 0 56px', overflow: 'hidden' }}>
       {/* Cyan grid backdrop */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
@@ -145,7 +145,7 @@ function Hero() {
             />
           </div>
 
-          <h1 style={{
+          <h1 className="hero-h1" style={{
             font: `800 52px/1.08 ${S.fontSans}`,
             letterSpacing: '-1.6px',
             margin: '0 auto',
@@ -243,7 +243,7 @@ function Mission() {
   return (
     <section style={{ marginBottom: 96 }}>
       <Wrap>
-        <div style={{
+        <div className="mission-card" style={{
           background: S.surface, borderRadius: 32, padding: '80px 64px',
           position: 'relative', overflow: 'hidden',
         }}>
@@ -255,7 +255,7 @@ function Mission() {
           }} />
           <div className="mission-row" style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 64, alignItems: 'end' }}>
             <div>
-              <h2 style={{ font: `600 64px/1.05 ${S.fontSans}`, letterSpacing: '-2px', color: S.ink, margin: 0 }}>
+              <h2 className="mission-h2" style={{ font: `600 64px/1.05 ${S.fontSans}`, letterSpacing: '-2px', color: S.ink, margin: 0 }}>
                 Stake the outcome.{' '}
                 <span style={{ color: S.cyanDeep, fontStyle: 'italic', fontWeight: 500, display: 'block' }}>
                   Skip the retainer.
@@ -309,7 +309,7 @@ function Arms() {
     <section style={{ marginBottom: 96 }}>
       <Wrap>
         <div className="arms-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, gap: 64 }}>
-          <h2 style={{ font: `600 56px/1.05 ${S.fontSans}`, letterSpacing: '-1.6px', maxWidth: 720, color: S.ink, margin: 0 }}>
+          <h2 className="arms-h2" style={{ font: `600 56px/1.05 ${S.fontSans}`, letterSpacing: '-1.6px', maxWidth: 720, color: S.ink, margin: 0 }}>
             One agent.{' '}
             <span style={{ color: S.cyanDeep, fontStyle: 'italic', fontWeight: 500 }}>Eight arms.</span>
           </h2>
@@ -475,9 +475,9 @@ function HowItWorks() {
             <span style={{ color: S.cyanDeep, fontStyle: 'italic', fontWeight: 500 }}>Zero retainer.</span>
           </h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', position: 'relative' }}>
+        <div className="flow-steps-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', position: 'relative' }}>
           {/* Dashed connector */}
-          <div style={{
+          <div className="flow-line" style={{
             position: 'absolute', top: 28, left: '16%', right: '16%', height: 2,
             background: `repeating-linear-gradient(to right, ${S.cyan} 0 6px, transparent 6px 12px)`,
             zIndex: 0,
@@ -512,12 +512,12 @@ function FinalCTA() {
   return (
     <section style={{ marginBottom: 64 }}>
       <Wrap>
-        <div style={{
+        <div className="cta-card" style={{
           background: S.ink, borderRadius: 32, padding: '80px 64px',
           color: '#fff', textAlign: 'center', position: 'relative', overflow: 'hidden',
         }}>
           <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 70% 80% at 50% 0%, rgba(61,174,255,0.5) 0%, rgba(61,174,255,0.08) 40%, transparent 70%)', pointerEvents: 'none' }} />
-          <h2 style={{ font: `600 64px/1.05 ${S.fontSans}`, letterSpacing: '-2px', color: '#fff', maxWidth: 800, margin: '0 auto', position: 'relative' }}>
+          <h2 className="cta-h2" style={{ font: `600 64px/1.05 ${S.fontSans}`, letterSpacing: '-2px', color: '#fff', maxWidth: 800, margin: '0 auto', position: 'relative' }}>
             Results first.
             <span style={{ color: S.cyan, fontStyle: 'italic', fontWeight: 500, display: 'block' }}>Then we get paid.</span>
           </h2>
@@ -604,19 +604,52 @@ export default function LandingPage() {
       {/* Responsive overrides */}
       <style>{`
         body { overflow-x: hidden; }
+
         @media (max-width: 900px) {
-          .mission-row { grid-template-columns: 1fr !important; gap: 32px !important; }
-          .arms-head { flex-direction: column !important; gap: 20px !important; }
-          .arms-grid { grid-template-columns: repeat(2,1fr) !important; }
-          .receipt-row { grid-template-columns: 1fr !important; gap: 48px !important; }
-          .ft-row { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
+          .mission-row  { grid-template-columns: 1fr !important; gap: 32px !important; }
+          .arms-head    { flex-direction: column !important; gap: 20px !important; }
+          .arms-grid    { grid-template-columns: repeat(2,1fr) !important; }
+          .receipt-row  { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .ft-row       { grid-template-columns: 1fr 1fr !important; gap: 32px !important; }
+          .mission-card { padding: 48px 40px !important; }
+          .cta-card     { padding: 64px 40px !important; }
         }
+
         @media (max-width: 640px) {
+          /* Layout */
+          .wrap         { padding: 0 20px !important; }
           .bt-nav-links { display: none !important; }
           .bt-nav-right { display: none !important; }
           .bt-hamburger { display: flex !important; }
+
+          /* Hero */
+          .hero-section { padding: 40px 0 36px !important; }
+          .hero-h1      { font-size: 36px !important; letter-spacing: -1px !important; line-height: 1.1 !important; }
+
+          /* Mission */
+          .mission-card { padding: 36px 24px !important; border-radius: 20px !important; }
+          .mission-h2   { font-size: 34px !important; letter-spacing: -1px !important; line-height: 1.1 !important; }
+
+          /* Arms */
+          .arms-h2   { font-size: 30px !important; letter-spacing: -0.8px !important; }
+          .arms-head { gap: 12px !important; margin-bottom: 24px !important; }
           .arms-grid { grid-template-columns: 1fr !important; }
-          .ft-row { grid-template-columns: 1fr !important; }
+
+          /* Receipt */
+          .receipt-row { grid-template-columns: 1fr !important; }
+
+          /* How it works */
+          .flow-steps-grid { grid-template-columns: 1fr !important; gap: 36px !important; }
+          .flow-line        { display: none !important; }
+
+          /* CTA */
+          .cta-card { padding: 48px 24px !important; border-radius: 20px !important; }
+          .cta-h2   { font-size: 38px !important; letter-spacing: -1.2px !important; line-height: 1.1 !important; }
+
+          /* Footer */
+          .ft-row { grid-template-columns: 1fr !important; gap: 32px !important; }
+
+          /* Hero CTAs */
           .hero-ctas { flex-direction: column !important; align-items: stretch !important; }
           .hero-ctas a { justify-content: center !important; }
         }
