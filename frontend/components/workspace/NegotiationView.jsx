@@ -365,7 +365,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
             )}
 
             {termsReady && !loading && !isStreaming && (
-              <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px' }}>
+              <div style={{ maxWidth: '720px', margin: '0 auto', width: '100%', padding: '0 16px 16px', display: 'flex', justifyContent: 'flex-start', paddingLeft: '52px' }}>
                 <button
                   onClick={() => handleSend('confirm')}
                   style={{ background: C.indigo, color: '#fff', border: 'none', borderRadius: '10px', padding: '10px 20px', fontSize: '13px', fontWeight: 700, fontFamily: font, cursor: 'pointer', boxShadow: '0 2px 8px rgba(59,130,246,0.25)', transition: 'opacity 0.15s' }}
