@@ -40,6 +40,20 @@ export const metadata = {
     ],
     shortcut: '/favicon.ico',
   },
+  openGraph: {
+    title: 'Bidtopus — Pay Only for Marketing Results',
+    description: 'AI agent for Meta Ads. Set a ROAS target, the agent runs your campaign, and collects its fee only after the result is verified.',
+    url: 'https://bidtopus.com',
+    siteName: 'Bidtopus',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Bidtopus — Your AI agent for Meta Ads' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Bidtopus — Pay Only for Marketing Results',
+    description: 'AI agent for Meta Ads. Set a ROAS target, the agent runs your campaign, and collects its fee only after the result is verified.',
+    images: ['/og-image.png'],
+  },
 }
 
 // ClerkProvider is always rendered. The previous `hasClerk` conditional
