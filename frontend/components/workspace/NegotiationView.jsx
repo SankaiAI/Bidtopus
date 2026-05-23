@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useClerk } from '@clerk/nextjs'
+import { useOpenMobileSidebar } from '@/components/AppShell'
 import AgentInputBar from '@/components/AgentInputBar'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useNegotiationStream } from '@/hooks/useNegotiationStream'
@@ -193,6 +194,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
     onContractCreated: onFinalized,
   })
 
+  const openMobileSidebar = useOpenMobileSidebar()
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
   const [isMobile, setIsMobile] = React.useState(false)
   const [inputKey, setInputKey] = React.useState(0)
@@ -272,7 +274,10 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
       />
 
       {/* Mobile header */}
-      <div className="app-mobile-header">
+      <div className="app-mobile-header" style={{ background: C.surface }}>
+        <button onClick={openMobileSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'flex', alignItems: 'center', marginRight: '8px', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
+        </button>
         <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
       </div>
 
