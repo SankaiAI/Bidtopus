@@ -232,13 +232,13 @@ function ContractRow({ contract }) {
       </div>
 
       {/* Fee */}
-      <div style={{ minWidth: '74px', textAlign: 'right' }}>
+      <div style={{ width: '74px', textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: '13px', fontWeight: 700, color: C.text }}>{fee != null ? `${fee} USDC` : '—'}</div>
         <div style={{ fontSize: '10px', color: C.muted }}>success fee</div>
       </div>
 
       {/* Status */}
-      <div style={{ flexShrink: 0 }}>
+      <div style={{ width: '72px', flexShrink: 0 }}>
         <StatusBadge status={status} />
       </div>
 
@@ -258,10 +258,10 @@ function RecentContracts({ contracts, loading, error, isSignedIn }) {
       </div>
 
       {/* Table header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 16px', borderBottom: `1px solid ${C.border}`, background: C.surfaceAlt }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '8px 16px', borderBottom: `1px solid ${C.border}` }}>
         <div style={{ flex: 2, fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Campaign</div>
-        <div style={{ minWidth: '74px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Fee</div>
-        <div style={{ flexShrink: 0, fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
+        <div style={{ width: '74px', textAlign: 'right', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Fee</div>
+        <div style={{ width: '72px', fontSize: '10px', fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Status</div>
         <div style={{ width: '13px' }} />
       </div>
 
