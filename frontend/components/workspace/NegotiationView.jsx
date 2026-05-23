@@ -4,9 +4,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { useClerk } from '@clerk/nextjs'
+import { useClerk, useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
 import { useMetaAccount } from '@/contexts/MetaAccountContext'
+import { createApiClient } from '@/lib/api'
 import AgentInputBar from '@/components/AgentInputBar'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useNegotiationStream } from '@/hooks/useNegotiationStream'
@@ -72,7 +73,7 @@ function WelcomeScreen({ onQuickAction, onStart }) {
       <div className="agent-setup-cards">
         <SetupCard onClick={onStart} title="New Contract" description="Set ROAS target, fee & time window" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>} />
         <SetupCard href="/contracts" title="My Contracts" description="View existing contracts and status" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>} />
-        <SetupCard href="/settings" title="Connect Ad Account" description="Link Meta Ads for campaign context" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>} />
+        <SetupCard onClick={handleConnectAccount} title={connecting ? 'Connecting…' : 'Connect Ad Account'} description="Link Meta Ads for campaign context" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '16px' }}>
         <div style={{ flex: 1, height: '1px', background: C.border }} />
@@ -196,8 +197,30 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
   })
 
   const openMobileSidebar = useOpenMobileSidebar()
-  const { accounts, loading: accountsLoading } = useMetaAccount()
+  const { getToken } = useAuth()
+  const { accounts, loading: accountsLoading, reloadAccounts } = useMetaAccount()
   const noAccount = isLoaded && isSignedIn && !accountsLoading && accounts.length === 0
+  const [connecting, setConnecting] = React.useState(false)
+
+  const handleConnectAccount = React.useCallback(async () => {
+    if (connecting) return
+    setConnecting(true)
+    try {
+      const { url } = await createApiClient(getToken).getMetaOAuthUrl()
+      const popup = window.open(url, 'meta_oauth', 'width=600,height=700,left=200,top=100')
+      let poll
+      const cleanup = () => { clearInterval(poll); window.removeEventListener('message', onMessage); setConnecting(false) }
+      const onMessage = (e) => {
+        if (e.data?.type !== 'meta_oauth_success') return
+        reloadAccounts()
+        cleanup()
+      }
+      window.addEventListener('message', onMessage)
+      poll = setInterval(() => { if (popup?.closed) cleanup() }, 500)
+    } catch {
+      setConnecting(false)
+    }
+  }, [connecting, getToken, reloadAccounts])
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
   const [isMobile, setIsMobile] = React.useState(false)
   const [inputKey, setInputKey] = React.useState(0)
@@ -296,7 +319,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
                     <span style={{ fontSize: '12px', color: 'var(--c-sub)', fontFamily: font, lineHeight: 1.5 }}>
                       <strong style={{ fontWeight: 700 }}>No Meta Ads account connected.</strong> You can explore freely, but contracts and workspaces won&apos;t be saved until you{' '}
                     </span>
-                    <a href="/settings" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--c-indigo)', textDecoration: 'none', fontFamily: font }}>connect an account</a>
+                    <button onClick={handleConnectAccount} style={{ fontSize: '12px', fontWeight: 700, color: 'var(--c-indigo)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: font }}>connect an account</button>
                     <span style={{ fontSize: '12px', color: 'var(--c-sub)', fontFamily: font }}>.</span>
                   </div>
                 </div>
