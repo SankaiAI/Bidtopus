@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@clerk/nextjs'
 import { getSession, upsertSession, deleteSession } from '@/lib/workspaceSessions'
 import { createApiClient } from '@/lib/api'
+import { useMetaAccount } from '@/contexts/MetaAccountContext'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const isUUID = s => UUID_RE.test(s ?? '')
@@ -11,6 +12,7 @@ export const isUUID = s => UUID_RE.test(s ?? '')
 // sessionId can be null (brand new), a ws_xxx local ID, or a UUID (server-assigned).
 export function useNegotiationStream(sessionId, { onContractCreated, onTitleGenerated } = {}) {
   const { isSignedIn, isLoaded, getToken } = useAuth()
+  const { activeAccount } = useMetaAccount()
 
   const [messages,     setMessages]     = useState([])
   const [loading,      setLoading]      = useState(false)
@@ -298,7 +300,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             isNegotiatingRef.current = true
             // Silent URL update — no re-mount, component state is preserved
             window.history.replaceState(null, '', `/workspace/${cid}`)
-            upsertSession(cid, { title: '', messages: updatedHistory, createdAt: new Date().toISOString() })
+            upsertSession(cid, { title: '', messages: updatedHistory, createdAt: new Date().toISOString(), metaAccountId: activeAccount?.id ?? null })
 
           } else if (eventType === 'title_generated') {
             if (data.title) {

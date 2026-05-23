@@ -172,6 +172,13 @@ export default function WorkspaceList() {
   const serverIds = new Set([...serverNegotiating, ...serverFunded].map(c => c.id))
   const localOnly = sessions
     .filter(s => !serverIds.has(s.id))
+    // Hide sessions that were started under a different Meta account.
+    // Sessions with no metaAccountId are pre-tagging legacy drafts — show them
+    // only when no specific account is selected so they don't bleed across accounts.
+    .filter(s => {
+      if (!s.metaAccountId) return !activeAccount?.id
+      return s.metaAccountId === activeAccount?.id
+    })
     .map(s => ({ id: s.id, title: s.title, status: 'negotiating', sub: relativeTime(s.createdAt), href: `/workspace/${s.id}`, hasContract: false, _ts: s.createdAt }))
 
   // Privacy gate: never surface workspaces (server contracts, local drafts)
