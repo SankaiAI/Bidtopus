@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/icon-512.png" alt="Bidtopus" width="160" />
+</p>
+
 # Bidtopus
 
 **Performance-paid AI agent for Meta Ads. Brands pay only when the agent delivers the contracted ROAS. Settled in USDC on Arc.**
