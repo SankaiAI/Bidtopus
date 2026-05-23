@@ -318,6 +318,28 @@ async def stream_negotiation(
                 contract_id, first_turn_account,
                 account_ctx.get("historical_roas_7d"),
             )
+            # Emit a system message so the merchant knows what data the agent is working with
+            has_history = account_ctx.get("historical_roas_30d") is not None
+            if has_history:
+                roas = account_ctx.get("historical_roas_30d")
+                spend = account_ctx.get("avg_daily_spend")
+                ctx_msg = (
+                    f"Connected to your Meta Ads account. "
+                    f"Found historical data: {roas:.2f}× ROAS over 30 days"
+                    + (f", ${spend:.0f}/day avg spend" if spend else "")
+                    + ". The agent will use this to calibrate your performance contract."
+                )
+            else:
+                ctx_msg = (
+                    "Connected to your Meta Ads account, but no campaign history was found. "
+                    "The agent will build your first campaign from scratch using industry benchmarks. "
+                    "Results will improve after your first campaigns run."
+                )
+            messages_repo.append(
+                db, contract_id, "system", "system_event",
+                content=ctx_msg,
+                extra={"account_id": first_turn_account, "has_history": has_history},
+            )
         except Exception:
             log.warning("Failed to fetch account_context contract=%s — proceeding with defaults", contract_id)
 
