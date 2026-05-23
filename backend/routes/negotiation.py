@@ -274,11 +274,25 @@ async def stream_negotiation(
         contract_id = str(contract.id)
         is_first_turn = False
     else:
+        # Resolve external act_XXXXX → internal UUID for the FK
+        meta_account_uuid = None
+        if body.meta_ads_account_id:
+            meta_acct = repo.get_meta_account_by_external_id(
+                db, str(current_user.id), body.meta_ads_account_id,
+            )
+            if meta_acct:
+                meta_account_uuid = str(meta_acct.id)
+            else:
+                log.warning(
+                    "negotiation meta_ads_account_id=%s not found for user=%s — contract unlinked",
+                    body.meta_ads_account_id, current_user.id,
+                )
         contract = repo.create_contract(
             db,
             merchant_id=current_user.id,
             target_metric="ROAS",
             status="Negotiating",
+            meta_ads_account_id=meta_account_uuid,
         )
         contract_id = str(contract.id)
         is_first_turn = True
@@ -290,16 +304,18 @@ async def stream_negotiation(
 
     # On the first turn, fetch historical Meta Ads context and store it on the contract
     # so the ML underwriting model has real account data for the entire negotiation.
-    if is_first_turn and current_user.meta_ads_account_id:
+    # Prefer the account passed in the request body; fall back to the legacy global field.
+    first_turn_account = body.meta_ads_account_id or current_user.meta_ads_account_id
+    if is_first_turn and first_turn_account:
         try:
-            account_ctx = agent_client.get_account_context(current_user.meta_ads_account_id)
+            account_ctx = agent_client.get_account_context(first_turn_account)
             db.query(PerformanceContract).filter_by(id=contract_id).update(
                 {"account_context": account_ctx}
             )
             db.commit()
             log.info(
                 "account_context fetched contract=%s account=%s roas_7d=%s",
-                contract_id, current_user.meta_ads_account_id,
+                contract_id, first_turn_account,
                 account_ctx.get("historical_roas_7d"),
             )
         except Exception:

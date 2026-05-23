@@ -148,6 +148,29 @@ _TOOL_LABELS = {
 _THINKING_BUDGET = 8000
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+_NO_META_ACCOUNT = {
+    "error": "no_meta_account",
+    "message": (
+        "To use Meta Ads features, please connect a Meta Ads account from the sidebar first. "
+        "Click '+ Connect new account' and complete the Facebook authorization."
+    ),
+}
+
+
+def _resolve_meta_account(db: Session, contract_id: str):
+    """Return (contract, meta_account). meta_account is None if not linked."""
+    contract = repo.get_contract(db, contract_id)
+    if contract is None:
+        return None, None
+    meta_account = (
+        repo.get_meta_account(db, str(contract.meta_ads_account_id))
+        if contract.meta_ads_account_id else None
+    )
+    return contract, meta_account
+
+
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
 def _dispatch_tool(
@@ -189,28 +212,32 @@ def _dispatch_tool(
         return agent_client.generate_agent_offer(contract_id)
 
     elif tool_name == "generate_ad_strategy":
-        contract = repo.get_contract(db, contract_id)
-        meta_account = repo.get_meta_account(db, str(contract.meta_ads_account_id)) if contract and contract.meta_ads_account_id else None
+        _, meta_account = _resolve_meta_account(db, contract_id)
+        if meta_account is None:
+            return _NO_META_ACCOUNT
         return agent_client.generate_plan(
             contract_id,
             user_id=str(current_user.id),
-            meta_ads_account_id=current_user.meta_ads_account_id,
-            access_token=meta_account.access_token if meta_account else None,
+            meta_ads_account_id=meta_account.meta_ads_account_id,
+            access_token=meta_account.access_token,
         )
 
     elif tool_name == "execute_ad_actions":
-        contract = repo.get_contract(db, contract_id)
-        meta_account = repo.get_meta_account(db, str(contract.meta_ads_account_id)) if contract and contract.meta_ads_account_id else None
+        _, meta_account = _resolve_meta_account(db, contract_id)
+        if meta_account is None:
+            return _NO_META_ACCOUNT
         return agent_client.execute_ads_actions(
             contract_id,
-            access_token=meta_account.access_token if meta_account else None,
+            access_token=meta_account.access_token,
         )
 
     elif tool_name == "check_performance":
-        # Placeholder until agent exposes GET /agent/performance
-        contract = repo.get_contract(db, contract_id)
+        contract, meta_account = _resolve_meta_account(db, contract_id)
         if contract is None:
             return {"error": "contract not found"}
+        if meta_account is None:
+            return _NO_META_ACCOUNT
+        # Placeholder until agent exposes GET /agent/performance
         return {
             "note": "Live performance endpoint coming soon.",
             "status": getattr(contract, "status", None),

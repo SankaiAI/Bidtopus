@@ -317,3 +317,4 @@ class NegotiationRequest(BaseModel):
     message: str
     history: list[NegotiationHistoryItem] = []
     contract_id: Optional[str] = None
+    meta_ads_account_id: Optional[str] = None  # external act_XXXXX ID; resolved to internal UUID on first turn
