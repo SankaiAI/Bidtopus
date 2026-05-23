@@ -877,11 +877,17 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
         </button>
         <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
         {hasContractDetails && (
-          <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600 }}>
+          <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600, marginRight: '6px' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>
             Details
           </button>
         )}
+        <button
+          onClick={() => router.push(`/workspace/${generateSessionId()}`)}
+          style={{ fontSize: '12px', fontWeight: 600, color: C.muted, background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', padding: '5px 12px', cursor: 'pointer', fontFamily: font, flexShrink: 0 }}
+        >
+          + New
+        </button>
       </div>
 
       {approvalMode === 'manual' && c.status === 'active' && (
