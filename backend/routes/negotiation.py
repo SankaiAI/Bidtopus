@@ -188,10 +188,27 @@ _FINALIZE_TOOL = {
 _TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
 
 
-def _build_system_prompt(account_context: dict | None) -> str:
+def _build_system_prompt(account_context: dict | None, wallet_address: str | None = None) -> str:
     """Extend the base system prompt with real account data so LLM can answer campaign questions."""
+    prompt = _SYSTEM_PROMPT
+
+    # Wallet status — so the agent knows whether to remind or proceed
+    if wallet_address:
+        prompt += (
+            f"\n\n## Merchant Wallet\n"
+            f"Connected: {wallet_address}\n"
+            "The merchant is ready to fund the escrow — no wallet reminder needed."
+        )
+    else:
+        prompt += (
+            "\n\n## Merchant Wallet\n"
+            "NOT connected. If the conversation reaches payment, funding, or next steps after contract agreement, "
+            "remind the merchant to connect their crypto wallet using the button in the left sidebar — "
+            "this is required before they can fund the escrow in USDC."
+        )
+
     if not account_context:
-        return _SYSTEM_PROMPT
+        return prompt
     has_history = account_context.get("historical_roas_30d") is not None
     if has_history:
         lines = [
@@ -211,9 +228,9 @@ def _build_system_prompt(account_context: dict | None) -> str:
             "Reference this data freely when the merchant asks about campaign performance or history. "
             "This is real data pulled from their connected Meta Ads account — you have access to it."
         )
-        return _SYSTEM_PROMPT + "\n".join(lines)
+        return prompt + "\n".join(lines)
     else:
-        return _SYSTEM_PROMPT + (
+        return prompt + (
             "\n\n## Connected Meta Ads Account — No History\n"
             "The merchant's Meta Ads account is connected but has no campaign history yet. "
             "This will be their first campaign. Tell them you'll build from scratch using industry benchmarks. "
@@ -378,9 +395,10 @@ async def stream_negotiation(
         except Exception:
             log.warning("Failed to fetch account_context contract=%s — proceeding with defaults", contract_id)
 
-    # Build dynamic system prompt — inject account_context so LLM can discuss campaign data
+    # Build dynamic system prompt — inject account_context and wallet status
     dynamic_system = _build_system_prompt(
-        _acct_ctx if is_first_turn else getattr(contract, "account_context", None)
+        _acct_ctx if is_first_turn else getattr(contract, "account_context", None),
+        wallet_address=current_user.wallet_address,
     )
 
     # Save user message before streaming — never lost regardless of what follows
