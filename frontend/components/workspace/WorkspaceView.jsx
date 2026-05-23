@@ -16,6 +16,7 @@ import { createApiClient } from '@/lib/api'
 import { normalizeStatus, isAwaitingFund, isLive, isResolved, isNegotiating, canFund, awaitingOfferAcceptance } from '@/lib/contractStatus'
 import ThinkingBlock from './ThinkingBlock'
 import WorkspaceHeader from './WorkspaceHeader'
+import { useOpenMobileSidebar } from '@/components/AppShell'
 import { C, font } from './constants'
 
 // ─── MARKDOWN ─────────────────────────────────────────────────────────────────
@@ -699,6 +700,7 @@ export function WorkspaceRightPanel({ contract, id, refetchContract }) {
 export default function WorkspaceView({ id, contract, refetchContract }) {
   const router = useRouter()
   const { getToken, isLoaded, isSignedIn } = useAuth()
+  const openMobileSidebar = useOpenMobileSidebar()
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
   const [approvalMode, setApprovalMode]       = React.useState('manual')
   const [isMobile, setIsMobile]               = React.useState(false)
@@ -869,7 +871,10 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
       />
 
       {/* Mobile header */}
-      <div className="app-mobile-header">
+      <div className="app-mobile-header" style={{ background: C.surface }}>
+        <button onClick={openMobileSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'flex', alignItems: 'center', marginRight: '8px', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
+        </button>
         <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
         {hasContractDetails && (
           <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600 }}>

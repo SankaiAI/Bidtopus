@@ -51,6 +51,9 @@ function userTitle(local) {
 }
 
 export default function WorkspaceList() {
+  const touchStartY = React.useRef(0)
+  const touchMoved  = React.useRef(false)
+
   const [filter, setFilter]             = useState('all')
   const [panelOpen, setPanelOpen]       = useState(false)
   const [sessions, setSessions]         = useState([])
@@ -261,6 +264,8 @@ export default function WorkspaceList() {
 
       <div
         className="ws-list-scroll"
+        onTouchStart={e => { touchStartY.current = e.touches[0].clientY; touchMoved.current = false }}
+        onTouchMove={e => { if (Math.abs(e.touches[0].clientY - touchStartY.current) > 5) touchMoved.current = true }}
         style={{
           flex: 1, overflowY: 'auto', minHeight: 0,
           // Fade the first/last ~16px so scrolled items appear/disappear
@@ -314,6 +319,7 @@ export default function WorkspaceList() {
               >
                 <Link
                   href={item.href}
+                  onClick={e => { if (touchMoved.current) e.preventDefault() }}
                   style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '7px 8px', paddingRight: showBtn ? '28px' : '8px', borderRadius: '8px', textDecoration: 'none', color: 'var(--c-sidebar-text)', transition: 'padding-right 0.1s' }}
                 >
                   {/* Leading slot — fixed width so titles align whether or not
