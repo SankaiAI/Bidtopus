@@ -202,6 +202,7 @@ def _dispatch_tool(
             "campaign_mode": contract.campaign_mode,
             "campaign_goal": contract.campaign_goal,
             "created_at": str(contract.created_at),
+            "account_context": contract.account_context,
             "recent_messages": recent_messages,
         }
 

@@ -188,6 +188,39 @@ _FINALIZE_TOOL = {
 _TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
 
 
+def _build_system_prompt(account_context: dict | None) -> str:
+    """Extend the base system prompt with real account data so LLM can answer campaign questions."""
+    if not account_context:
+        return _SYSTEM_PROMPT
+    has_history = account_context.get("historical_roas_30d") is not None
+    if has_history:
+        lines = [
+            "\n\n## Connected Meta Ads Account — Historical Data",
+            "The merchant's Meta Ads account has the following real performance data:",
+        ]
+        roas_30d = account_context.get("historical_roas_30d")
+        roas_7d = account_context.get("historical_roas_7d")
+        avg_spend = account_context.get("avg_daily_spend")
+        if roas_30d is not None:
+            lines.append(f"- 30-day ROAS: {roas_30d:.2f}×")
+        if roas_7d is not None:
+            lines.append(f"- 7-day ROAS: {roas_7d:.2f}×")
+        if avg_spend is not None:
+            lines.append(f"- Average daily spend: ${avg_spend:.0f}/day")
+        lines.append(
+            "Reference this data freely when the merchant asks about campaign performance or history. "
+            "This is real data pulled from their connected Meta Ads account — you have access to it."
+        )
+        return _SYSTEM_PROMPT + "\n".join(lines)
+    else:
+        return _SYSTEM_PROMPT + (
+            "\n\n## Connected Meta Ads Account — No History\n"
+            "The merchant's Meta Ads account is connected but has no campaign history yet. "
+            "This will be their first campaign. Tell them you'll build from scratch using industry benchmarks. "
+            "Do NOT say you lack access to their account — the account is connected, it simply has no past campaigns."
+        )
+
+
 # ── Streaming helpers ─────────────────────────────────────────────────────────
 
 def _serialize_block(b) -> dict:
@@ -205,7 +238,7 @@ def _serialize_block(b) -> dict:
 _THINKING_BUDGET = 15000
 
 
-async def _stream_turn(request, messages, *, max_tokens=1024):
+async def _stream_turn(request, messages, *, system=_SYSTEM_PROMPT, max_tokens=1024):
     """Stream one Claude turn with retries. Yields thinking chunks, text chunks, final_message."""
     _RETRYABLE = {429, 500, 503, 529}
     _MAX_RETRIES = 3
@@ -223,7 +256,7 @@ async def _stream_turn(request, messages, *, max_tokens=1024):
                 model="claude-sonnet-4-6",
                 max_tokens=max_tokens + _THINKING_BUDGET,
                 thinking={"type": "enabled", "budget_tokens": _THINKING_BUDGET},
-                system=_SYSTEM_PROMPT,
+                system=system,
                 tools=_TOOLS,
                 messages=messages,
             ) as stream:
@@ -305,10 +338,12 @@ async def stream_negotiation(
     # On the first turn, fetch historical Meta Ads context and store it on the contract
     # so the ML underwriting model has real account data for the entire negotiation.
     # Prefer the account passed in the request body; fall back to the legacy global field.
+    _acct_ctx = None  # captured below for system prompt injection
     first_turn_account = body.meta_ads_account_id or current_user.meta_ads_account_id
     if is_first_turn and first_turn_account:
         try:
             account_ctx = agent_client.get_account_context(first_turn_account)
+            _acct_ctx = account_ctx
             db.query(PerformanceContract).filter_by(id=contract_id).update(
                 {"account_context": account_ctx}
             )
@@ -342,6 +377,11 @@ async def stream_negotiation(
             )
         except Exception:
             log.warning("Failed to fetch account_context contract=%s — proceeding with defaults", contract_id)
+
+    # Build dynamic system prompt — inject account_context so LLM can discuss campaign data
+    dynamic_system = _build_system_prompt(
+        _acct_ctx if is_first_turn else getattr(contract, "account_context", None)
+    )
 
     # Save user message before streaming — never lost regardless of what follows
     messages_repo.append(db, contract_id, "merchant", "message", content=clean_message)
@@ -400,7 +440,7 @@ async def stream_negotiation(
                 thinking_started = False
                 thinking_closed = False
 
-                async for item in _stream_turn(request, current_messages):
+                async for item in _stream_turn(request, current_messages, system=dynamic_system):
                     if item[0] == "thinking":
                         _, thinking_text = item
                         thinking_parts.append(thinking_text)
@@ -635,7 +675,7 @@ async def stream_negotiation(
                     with _anthropic.messages.stream(
                         model="claude-sonnet-4-6",
                         max_tokens=512,
-                        system=_SYSTEM_PROMPT,
+                        system=dynamic_system,
                         tools=_TOOLS,
                         messages=follow_messages,
                     ) as follow_stream:
