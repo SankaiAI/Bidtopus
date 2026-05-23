@@ -329,9 +329,19 @@ def _run_sync(coro: Any) -> Any:
 MetaAdsAdapter = MetaAdsAdapterBase
 
 
-def get_meta_ads_adapter() -> MetaAdsAdapterBase:
+def get_meta_ads_adapter(access_token: str | None = None) -> MetaAdsAdapterBase:
+    """Return the appropriate Meta Ads adapter.
+
+    In mock mode the token is ignored — mock adapters don't make real MCP calls.
+    In real mode, `access_token` takes priority over the env var so each request can
+    use the merchant's own OAuth token instead of a shared static credential.
+    """
     if settings.META_ADS_MOCK:
         return MockMetaAdsAdapter()
-    if not settings.META_ADS_ACCESS_TOKEN:
-        raise MetaAdsError("META_ADS_ACCESS_TOKEN is required when META_ADS_MOCK=False")
-    return RealMetaAdsAdapter(access_token=settings.META_ADS_ACCESS_TOKEN)
+    token = access_token or settings.META_ADS_ACCESS_TOKEN
+    if not token:
+        raise MetaAdsError(
+            "No Meta Ads access token available. "
+            "Pass access_token in the request or set META_ADS_ACCESS_TOKEN in env."
+        )
+    return RealMetaAdsAdapter(access_token=token)

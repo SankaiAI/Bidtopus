@@ -469,6 +469,7 @@ def execute_ads_actions(
     contract_status: str,
     account_id: str,
     db: Session,
+    access_token: str | None = None,
 ) -> list[dict]:
     """Step 4: Execute approved strategy actions via Meta Ads adapter.
 
@@ -496,7 +497,7 @@ def execute_ads_actions(
             f"strategy_plans.approval_status = {getattr(row, 'approval_status', 'not_found')}"
         )
 
-    meta_ads = get_meta_ads_adapter()
+    meta_ads = get_meta_ads_adapter(access_token=access_token)
     results = []
 
     for action_data in (row.planned_actions or []):

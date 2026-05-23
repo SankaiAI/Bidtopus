@@ -113,6 +113,12 @@ class GeneratePlanRequest(BaseModel):
     contract_id: str
     user_id: str
     meta_ads_account_id: str | None = None
+    access_token: str | None = None
+
+
+class ExecuteAdsRequest(BaseModel):
+    contract_id: str
+    access_token: str | None = None
 
 
 class GeneratePlanResponse(BaseModel):
@@ -364,7 +370,7 @@ def generate_strategy(body: ContractRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/execute-ads", response_model=ExecuteAdsResponse)
-def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
+def execute_ads(body: ExecuteAdsRequest, db: Session = Depends(get_db)):
     """Execute approved strategy actions. Re-reads approval from DB with row lock."""
     contract = _get_contract_or_404(body.contract_id, db)
     attach_session(body.contract_id)
@@ -375,6 +381,7 @@ def execute_ads(body: ContractRequest, db: Session = Depends(get_db)):
             contract_status=contract.status,
             account_id=contract.account_id,
             db=db,
+            access_token=body.access_token,
         )
     except Exception as e:
         _handle_agent_error(e, body.contract_id)
@@ -582,7 +589,7 @@ def generate_plan(body: GeneratePlanRequest, db: Session = Depends(get_db)):
     live_context: dict | None = None
     try:
         from adapters.meta_ads import get_meta_ads_adapter as _get_adapter
-        live_context = _get_adapter().get_live_campaign_context(account_context.account_id)
+        live_context = _get_adapter(access_token=body.access_token).get_live_campaign_context(account_context.account_id)
     except Exception as exc:
         logger.warning("live_campaign_context_fetch_failed", contract_id=body.contract_id, error=str(exc))
 
@@ -743,7 +750,7 @@ def generate_strategy_stream(body: ContractRequest, db: Session = Depends(get_db
 
 
 @router.post("/execute-ads/stream")
-def execute_ads_stream(body: ContractRequest, db: Session = Depends(get_db)):
+def execute_ads_stream(body: ExecuteAdsRequest, db: Session = Depends(get_db)):
     """SSE variant of /execute-ads — emits a single result event (no LLM thinking)."""
     contract = _get_contract_or_404(body.contract_id, db)
     attach_session(body.contract_id)
@@ -755,6 +762,7 @@ def execute_ads_stream(body: ContractRequest, db: Session = Depends(get_db)):
                 contract_status=contract.status,
                 account_id=contract.account_id,
                 db=db,
+                access_token=body.access_token,
             )
             payload = ExecuteAdsResponse(
                 actions_executed=results,

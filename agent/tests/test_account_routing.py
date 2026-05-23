@@ -69,7 +69,7 @@ def test_orchestrator_threads_account_id_to_adapter(monkeypatch):
             )
             return {"status": "success", "account_id": account_id}
 
-    monkeypatch.setattr(orch, "get_meta_ads_adapter", lambda: _StubAdapter())
+    monkeypatch.setattr(orch, "get_meta_ads_adapter", lambda access_token=None: _StubAdapter())
 
     class _Row:
         approval_status = "approved"
