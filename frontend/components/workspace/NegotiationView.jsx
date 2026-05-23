@@ -65,7 +65,7 @@ function SetupCard({ icon, title, description, onClick, href }) {
     : <button onClick={onClick} className="agent-setup-card" style={cardStyle} onMouseEnter={hoverIn} onMouseLeave={hoverOut}>{inner}</button>
 }
 
-function WelcomeScreen({ onQuickAction, onStart }) {
+function WelcomeScreen({ onQuickAction, onStart, onConnect, connecting }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', width: '100%', maxWidth: '580px' }}>
       <h2 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.03em', margin: '0 0 6px', color: C.text, fontFamily: font }}>Hi, I&apos;m the Bidtopus Agent</h2>
@@ -73,7 +73,7 @@ function WelcomeScreen({ onQuickAction, onStart }) {
       <div className="agent-setup-cards">
         <SetupCard onClick={onStart} title="New Contract" description="Set ROAS target, fee & time window" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>} />
         <SetupCard href="/contracts" title="My Contracts" description="View existing contracts and status" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>} />
-        <SetupCard onClick={handleConnectAccount} title={connecting ? 'Connecting…' : 'Connect Ad Account'} description="Link Meta Ads for campaign context" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>} />
+        <SetupCard onClick={onConnect} title={connecting ? 'Connecting…' : 'Connect Ad Account'} description="Link Meta Ads for campaign context" icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.indigo} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '16px' }}>
         <div style={{ flex: 1, height: '1px', background: C.border }} />
@@ -324,7 +324,7 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
                   </div>
                 </div>
               )}
-              <WelcomeScreen onQuickAction={handleQuickAction} onStart={handleStart} />
+              <WelcomeScreen onQuickAction={handleQuickAction} onStart={handleStart} onConnect={handleConnectAccount} connecting={connecting} />
             </div>
           )}
 
