@@ -232,9 +232,9 @@ function SystemEvent({ msg }) {
   if (!text) return null
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <div style={{ flex: 1, height: '1px', background: C.borderS }} />
-      <span style={{ fontSize: '11px', color: C.faint, fontFamily: font, whiteSpace: 'nowrap' }}>{text} · {msg.time}</span>
-      <div style={{ flex: 1, height: '1px', background: C.borderS }} />
+      <div style={{ flex: 1, height: '1px', background: C.borderS, flexShrink: 0, minWidth: '16px' }} />
+      <span style={{ fontSize: '11px', color: C.faint, fontFamily: font, textAlign: 'center', maxWidth: '72%', lineHeight: 1.5 }}>{text} · {msg.time}</span>
+      <div style={{ flex: 1, height: '1px', background: C.borderS, flexShrink: 0, minWidth: '16px' }} />
     </div>
   )
 }
@@ -875,7 +875,7 @@ export default function WorkspaceView({ id, contract, refetchContract }) {
         <button onClick={openMobileSidebar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'flex', alignItems: 'center', marginRight: '8px', flexShrink: 0 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>
         </button>
-        <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{localTitle || c.title || c.name}</span>
+        <span key={localTitle || c.title || c.name} style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', animation: 'title-fade-in 0.35s ease' }}>{localTitle || c.title || c.name}</span>
         {hasContractDetails && (
           <button onClick={() => setShowPanel(true)} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: '7px', cursor: 'pointer', color: C.indigo, padding: '5px 11px', display: 'flex', alignItems: 'center', gap: '5px', fontFamily: font, fontSize: '12px', fontWeight: 600, marginRight: '6px' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></svg>

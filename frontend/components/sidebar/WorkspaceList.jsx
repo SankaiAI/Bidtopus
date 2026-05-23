@@ -360,12 +360,13 @@ export default function WorkspaceList() {
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
+                    <div key={item.title} style={{
                       fontSize: '14px',
                       fontWeight: isActive ? 600 : 500,
                       color: isActive ? 'var(--c-indigo)' : 'var(--c-sidebar-text)',
                       fontFamily: 'Plus Jakarta Sans, sans-serif',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      animation: 'title-fade-in 0.35s ease',
                     }}>
                       {item.title}
                     </div>

@@ -45,7 +45,7 @@ export default function WorkspaceHeader({ title, contractId, contractMetaAccount
           />
         ) : (
           <>
-            <span style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+            <span key={title} style={{ fontSize: '14px', fontWeight: 700, color: C.text, fontFamily: font, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', animation: 'title-fade-in 0.35s ease' }}>{title}</span>
             {contractId && onTitleSave && (
               <button
                 onClick={startEdit}
