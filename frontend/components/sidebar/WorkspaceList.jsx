@@ -289,7 +289,7 @@ export default function WorkspaceList() {
           WebkitMaskImage: 'linear-gradient(to bottom, transparent 0, black 16px, black calc(100% - 16px), transparent 100%)',
         }}
       >
-      {!isLoaded || (isSignedIn && !hasFetchedOnce && sessions.length === 0) ? (
+      {!isLoaded || (isSignedIn && !hasFetchedOnce) ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '4px 0' }}>
           {Array.from({ length: 4 }, (_, i) => <SidebarRowSkeleton key={i} />)}
         </div>
