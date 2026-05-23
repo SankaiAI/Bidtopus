@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useClerk } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
+import { useMetaAccount } from '@/contexts/MetaAccountContext'
 import AgentInputBar from '@/components/AgentInputBar'
 import { generateSessionId } from '@/lib/workspaceSessions'
 import { useNegotiationStream } from '@/hooks/useNegotiationStream'
@@ -195,6 +196,8 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
   })
 
   const openMobileSidebar = useOpenMobileSidebar()
+  const { accounts, loading: accountsLoading } = useMetaAccount()
+  const noAccount = isLoaded && isSignedIn && !accountsLoading && accounts.length === 0
   const [inputAreaHeight, setInputAreaHeight] = React.useState(120)
   const [isMobile, setIsMobile] = React.useState(false)
   const [inputKey, setInputKey] = React.useState(0)
@@ -286,6 +289,18 @@ export default function NegotiationView({ sessionId, onFinalized, finalized = fa
 
           {chatStep === 'choose' && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: inputAreaHeight, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px', overflowY: 'auto', zIndex: 5, background: C.surface }}>
+              {noAccount && (
+                <div style={{ width: '100%', maxWidth: '580px', marginBottom: '20px', background: 'var(--c-amber-bg)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px', padding: '12px 16px', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--c-amber)" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0, marginTop: '1px' }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <div>
+                    <span style={{ fontSize: '12px', color: 'var(--c-sub)', fontFamily: font, lineHeight: 1.5 }}>
+                      <strong style={{ fontWeight: 700 }}>No Meta Ads account connected.</strong> You can explore freely, but contracts and workspaces won&apos;t be saved until you{' '}
+                    </span>
+                    <a href="/settings" style={{ fontSize: '12px', fontWeight: 700, color: 'var(--c-indigo)', textDecoration: 'none', fontFamily: font }}>connect an account</a>
+                    <span style={{ fontSize: '12px', color: 'var(--c-sub)', fontFamily: font }}>.</span>
+                  </div>
+                </div>
+              )}
               <WelcomeScreen onQuickAction={handleQuickAction} onStart={handleStart} />
             </div>
           )}

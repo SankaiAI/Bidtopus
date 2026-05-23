@@ -66,7 +66,7 @@ export default function WorkspaceList() {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [toast, setToast]               = useState(null)
   const { isSignedIn, isLoaded, getToken } = useAuth()
-  const { activeAccount } = useMetaAccount()
+  const { activeAccount, accounts, loading: accountsLoading } = useMetaAccount()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -297,13 +297,28 @@ export default function WorkspaceList() {
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ padding: '8px 8px 12px' }}>
-          <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
-            {!isSignedIn
-              ? 'Sign in to see your workspaces.'
-              : allItems.length === 0
-                ? 'No workspaces yet. Start a new contract above.'
-                : 'No contracts match'}
-          </p>
+          {!isSignedIn ? (
+            <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+              Sign in to see your workspaces.
+            </p>
+          ) : isSignedIn && !accountsLoading && accounts.length === 0 ? (
+            <div style={{ background: 'var(--c-amber-bg)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px', padding: '10px 12px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--c-sub)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: '0 0 8px', lineHeight: 1.5 }}>
+                Connect a Meta Ads account to save your contracts and workspaces.
+              </p>
+              <a href="/settings" style={{ fontSize: '11px', fontWeight: 700, color: 'var(--c-indigo)', textDecoration: 'none', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                Connect account →
+              </a>
+            </div>
+          ) : allItems.length === 0 ? (
+            <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+              No workspaces yet. Start a new contract above.
+            </p>
+          ) : (
+            <p style={{ fontSize: '12px', color: 'var(--c-sidebar-section)', fontFamily: 'Plus Jakarta Sans, sans-serif', margin: 0 }}>
+              No contracts match
+            </p>
+          )}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>

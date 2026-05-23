@@ -9,7 +9,7 @@ function sse(event, data) {
 
 export async function POST(request) {
   const reqStart = Date.now()
-  const { message, history = [], contract_id } = await request.json()
+  const { message, history = [], contract_id, meta_ads_account_id } = await request.json()
 
   if (!message?.trim()) {
     logWarn(SRC, 'empty message rejected')
@@ -38,7 +38,7 @@ export async function POST(request) {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ message, history, ...(contract_id ? { contract_id } : {}) }),
+      body: JSON.stringify({ message, history, ...(contract_id ? { contract_id } : {}), ...(meta_ads_account_id ? { meta_ads_account_id } : {}) }),
     })
 
     if (!res.ok) {

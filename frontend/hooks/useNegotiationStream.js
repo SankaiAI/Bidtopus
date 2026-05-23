@@ -174,6 +174,7 @@ export function useNegotiationStream(sessionId, { onContractCreated, onTitleGene
             message: text.trim(),
             history: [],
             ...(contractIdRef.current ? { contract_id: contractIdRef.current } : {}),
+            ...(activeAccount?.meta_ads_account_id ? { meta_ads_account_id: activeAccount.meta_ads_account_id } : {}),
           }),
           signal: controller.signal,
         })
