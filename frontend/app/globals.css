@@ -265,4 +265,10 @@ body:has(.app-shell) { height: 100%; overflow: hidden; }
   .feature-grid-reverse { direction: ltr !important; }
   .decision-grid { grid-template-columns: 1fr !important; }
   .phase-grid    { grid-template-columns: 1fr !important; }
+  /* Footer mobile */
+  .wrap                   { padding: 0 20px !important; }
+  .ft-row                 { grid-template-columns: 1fr 1fr !important; gap: 32px 20px !important; margin-bottom: 32px !important; }
+  .ft-row > div:first-child { grid-column: 1 / -1; }
+  .ft-bottom              { flex-direction: column !important; align-items: flex-start !important; gap: 14px !important; }
+  .ft-links               { flex-wrap: wrap !important; gap: 12px 20px !important; }
 }

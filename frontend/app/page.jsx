@@ -574,9 +574,9 @@ function Footer() {
             </div>
           ))}
         </div>
-        <div style={{ borderTop: `1px solid ${S.hairline}`, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: S.stone, font: `400 13px/1 ${S.fontSans}` }}>
+        <div className="ft-bottom" style={{ borderTop: `1px solid ${S.hairline}`, paddingTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: S.stone, font: `400 13px/1 ${S.fontSans}` }}>
           <span>© 2026 Bidtopus. Built for the Agora Hackathon.</span>
-          <div style={{ display: 'flex', gap: 24 }}>
+          <div className="ft-links" style={{ display: 'flex', gap: 24 }}>
             {['Terms','Privacy','Disclosures','Status'].map(l => (
               <a key={l} href="#" style={{ color: S.stone, textDecoration: 'none' }}>{l}</a>
             ))}
