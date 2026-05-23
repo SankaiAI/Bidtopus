@@ -51,24 +51,22 @@ function MetaAccountSelector({ collapsed }) {
     try {
       const { url } = await createApiClient(getToken).getMetaOAuthUrl()
       const popup = window.open(url, 'meta_oauth', 'width=600,height=700,left=200,top=100')
-      const onMessage = (e) => {
-        if (e.origin !== window.location.origin) return
-        if (e.data?.type === 'meta_oauth_success') {
-          reloadAccounts()
-          setOpen(false)
-        }
+
+      let poll
+      const cleanup = () => {
+        clearInterval(poll)
         window.removeEventListener('message', onMessage)
         setConnecting(false)
       }
+      const onMessage = (e) => {
+        if (e.data?.type !== 'meta_oauth_success') return
+        reloadAccounts()
+        setOpen(false)
+        cleanup()
+      }
       window.addEventListener('message', onMessage)
       // Fallback: if popup closes without postMessage (user closed manually)
-      const poll = setInterval(() => {
-        if (popup?.closed) {
-          clearInterval(poll)
-          window.removeEventListener('message', onMessage)
-          setConnecting(false)
-        }
-      }, 500)
+      poll = setInterval(() => { if (popup?.closed) cleanup() }, 500)
     } catch {
       setConnecting(false)
     }

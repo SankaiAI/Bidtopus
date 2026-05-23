@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 export default function MetaOAuthSuccess() {
   useEffect(() => {
     if (window.opener) {
-      window.opener.postMessage({ type: 'meta_oauth_success' }, window.location.origin)
+      window.opener.postMessage({ type: 'meta_oauth_success' }, '*')
       window.close()
     }
   }, [])
