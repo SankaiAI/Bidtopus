@@ -3,6 +3,8 @@ import React from 'react'
 import Link from 'next/link'
 import { useAuth } from '@clerk/nextjs'
 import { useOpenMobileSidebar } from '@/components/AppShell'
+import { useMetaAccount, accountLabel } from '@/contexts/MetaAccountContext'
+import { createApiClient } from '@/lib/api'
 
 const C = {
   bg:           'var(--c-bg)',
@@ -125,13 +127,51 @@ function ApprovalModeSelector({ value, onChange }) {
   )
 }
 
+function DisconnectConfirmDialog({ account, onConfirm, onCancel, loading }) {
+  const label = accountLabel(account)
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)', padding: '16px' }}
+      onClick={e => { if (e.target === e.currentTarget && !loading) onCancel() }}>
+      <div style={{ background: 'var(--c-surface)', borderRadius: '16px', padding: '28px', width: '400px', maxWidth: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.22)', fontFamily: font }}>
+        <div style={{ width: 44, height: 44, borderRadius: '12px', background: '#fef2f2', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </div>
+        <h3 style={{ margin: '0 0 8px', fontSize: '17px', fontWeight: 700, color: 'var(--c-text)' }}>Disconnect {label}?</h3>
+        <p style={{ margin: '0 0 12px', fontSize: '13px', color: 'var(--c-muted)', lineHeight: 1.6 }}>
+          This will permanently delete the following data from Bidtopus:
+        </p>
+        <ul style={{ margin: '0 0 20px', padding: '0 0 0 18px', fontSize: '13px', color: 'var(--c-sub)', lineHeight: 1.8 }}>
+          <li>The connected Meta Ads account and its OAuth tokens</li>
+          <li>All contracts associated with this account</li>
+          <li>All workspace history and chat messages for those contracts</li>
+        </ul>
+        <p style={{ margin: '0 0 20px', fontSize: '12px', fontWeight: 600, color: '#ef4444' }}>This action cannot be undone.</p>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} disabled={loading} style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--c-border)', background: 'var(--c-surface)', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'var(--c-sub)', fontFamily: font }}>
+            Cancel
+          </button>
+          <button onClick={onConfirm} disabled={loading} style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#ef4444', cursor: loading ? 'wait' : 'pointer', fontSize: '13px', fontWeight: 600, color: '#fff', fontFamily: font, opacity: loading ? 0.7 : 1 }}>
+            {loading ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const openMobileSidebar = useOpenMobileSidebar()
   const { getToken } = useAuth()
+  const { accounts, reloadAccounts } = useMetaAccount()
   const [approvalMode, setApprovalMode] = React.useState('manual')
   const [saved, setSaved] = React.useState(false)
   const [dataSharing, setDataSharing] = React.useState(false)
   const [dataSaved, setDataSaved] = React.useState(false)
+  const [disconnectTarget, setDisconnectTarget] = React.useState(null)
+  const [disconnecting, setDisconnecting] = React.useState(false)
+  const [disconnectError, setDisconnectError] = React.useState(null)
 
   React.useEffect(() => {
     const stored = localStorage.getItem('bidtopus-approval-mode')
@@ -163,6 +203,21 @@ export default function SettingsPage() {
     localStorage.setItem('bidtopus-approval-mode', mode)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  async function handleDisconnect() {
+    if (!disconnectTarget || disconnecting) return
+    setDisconnecting(true)
+    setDisconnectError(null)
+    try {
+      await createApiClient(getToken).disconnectMetaAccount(disconnectTarget.id)
+      await reloadAccounts()
+      setDisconnectTarget(null)
+    } catch (e) {
+      setDisconnectError(e?.message || 'Failed to disconnect. Please try again.')
+    } finally {
+      setDisconnecting(false)
+    }
   }
 
   async function handleDataSharingToggle() {
@@ -208,6 +263,15 @@ export default function SettingsPage() {
         <span style={{ fontSize: '15px', fontWeight: 700, color: C.text, flex: 1, fontFamily: font }}>Settings</span>
       </div>
 
+      {disconnectTarget && (
+        <DisconnectConfirmDialog
+          account={disconnectTarget}
+          onConfirm={handleDisconnect}
+          onCancel={() => { if (!disconnecting) setDisconnectTarget(null) }}
+          loading={disconnecting}
+        />
+      )}
+
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: '640px', margin: '0 auto', padding: '32px 24px 48px' }}>
@@ -243,24 +307,54 @@ export default function SettingsPage() {
           </SettingsSection>
 
           {/* Account section */}
-          <SettingsSection title="Connected Accounts">
-            <SettingsRow
-              label="Meta Ads Account"
-              description="The ad account your agent manages campaigns on."
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: C.sub, fontFamily: font, fontWeight: 600 }}>act_1234567890</span>
+          <SettingsSection
+            title="Connected Accounts"
+            description="Meta Ads accounts your agent can manage campaigns on."
+          >
+            {accounts.length === 0 ? (
+              <div style={{ padding: '20px', fontSize: '13px', color: C.muted, fontFamily: font }}>
+                No Meta Ads accounts connected yet. Use the sidebar to connect one.
               </div>
-            </SettingsRow>
+            ) : (
+              accounts.map((account, i) => (
+                <SettingsRow
+                  key={account.id}
+                  label={accountLabel(account)}
+                  description={`Account ID: ${account.meta_ads_account_id}`}
+                  isLast={i === accounts.length - 1}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
+                      <span style={{ fontSize: '11px', color: C.muted, fontFamily: font }}>Connected</span>
+                    </div>
+                    <button
+                      onClick={() => { setDisconnectError(null); setDisconnectTarget(account) }}
+                      style={{ fontSize: '12px', fontWeight: 600, color: '#ef4444', background: 'none', border: '1px solid #fecaca', borderRadius: '7px', padding: '5px 12px', cursor: 'pointer', fontFamily: font, transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </SettingsRow>
+              ))
+            )}
+            {disconnectError && (
+              <div style={{ padding: '10px 20px', fontSize: '12px', color: '#ef4444', fontFamily: font }}>{disconnectError}</div>
+            )}
+          </SettingsSection>
+
+          {/* Wallet section */}
+          <SettingsSection title="Wallet">
             <SettingsRow
-              label="Wallet"
-              description="USDC wallet used for escrow funding and settlement."
+              label="USDC Wallet"
+              description="Wallet used for escrow funding and settlement."
               isLast
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.green, flexShrink: 0 }} />
-                <span style={{ fontSize: '12px', color: C.sub, fontFamily: font, fontWeight: 600 }}>0x4a7b...3e21</span>
+                <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.muted, flexShrink: 0 }} />
+                <span style={{ fontSize: '12px', color: C.muted, fontFamily: font }}>Connect via sidebar</span>
               </div>
             </SettingsRow>
           </SettingsSection>
