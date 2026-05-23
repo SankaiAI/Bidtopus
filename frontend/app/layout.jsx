@@ -1,5 +1,6 @@
 import { Plus_Jakarta_Sans } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
+import { Analytics } from '@vercel/analytics/next'
 import AppShell from '@/components/AppShell'
 import Web3Provider from '@/components/Web3Provider'
 import MetaAccountProvider from '@/contexts/MetaAccountContext'
@@ -73,6 +74,7 @@ export default function RootLayout({ children }) {
             </MetaAccountProvider>
           </Web3Provider>
         </ClerkProvider>
+        <Analytics />
       </body>
     </html>
   )
