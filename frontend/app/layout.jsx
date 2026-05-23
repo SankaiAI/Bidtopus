@@ -22,6 +22,7 @@ export const viewport = {
 }
 
 export const metadata = {
+  metadataBase: new URL('https://bidtopus.com'),
   title: 'Bidtopus — Pay Only for Marketing Results',
   description: 'Bidtopus connects merchants with AI agents that only earn their fee when they deliver the contracted marketing outcome. Powered by USDC escrow.',
   // PWA manifest (Android Chrome, Edge, Samsung Internet, Google search).
