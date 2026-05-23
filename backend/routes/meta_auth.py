@@ -162,13 +162,13 @@ def meta_oauth_callback(
         log.error("meta_oauth_callback adaccounts_fetch_failed user=%s: %s", clerk_user_id, exc)
         return RedirectResponse(error_url)
 
-    # 5. Persist — create_meta_account is idempotent (re-connecting same account is a no-op)
+    # 5. Persist — create_meta_account is idempotent (re-connecting refreshes the token)
     stored = 0
     for acc in accounts:
         account_id = acc.get("id")
         name = acc.get("name") or account_id
         if account_id:
-            repo.create_meta_account(db, user.id, account_id, name)
+            repo.create_meta_account(db, user.id, account_id, name, access_token=access_token)
             stored += 1
 
     log.info("meta_oauth_callback stored=%d user=%s", stored, clerk_user_id)

@@ -104,15 +104,24 @@ def get_meta_account_by_external_id(
 
 
 def create_meta_account(
-    db: Session, merchant_id: str, meta_ads_account_id: str, name: Optional[str] = None,
+    db: Session,
+    merchant_id: str,
+    meta_ads_account_id: str,
+    name: Optional[str] = None,
+    access_token: Optional[str] = None,
 ) -> MetaAdsAccount:
     existing = get_meta_account_by_external_id(db, merchant_id, meta_ads_account_id)
     if existing is not None:
+        if access_token and existing.access_token != access_token:
+            existing.access_token = access_token
+            db.commit()
+            db.refresh(existing)
         return existing
     account = MetaAdsAccount(
         merchant_id=merchant_id,
         meta_ads_account_id=meta_ads_account_id,
         name=name,
+        access_token=access_token,
     )
     db.add(account)
     db.commit()

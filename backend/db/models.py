@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey,
+    Column, DateTime, Float, ForeignKey,
     Index, Integer, String, Text, UniqueConstraint, JSON,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -60,6 +60,7 @@ class MetaAdsAccount(Base):
     merchant_id = Column(UUID_FK, ForeignKey("users.id"), nullable=False, index=True)
     meta_ads_account_id = Column(String, nullable=False)   # the "act_XXXXX" string Meta uses
     name = Column(String, nullable=True)
+    access_token = Column(String, nullable=True)           # per-merchant OAuth token; NULL for mock/legacy rows
     connected_at = Column(DateTime(timezone=True), default=_now, nullable=False)
 
     merchant = relationship("User", back_populates="meta_accounts")
