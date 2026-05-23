@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from db.models import (
     User, PerformanceContract, UnderwritingResult, AgentOffer,
     EscrowRecord, StrategyPlan, PerformanceSnapshot, ResolutionRecord,
-    AuditEvent, MetaAdsAccount, WalletConnectNonce,
+    AuditEvent, MetaAdsAccount, WalletConnectNonce, ContractMessage,
 )
 
 
@@ -130,6 +130,32 @@ def create_meta_account(
 
 
 def delete_meta_account(db: Session, account_id: str) -> None:
+    db.query(MetaAdsAccount).filter(MetaAdsAccount.id == account_id).delete(
+        synchronize_session=False,
+    )
+    db.commit()
+
+
+def delete_meta_account_cascade(db: Session, account_id: str) -> None:
+    """Atomically delete a meta account and all contracts + their child rows."""
+    contract_ids = [
+        row[0] for row in
+        db.query(PerformanceContract.id)
+        .filter(PerformanceContract.meta_ads_account_id == account_id)
+        .all()
+    ]
+    if contract_ids:
+        for model in (
+            AuditEvent, ContractMessage, UnderwritingResult,
+            AgentOffer, EscrowRecord, StrategyPlan,
+            PerformanceSnapshot, ResolutionRecord,
+        ):
+            db.query(model).filter(model.contract_id.in_(contract_ids)).delete(
+                synchronize_session=False,
+            )
+        db.query(PerformanceContract).filter(
+            PerformanceContract.id.in_(contract_ids)
+        ).delete(synchronize_session=False)
     db.query(MetaAdsAccount).filter(MetaAdsAccount.id == account_id).delete(
         synchronize_session=False,
     )
