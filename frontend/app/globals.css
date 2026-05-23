@@ -188,7 +188,7 @@
   .agent-input-mobile   { display: block; position: fixed !important; bottom: 0; left: 0; right: 0; z-index: 20; padding-bottom: env(safe-area-inset-bottom, 0px); }
   .agent-input-desktop  { display: none; }
   .agent-app-header     { display: none; }
-  .agent-msgs-area      { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; scrollbar-width: none; overflow-anchor: none; }
+  .agent-msgs-area      { -webkit-overflow-scrolling: touch; overscroll-behavior-y: none; scrollbar-width: none; overflow-anchor: none; overflow-x: hidden; }
   .agent-msgs-area::-webkit-scrollbar { display: none; }
   .agent-setup-cards    { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 4px; margin-bottom: 14px; }
   .agent-setup-cards::-webkit-scrollbar { display: none; }
