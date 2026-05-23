@@ -189,14 +189,22 @@ def _dispatch_tool(
         return agent_client.generate_agent_offer(contract_id)
 
     elif tool_name == "generate_ad_strategy":
+        contract = repo.get_contract(db, contract_id)
+        meta_account = repo.get_meta_account(db, str(contract.meta_ads_account_id)) if contract and contract.meta_ads_account_id else None
         return agent_client.generate_plan(
             contract_id,
             user_id=str(current_user.id),
             meta_ads_account_id=current_user.meta_ads_account_id,
+            access_token=meta_account.access_token if meta_account else None,
         )
 
     elif tool_name == "execute_ad_actions":
-        return agent_client.execute_ads_actions(contract_id)
+        contract = repo.get_contract(db, contract_id)
+        meta_account = repo.get_meta_account(db, str(contract.meta_ads_account_id)) if contract and contract.meta_ads_account_id else None
+        return agent_client.execute_ads_actions(
+            contract_id,
+            access_token=meta_account.access_token if meta_account else None,
+        )
 
     elif tool_name == "check_performance":
         # Placeholder until agent exposes GET /agent/performance

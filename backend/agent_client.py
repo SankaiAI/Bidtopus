@@ -157,7 +157,7 @@ def generate_strategy(contract_id: str, on_reasoning: Callable[[str], None] | No
     return _post("/agent/generate-strategy", contract_id)
 
 
-def execute_ads_actions(contract_id: str) -> dict[str, Any]:
+def execute_ads_actions(contract_id: str, access_token: str | None = None) -> dict[str, Any]:
     """
     Execute approved Meta Ads actions.
     Expected return shape:
@@ -166,7 +166,8 @@ def execute_ads_actions(contract_id: str) -> dict[str, Any]:
         "actions_executed": list[dict],
     }
     """
-    return _post("/agent/execute-ads", contract_id)
+    extra = {"access_token": access_token} if access_token else None
+    return _post("/agent/execute-ads", contract_id, extra)
 
 
 def resolve_contract(contract_id: str) -> dict[str, Any]:
@@ -204,6 +205,7 @@ def generate_plan(
     contract_id: str,
     user_id: str,
     meta_ads_account_id: str | None = None,
+    access_token: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate a Meta Ads campaign plan as individual approval_request messages.
@@ -218,11 +220,14 @@ def generate_plan(
     """
     url = f"{settings.agent_base_url}/agent/generate-plan"
     log.debug("agent call → /agent/generate-plan contract=%s user=%s", contract_id, user_id)
-    resp = httpx.post(url, json={
+    body: dict[str, Any] = {
         "contract_id": str(contract_id),
         "user_id": str(user_id),
         "meta_ads_account_id": meta_ads_account_id,
-    }, headers=_service_headers(), timeout=_TIMEOUT)
+    }
+    if access_token:
+        body["access_token"] = access_token
+    resp = httpx.post(url, json=body, headers=_service_headers(), timeout=_TIMEOUT)
     resp.raise_for_status()
     result = resp.json()
     log.debug("agent result ← /agent/generate-plan:\n%s", json.dumps(result, indent=2, default=str))
