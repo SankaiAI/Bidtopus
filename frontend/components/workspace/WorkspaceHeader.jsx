@@ -27,7 +27,7 @@ export default function WorkspaceHeader({ title, contractId, contractMetaAccount
   }
 
   return (
-    <div className="agent-app-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '56px', background: C.surface, borderBottom: 'none', flexShrink: 0 }}>
+    <div className="agent-app-header" style={{ alignItems: 'center', justifyContent: 'space-between', padding: '0 16px', height: '56px', background: C.surface, borderBottom: 'none', flexShrink: 0 }}>
 
       <button onClick={openMobileSidebar} className="app-mobile-menu-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.text, padding: '4px', display: 'none', alignItems: 'center', marginRight: '8px' }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 9l3 3-3 3"/></svg>

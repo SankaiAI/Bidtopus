@@ -105,7 +105,7 @@ function Navbar() {
         {/* Mobile drawer */}
         {open && (
           <div className="bt-mobile-menu" style={{ borderTop: `1px solid ${S.hairline}`, padding: '16px 0 20px', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <PrimaryBtn href="/dashboard" style={{ marginTop: 8, justifyContent: 'center' }}>Get started free</PrimaryBtn>
+            <PrimaryBtn href="/dashboard" style={{ marginTop: 8, justifyContent: 'center' }}>Dashboard</PrimaryBtn>
           </div>
         )}
       </Wrap>
