@@ -96,10 +96,14 @@ export default function WorkspaceList() {
   }, [isLoaded, isSignedIn])
 
   // Refetch the server contract list on mount, on window focus, every 30s,
-  // and whenever the active Meta Ads account changes. Stale-while-revalidate:
-  // we never clear `contracts` mid-fetch, so the list never flashes empty.
+  // and whenever the active Meta Ads account changes. On account switch we
+  // clear immediately so the skeleton renders; background refetches (focus,
+  // interval) are stale-while-revalidate so the list never flashes empty.
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
+
+    setContracts([])
+    setHasFetchedOnce(false)
 
     const api = createApiClient(getToken)
     const opts = activeAccount?.id ? { metaAdsAccountId: activeAccount.id } : {}

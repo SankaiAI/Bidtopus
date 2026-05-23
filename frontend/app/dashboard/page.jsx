@@ -352,6 +352,7 @@ export default function DashboardPage() {
   // user switches accounts in the sidebar dropdown.
   React.useEffect(() => {
     if (!isLoaded || !isSignedIn) return
+    setContracts([])
     setLoading(true)
     setError(null)
     const opts = activeAccount?.id ? { metaAdsAccountId: activeAccount.id } : {}

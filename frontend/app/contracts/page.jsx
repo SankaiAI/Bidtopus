@@ -168,6 +168,7 @@ export default function ContractsPage() {
   // to that account. Backend filter param ships in ticket #76.
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return
+    setContracts([])
     setLoading(true)
     setError(null)
     const opts = activeAccount?.id ? { metaAdsAccountId: activeAccount.id } : {}
