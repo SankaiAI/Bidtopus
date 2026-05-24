@@ -234,6 +234,32 @@ def generate_plan(
     return result
 
 
+async def astream_live_query(
+    question: str,
+    account_id: str,
+    access_token: str | None = None,
+):
+    """Async generator — yields parsed SSE events from /agent/query-live-data.
+    Each item: {"event": str, "data": dict}
+    """
+    url = f"{settings.agent_base_url}/agent/query-live-data"
+    body = {"question": question, "account_id": account_id, "access_token": access_token}
+    current_event: str | None = None
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        async with client.stream("POST", url, json=body, headers=_service_headers()) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.startswith("event: "):
+                    current_event = line[7:].strip()
+                elif line.startswith("data: ") and current_event:
+                    try:
+                        data = json.loads(line[6:])
+                    except Exception:
+                        data = {}
+                    yield {"event": current_event, "data": data}
+                    current_event = None
+
+
 def activate_contract(contract_id: str) -> dict[str, Any]:
     """
     Register the 24h monitoring job in the agent's APScheduler.

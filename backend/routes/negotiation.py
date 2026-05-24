@@ -137,7 +137,12 @@ _SYSTEM_PROMPT = (
     "Once the ML model returns recommendation=accept, present the terms clearly and ask the merchant "
     "to confirm with an explicit YES. Do NOT call finalize_contract until the merchant responds with "
     "an unambiguous confirmation such as 'yes', 'confirm', 'agreed', 'lock it in', or similar. "
-    "A question, silence, or vague reply is NOT confirmation — keep asking until you get a clear yes."
+    "A question, silence, or vague reply is NOT confirmation — keep asking until you get a clear yes.\n\n"
+    "LIVE DATA — you have a fetch_live_performance tool. When the merchant asks about "
+    "live campaign performance, current spend, active ad sets, or any real-time metrics, "
+    "call fetch_live_performance immediately with their question — do not redirect them. "
+    "Only fall back to the ## Connected Meta Ads Account historical snapshot when there "
+    "is no meta account connected at all."
 )
 
 _EVALUATE_TOOL = {
@@ -185,7 +190,26 @@ _FINALIZE_TOOL = {
     },
 }
 
-_TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL]
+_FETCH_LIVE_TOOL = {
+    "name": "fetch_live_performance",
+    "description": (
+        "Fetch live Meta Ads campaign performance data for the merchant's connected account. "
+        "Call this when the merchant asks about current campaigns, active spend, ROAS, ad set "
+        "performance, or any live metrics. Always use this tool instead of redirecting the merchant."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "question": {
+                "type": "string",
+                "description": "The specific performance question to answer using live data",
+            }
+        },
+        "required": ["question"],
+    },
+}
+
+_TOOLS = [_EVALUATE_TOOL, _FINALIZE_TOOL, _FETCH_LIVE_TOOL]
 
 
 def _build_system_prompt(account_context: dict | None, wallet_address: str | None = None) -> str:
@@ -711,6 +735,102 @@ async def stream_negotiation(
                             messages_repo.append(db, contract_id, "agent", "message", content=sanitized)
 
                     return  # conversation complete
+
+                # ── fetch_live_performance ────────────────────────────────────
+                if tool_block.name == "fetch_live_performance":
+                    question = tool_block.input.get("question", "")
+                    log.info("fetch_live_performance called contract=%s question=%r", contract_id, question[:80])
+
+                    # Resolve meta account for this contract
+                    _contract = repo.get_contract(db, contract_id)
+                    _meta = (
+                        repo.get_meta_account(db, str(_contract.meta_ads_account_id))
+                        if _contract and _contract.meta_ads_account_id else None
+                    )
+
+                    live_answer = ""
+                    thinking_parts: list[str] = []
+
+                    if not _meta:
+                        live_answer = (
+                            "No Meta Ads account is connected to this workspace. "
+                            "Connect one from the left sidebar first."
+                        )
+                    else:
+                        current_step: str | None = None
+                        live_seq_id: str | None = None
+                        try:
+                            async for evt in agent_client.astream_live_query(
+                                question, _meta.meta_ads_account_id, _meta.access_token
+                            ):
+                                if await request.is_disconnected():
+                                    break
+                                ev_name = evt["event"]
+                                ev_data = evt["data"]
+
+                                if ev_name == "thinking_step_start":
+                                    current_step = ev_data.get("step", "live_query")
+                                    live_seq_id = str(uuid.uuid4())
+                                    label = {
+                                        "fetch_meta_ads_data": "Fetching your Meta Ads performance data...",
+                                        "analyze_data": "Analyzing performance data...",
+                                    }.get(current_step, "Working...")
+                                    yield (
+                                        f"event: thinking_step_start\n"
+                                        f"data: {json.dumps({'step_id': current_step, 'label': label, 'thinking_sequence_id': live_seq_id})}\n\n"
+                                    )
+
+                                elif ev_name == "thinking_step_detail":
+                                    chunk = ev_data.get("text", "")
+                                    thinking_parts.append(chunk)
+                                    yield f"event: thinking_step_detail\ndata: {json.dumps({'delta': chunk})}\n\n"
+
+                                elif ev_name == "thinking_step_end":
+                                    yield (
+                                        f"event: thinking_step_end\n"
+                                        f"data: {json.dumps({'step_id': current_step or 'live_query', 'thinking_sequence_id': live_seq_id})}\n\n"
+                                    )
+                                    yield f"event: thinking_end\ndata: {json.dumps({'thinking_sequence_id': live_seq_id})}\n\n"
+
+                                elif ev_name == "result":
+                                    live_answer = ev_data.get("answer", "")
+
+                                elif ev_name == "error":
+                                    log.warning("live_query agent error contract=%s: %s", contract_id, ev_data)
+                                    live_answer = "Failed to fetch live performance data — please try again."
+
+                        except Exception:
+                            log.exception("fetch_live_performance failed contract=%s", contract_id)
+                            live_answer = "Failed to fetch live performance data — please try again."
+
+                    if thinking_parts:
+                        messages_repo.append(
+                            db, contract_id, "agent", "thinking_step",
+                            content="".join(thinking_parts),
+                            extra={"step_id": "live_query", "label": "Analyzing performance data...",
+                                   "thinking_sequence_id": live_seq_id, "is_complete": True},
+                        )
+
+                    tool_result = json.dumps({"answer": live_answer})
+                    messages_repo.append(
+                        db, contract_id, "agent", "tool_call", content="",
+                        extra={"assistant_content": assistant_content, "tool_use_id": tool_block.id},
+                    )
+                    messages_repo.append(
+                        db, contract_id, "system", "tool_result", content="",
+                        extra={"tool_use_id": tool_block.id, "content": tool_result},
+                    )
+                    current_messages = current_messages + [
+                        {"role": "assistant", "content": assistant_content},
+                        {"role": "user", "content": [{
+                            "type": "tool_result",
+                            "tool_use_id": tool_block.id,
+                            "content": tool_result,
+                        }]},
+                    ]
+                    if accumulated:
+                        yield f"event: message_break\ndata: {{}}\n\n"
+                    continue
 
                 # Unknown tool — log and stop
                 log.warning("Unknown tool called during negotiation: %s", tool_block.name)
