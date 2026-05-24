@@ -18,7 +18,7 @@ from typing import Generator
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from auth.service_token import verify_service_token
@@ -107,6 +107,12 @@ class ActivateResponse(BaseModel):
 class PerformanceResponse(BaseModel):
     snapshot: dict
     forecast: dict
+
+
+class LiveDataQueryRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    account_id: str
+    access_token: str | None = None
 
 
 class GeneratePlanRequest(BaseModel):
@@ -417,6 +423,50 @@ def get_account_context(meta_ads_account_id: str):
         }
     logger.info("request_complete", action="get_account_context", account_id=meta_ads_account_id)
     return AccountContextResponse(**data)
+
+
+@router.post("/query-live-data")
+def query_live_data(body: LiveDataQueryRequest):
+    """Stream live Meta Ads data fetch + extended-thinking answer for a merchant question.
+
+    Called by the backend conductor when the negotiation LLM invokes fetch_live_performance.
+    SSE events: thinking_step_start / thinking_step_detail / thinking_step_end / result.
+    Works in mock mode (access_token ignored; mock adapter returns realistic data).
+    """
+    from llm.live_query import LiveQueryAgent
+
+    logger.info(
+        "request_received",
+        action="query_live_data",
+        account_id=body.account_id,
+        question_len=len(body.question),
+    )
+
+    agent = LiveQueryAgent()
+
+    def gen():
+        try:
+            yield from agent.stream_query(
+                question=body.question,
+                account_id=body.account_id,
+                access_token=body.access_token,
+            )
+        except Exception as exc:
+            correlation_id = uuid.uuid4().hex[:12]
+            logger.error(
+                "live_query_stream_error",
+                account_id=body.account_id,
+                correlation_id=correlation_id,
+                error=str(exc),
+                error_type=type(exc).__name__,
+            )
+            payload = json.dumps({
+                "detail": "Live query stream error. See agent logs for correlation_id.",
+                "correlation_id": correlation_id,
+            })
+            yield f"event: error\ndata: {payload}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=_SSE_HEADERS)
 
 
 @router.post("/activate", response_model=ActivateResponse)
